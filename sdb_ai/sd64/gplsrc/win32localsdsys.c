@@ -704,7 +704,16 @@ static int sshd_accepted(DWORD a_pid, const FILETIME* a_created, char* user, siz
       if (xml != NULL && EvtRender(NULL, ev, EvtRenderEventXml, used, xml, &used, &props)) {
         FILETIME et;
         const WCHAR* p = wcsstr(xml, L"Accepted ");
-        if (p != NULL && event_time(xml, &et) && !ft_before(&et, a_created)) {
+        /* 18 Nov 26: event_time() reads whole seconds, so A's creation time is compared at the same resolution (truncated to its
+           second); otherwise an event written in the second A was made would read as older than A and a real login be refused. */
+        ULARGE_INTEGER ac;
+        FILETIME a_sec;
+        ac.LowPart = a_created->dwLowDateTime;
+        ac.HighPart = a_created->dwHighDateTime;
+        ac.QuadPart -= ac.QuadPart % 10000000ULL;
+        a_sec.dwLowDateTime = ac.LowPart;
+        a_sec.dwHighDateTime = ac.HighPart;
+        if (p != NULL && event_time(xml, &et) && !ft_before(&et, &a_sec)) {
           WCHAR method[32], wuser[128], waddr[64];
           unsigned int n = 0;
           if (swscanf(p, L"Accepted %31ls for %127ls from %63ls port %u", method, wuser, waddr, &n) == 4 && n > 0 && n < 65536) {

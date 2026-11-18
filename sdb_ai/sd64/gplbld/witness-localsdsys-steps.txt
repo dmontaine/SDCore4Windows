@@ -1,0 +1,186 @@
+LOCAL SDSYS WITNESS (RELEASE_1.1 339) - STEP SHEET FOR THE VM
+==============================================================
+
+Everything below happens INSIDE THE VM (a fresh clone with this Core installed), never on the host, except step 9,
+which is the one HOST step and says so.
+
+There are two windows, both in the VM:
+
+  WINDOW A  - an ELEVATED PowerShell ("Run as administrator"), signed in as your own VM account.  The script runs here.
+              It prints exactly what to type in window B, then waits for you to press Enter here.
+  WINDOW B  - an ORDINARY PowerShell (NOT elevated), same account.  You type the ssh commands here.
+
+No password is written in this sheet or by the script.  You will be asked for:
+  - two test Windows passwords you choose in step 1 (for the test users sdlocalw and sdlocalx); keep them for the
+    whole sitting.  You type them at ssh's prompt in window B, and in window A when a step asks (no echo).
+  - SDSYS's SD password (the one set at SDSYS's first console sign-in in step 3), typed at "SD password of sdsys:"
+    in window B, and once in window A for the API steps (no echo).
+
+After each step, read the [PASS] / [FAIL] / [NOT RUN] lines.  The log is in C:\SD-witness\logs (one file per run, with a
+.results.csv beside it).  If a step says NOT RUN, its line says why; go on to the next step.
+
+If the script ever asks you to "Press Enter HERE" and you could not do the window-B part, type  skip  and press Enter.
+
+
+STEP 1 - WINDOW A (VM, ELEVATED): make the test users, check the install, and the empty-list case
+--------------------------------------------------------------------------------------------------
+Paste:
+
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only setup,W5,W0
+
+What you do:
+  - It asks for a Windows password for sdlocalw, twice, then for sdlocalx, twice.  Choose test passwords.
+  - W5: open WINDOW B when told, type the ssh command it prints, then sdlocalw's password.  Window B ends at once
+    with "sd-sdsys refused: list-empty".  Press Enter in window A.
+  - W0: press Enter in window A FIRST, then type the ssh command in window B, then sdlocalw's password.  Leave window B
+    where it stops (do not type anything else there).  Press Enter in window A when asked.  Then CLOSE WINDOW B with
+    its X button.
+
+
+STEP 2 - WINDOW A (VM, ELEVATED): sdsys with no SD password yet
+---------------------------------------------------------------
+Do this BEFORE SDSYS ever signs in at the console (the first console sign-in sets SDSYS's SD password).
+
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only W3
+
+What you do: in window B type the ssh command it prints, then sdlocalw's password.  Window B should say
+"sdsys has no SD password ..." and end.  Answer y or n in window A.
+
+
+STEP 3 - VM CONSOLE, signed in to Windows AS SDSYS (its own Windows sign-in, elevated as always)
+------------------------------------------------------------------------------------------------
+Sign out of your own VM account and sign in as SDSYS.  SD opens; the first time it asks you to set SDSYS's SD password:
+choose a test password for this VM and keep it.  Then type these at the SD prompt, one at a time:
+
+remote.api local
+     (answer Y when it asks to restart SD)
+
+CREATE.ACCOUNT USER sdlocalw
+
+MODIFY.ACCOUNT sdlocalw SH-ON
+
+OFF
+
+Then sign out of SDSYS and sign back in as your own VM account.  (If any of the three is refused, write down its words;
+the steps that need it - the API steps and W9 - will then say NOT RUN and why.)
+
+
+STEP 4 - WINDOW A (VM, ELEVATED): the grant, the wrong password, the phantom, the plain session
+------------------------------------------------------------------------------------------------
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only W1,W2,W10,W11
+
+What you type in window B, row by row (the script prints each again when it is time):
+  W1   the ssh command, sdlocalw's password, then at "SD password of sdsys:" SDSYS's SD password (the right one),
+       then at the SD prompt:   WHO   and then:   OFF
+       Answer the two questions in window A (y or n).
+  W2   the ssh command, sdlocalw's password, then at "SD password of sdsys:" a WRONG password (for example: wrong).
+       Watch whether it pauses a few seconds before the session ends.  Answer the questions in window A.
+  W10  the ssh command, sdlocalw's password, the RIGHT SD password of sdsys, then:   PHANTOM WHO
+       wait 10 seconds, then:   OFF
+  W11  first a plain login with no command (it prints it), sdlocalw's password, and OFF at the SD prompt if one appears;
+       then the same ssh WITHOUT -t asking sd-sdsys - it prints one line "sd-sdsys needs a terminal".
+       Answer the questions in window A.
+
+
+STEP 5 - WINDOW A (VM, ELEVATED): the refusals
+----------------------------------------------
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only W4,W6,W8,W9,W12
+
+What you type in window B (each is printed again when it is time):
+  W4   the ssh command as sdlocalx, and sdlocalx's password.  It ends with "sd-sdsys refused: not-listed".
+  W6   the ssh command to the VM's own network address (it prints the address), sdlocalw's password; answer yes if
+       ssh asks about the host key.  It ends with "sd-sdsys refused: not-local".
+  W8   runas /user:sdlocalw cmd   then sdlocalw's password.  A NEW black window opens.  In THAT window type the three
+       lines the script prints (two "set" lines and the sd.exe line in quotes).  It prints "sd-sdsys refused: not-ssh".
+       If an ordinary SD session opens instead, type OFF in it.  Close that window.
+  W9   a plain ssh login as sdlocalw (no command), sdlocalw's password, then at the SD prompt the SH line the script
+       prints.  It prints "sd-sdsys refused: session-unsafe".  Then OFF.  If SH refuses the line, type skip in window A.
+  W12  the ssh command and sdlocalw's password.  It ends with "sd-sdsys refused: list-unsafe".
+
+
+STEP 6 - WINDOW A (VM, ELEVATED): the API (nothing to type in window B)
+-----------------------------------------------------------------------
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only W13,W14,W15,W16
+
+What you type, all in window A (no echo): SDSYS's SD password once; then sdlocalw's or sdlocalx's Windows password when
+each row asks.
+
+
+STEP 7 - WINDOW A (VM, ELEVATED): the fake sshd record and the reused process number
+------------------------------------------------------------------------------------
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only W20,W21
+
+What you do:
+  W20  type sdlocalw's Windows password in window A when asked.  Then press Enter in window A FIRST, and only then type
+       the ssh command it prints (to the VM's own network address) in window B, and sdlocalw's password SLOWLY.  It ends
+       with "sd-sdsys refused: not-local".  Press Enter in window A.
+  W21  nothing to type; it takes up to a minute.
+
+
+STEP 8 - THE HOST (not the VM), an ordinary PowerShell: the listed user from another computer
+---------------------------------------------------------------------------------------------
+First start this in WINDOW A in the VM (VM, ELEVATED):
+
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only W7
+
+It prints the VM's addresses.  Then ON THE HOST, in an ordinary PowerShell (not elevated), type:
+
+ssh -t sdlocalw@<one of the VM addresses it printed> sd-sdsys
+
+and sdlocalw's password.  It ends with "sd-sdsys refused: not-local".  Back in the VM, press Enter in window A.
+If the host cannot reach the VM at all, type skip in window A.
+
+
+STEP 9 - tool.remote from an SDSYS session
+------------------------------------------
+First start this in WINDOW A in the VM (VM, ELEVATED):
+
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only W17
+
+When it waits, do the page part from an SDSYS session.  The simplest is WINDOW B (VM, not elevated):
+
+ssh -t sdlocalw@localhost sd-sdsys
+
+with sdlocalw's password and then SDSYS's SD password.  At the SD prompt type:
+
+tool.remote
+
+Go to View > Remote admin.  On the field "Local API users":  U, type sdlocalw, type it again when asked, confirm;
+then X and pick sdlocalw; then U and add sdlocalw again; then C.  Leave the page (Esc / File > Quit), type OFF, and press
+Enter in window A.
+
+
+STEP 10 - WINDOW A (VM, ELEVATED): put the lists back to empty
+--------------------------------------------------------------
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only cleanup
+
+
+STEP 11 - an UPGRADE keeps the lists (three parts)
+--------------------------------------------------
+11a  WINDOW A (VM, ELEVATED):
+
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only W18
+
+11b  In the VM, run the SAME installer this VM was installed with again, over the installed SD (an upgrade: do NOT
+     uninstall first).  Read every page; finish it.
+
+11c  WINDOW A (VM, ELEVATED), the same line again:
+
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only W18
+
+
+STEP 12 - a FULL UNINSTALL removes the lists (three parts; this is the last step: SD is gone after it)
+------------------------------------------------------------------------------------------------------
+12a  WINDOW A (VM, ELEVATED):
+
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only W19
+
+12b  Sign SDSYS out if it is signed in anywhere.  Uninstall SD fully (Settings > Apps > SD > Uninstall), and choose to
+     remove the data.  Read every dialog: if one says files could NOT be removed, write its words down.
+
+12c  WINDOW A (VM, ELEVATED), the same line again:
+
+powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-localsdsys.ps1 -Only W19
+
+
+AFTERWARDS: copy the folder C:\SD-witness\logs to \\vboxsvr\xfer so the logs reach the host.
