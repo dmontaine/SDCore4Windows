@@ -3,6 +3,19 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+17 Nov 26  A CHANGE TO NETDIRS REACHES NEW SESSIONS WITHOUT A RESTART; A LONG AUDIT RECORD KEEPS ITS LINE END.
+
+             What        - Each session reads sd.conf's NETDIRS line when it starts, as SD Core for Linux does, so a
+                           change reaches the sessions started after it; SD no longer has to be restarted.  A value
+                           that is too long now refuses a new session, by name, as well as stopping SD starting.  An
+                           audit record too long for the audit file's line is cut and still ends its line, so the next
+                           record starts a line of its own; the copy in the Windows event log is not cut.
+             Why         - The four-version parity audit, round 4: SD Core for Linux reads NETDIRS per session and
+                           ends a cut record with a line end.
+             Does NOT    - Change which directories NETDIRS admits, or which sessions it applies to.  Sessions already
+                           running keep the list they started with.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 18 Nov 26  RUN.IN'S TWO REFUSALS IN SD CORE FOR LINUX'S WORDS, AND ONE MORE FILE ASKED; SET.FILE NAMES A NEW POINTER IN LOWER CASE.
 
              What        - run.in, the administrator's account-scoped run, refuses a command whose files lie outside

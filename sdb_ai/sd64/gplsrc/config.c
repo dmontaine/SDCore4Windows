@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 4 (P-6841, as Linux S.62): NETDIRS= is read into pcfg.netdirs, the process's own
+ *           copy, which every session fills (session_trust()); it was the segment's, read once when SD started.
  * 17 Nov 26 Windows port - four-version audit round 3 (P-7016): the BACKUPDIR= branch sits before SDSYS=, as Linux's (layout only).
  * 18 Nov 26 Windows port - four-version audit round 2 (P-1222, P-5444 to P-5447): BACKUPDIR= is accepted and ignored with no length test
  *           (fgets() leaves at most 189 characters, so the test could never refuse), and the NETDIRS / SH / SH1 refusals are laid out as Linux's.
@@ -69,7 +71,7 @@
  *  GRPSIZE=n     Default group size when creating a dynamic file
  *  MAXIDLEN=63   Maximum record id len
  *  MUSTLOCK=1    Must hold update or file lock to write or delete record
- *  NETDIRS=p;p   Directories a network session may reach outside its account
+ *  NETDIRS=p;p   Directories outside its own account a session without os-on may reach (none; each session reads it)
  *  NETFILES=0    Allow remote files?
  *                  0x0001   Allow outgoing NFS
  *                  0x0002   Allow incoming Q_M_Net
@@ -176,7 +178,8 @@ struct CONFIG* read_config(char* errmsg) {
   pcfg.must_lock = FALSE;         /* MUSTLOCK: Enforce locking rules */
   pcfg.objects = 0;               /* OBJECTS:  Max loaded objects */
   pcfg.objmem = 0;                /* OBJMEM:   Max loaded object size */
-  pcfg.netwait = 5;               /* NETWAIT:  Seconds to wait for a connection to a remote SDNet server (19 Oct 26, K8d; the plan's 5) */
+  pcfg.netdirs[0] = '\0';         /* NETDIRS:  none - a session held to its account reaches nothing outside it (17 Nov 26, per session) */
+  pcfg.netwait = 5;            /* NETWAIT:  Seconds to wait for a connection to a remote SDNet server (19 Oct 26, K8d; the plan's 5) */
   pcfg.netreply = 30;             /* NETREPLY: Seconds to wait for each reply of a remote SDNet server (the plan's 30) */
   pcfg.pwdelay = 3;               /* PWDELAY:  Seconds after a failed network login.  SD's own 3 (openQM's is 5) */
   pcfg.sdclient_mode = 0;         /* SDCLIENT: Client capabilities */
@@ -322,10 +325,14 @@ struct CONFIG* read_config(char* errmsg) {
    SEMICOLON SEPARATED, NOT COLON.  A Windows pathname contains a colon, so
    the Unix PATH convention cannot be borrowed.
 
-   NO DEFAULT, AND THE EMPTY VALUE IS THE STRICT ONE.  struct config is
-   memset to zero above, so an sd.conf that does not mention NETDIRS confines
+   NO DEFAULT, AND THE EMPTY VALUE IS THE STRICT ONE.  pcfg.netdirs is
+   emptied above, so an sd.conf that does not mention NETDIRS confines
    every network session to its account.  That is the safe direction and it is
    the same convention as os.users: what is not named is refused.
+
+   17 Nov 26 (four-version audit round 4, as Linux): into pcfg, the process's
+   own copy, which every session fills from sd.conf (session_trust()), so a
+   change reaches the sessions started after it with no restart.
 
    BOUNDS CHECKED, and the refusal is deliberate rather than a truncation - a
    truncated pathname is a SHORTER one, which as a containment root would
@@ -335,7 +342,7 @@ struct CONFIG* read_config(char* errmsg) {
           sprintf(errmsg, "NETDIRS value is longer than %d characters.", MAX_NETDIRS_LEN);
           goto exit_read_config;
         }
-        strcpy(cfg->netdirs, rec + 8);
+        strcpy(pcfg.netdirs, rec + 8);
       }
       else if (sscanf(rec, "NETFILES=%d", &n) == 1)
         cfg->netfiles |= n;

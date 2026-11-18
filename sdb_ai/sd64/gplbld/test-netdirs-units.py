@@ -20,7 +20,9 @@ WHAT IT CHECKS (the C with its comments taken out where a rule is about code)
       directory, USRDIR, GRPDIR or a registered account (an unreadable register refuses), or after the first 16; an over-long element is
       discarded whole, never cut
   E2  start_sd() calls netdirs_report() after audit_rotate(), which names each ignored entry in the error log, and the session judges again
-  T1  config.table has a NETDIRS row, kind text, write no, saying CONFIG cannot read it
+  P1  each session reads it (17 Nov 26, four-version audit round 4, as Linux): read_config() puts it in pcfg, the process's own copy, which
+      session_trust() fills for every session; no segment or CONFIG copy remains
+  T1  config.table has a NETDIRS row, kind text, effect session, write no, saying CONFIG cannot read it
 WHAT IT CANNOT SAY: that a session is admitted or refused at run time - a VM or an install sitting's.  --selftest requires each mutation to be
 caught and to match its text exactly once.
 """
@@ -93,7 +95,7 @@ def checks(s):
     callers = re.findall(r"path_in_netdirs\(", d2 + sh)
     ck("G1d path_in_netdirs() is called from those two places only (and defined once)", len(callers) == 3, "%d" % len(callers))
     pin = func(d2, "bool path_in_netdirs(char* cand) {")
-    a = pin.find("if (sysseg->netdirs[0] == '\\0')")
+    a = pin.find("if (pcfg.netdirs[0] == '\\0')")
     b = pin.find("has_parent_ref(cand) || netdir_dot_component(cand)")
     c = pin.find("netdirs_load(FALSE)")
     d = pin.find("path_within(cand, netdirs_root[i]) && (netdir_account_clash(netdirs_root[i], NULL, 0) == 0)")
@@ -124,9 +126,17 @@ def checks(s):
     ck("E2 start_sd() names the ignored entries once, after audit_rotate(); a session judges again",
        0 <= st.find("audit_rotate();") < st.find("netdirs_report();") and "netdirs_load(TRUE);\n  netdirs_count = -1;" in d2)
 
+    # 17 Nov 26 (four-version audit round 4, P-6841): each session reads NETDIRS from sd.conf into its own pcfg, as Linux; no segment copy
+    cc2 = ccode(s["configc"])
+    ck("P1 NETDIRS is the session's own: read_config() empties pcfg.netdirs and copies the value there; nothing reads or writes a segment "
+       "or CONFIG copy (sysseg->netdirs, cfg->netdirs)",
+       "pcfg.netdirs[0] = '\\0';" in cc2 and "strcpy(pcfg.netdirs, rec + 8);" in cc2
+       and "netdirs" not in re.sub(r"(?s)/\*.*?\*/", "", s["syssegh"])
+       and not re.search(r"(sysseg->|cfg->)netdirs", ccode(s["dio2"]) + cc2 + ccode(s["syssegc"])))
     table = {ln.split("|")[0]: ln.split("|") for ln in s["table"].split("\n") if ln and not ln.startswith("#")}
     t = table.get("NETDIRS", [])
-    ck("T1 config.table: NETDIRS is text, write no, and says CONFIG cannot read it", len(t) >= 10 and t[1] == "text" and t[8] == "no" and "Not readable with the CONFIG function" in t[7], "%s" % t)
+    ck("T1 config.table: NETDIRS is text, write no, effect session (each session reads it), and says CONFIG cannot read it",
+       len(t) >= 10 and t[1] == "text" and t[5] == "session" and t[8] == "no" and "Not readable with the CONFIG function" in t[7], "%s" % t)
     return rows
 
 
@@ -164,6 +174,8 @@ MUTANTS = [
     ("dio2", "the comparison minds case", "  if (strncasecmp(cand, root, root_len) != 0)", "  if (strncmp(cand, root, root_len) != 0)"),
     ("syssegc", "nothing is named at start", "  netdirs_report();\n", ""),
     ("stage", "the delivered sd.conf lists a directory", "# NETDIRS=\nUSRDIR=", "NETDIRS=C:\\\\data\nUSRDIR="),
+    ("configc", "NETDIRS is read into the segment's template again", "strcpy(pcfg.netdirs, rec + 8);", "strcpy(cfg->netdirs, rec + 8);"),
+    ("table", "the table says it takes a restart", "NETDIRS|text||||session|", "NETDIRS|text||||restart|"),
     ("table", "CONFIG is said to read it", "empty keeps it to its account. Not readable with the CONFIG function.", "empty keeps it to its account."),
 ]
 

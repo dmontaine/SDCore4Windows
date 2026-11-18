@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 4 (P-6841): netdirs leaves the segment for PCFG, read per session as Linux; a layout change.
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62): MAX_NETDIRS_LEN 191 (Linux's; what one sd.conf line leaves); a layout change, as APILOCAL's was.
  * 15 Nov 26 Windows port - RELEASE_1.1 317: api_local after api_port (APILOCAL; a layout change, as APIPORT's was).
  * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): the user table gains the file transfer slot (xfer_dir, xfer_flags,
@@ -78,19 +79,9 @@ struct SYSSEG {
    int16_t fds_limit;
    int32_t fds_rotate;
    int16_t maxidlen;           /* MAXIDLEN: Max record id length */
-   /* 21 Aug 26 Windows port - NETDIRS.  It lives here rather than in PCFG
-      because net_path_permitted() is consulted on every OPEN in a network
-      session, so it has to be readable without a per-process config load,
-      and because a per-process copy would be a containment root the session
-      itself could be given a different view of.
-
-      THIS CHANGES THE SHARED SEGMENT LAYOUT, and SYSSEG_REVSTAMP DOES NOT
-      CATCH THAT - same trap as APIPORT below and the PCFG change of
-      16 Aug 26.  Harmless as shipped, because an install replaces every
-      binary at once; the hazard is copying one rebuilt binary onto a
-      running system.  PROJECT_STATUS.md section 7 step 1a and section 6.  */
-   char netdirs[MAX_NETDIRS_LEN+1]; /* NETDIRS: dirs a network session may
-                                       reach outside its own account */
+   /* 17 Nov 26 Windows port - four-version audit round 4: NETDIRS left the segment for PCFG (config.h), as Linux's.  Both reasons it
+      was put here no longer hold: every session reads sd.conf itself since W.11 F9 (session_trust()), so there is a per-process load,
+      and it is the SEGMENT a member of sdusers with a shell can write, not the process's own copy.  A layout change, as APILOCAL's was. */
    int16_t netfiles;           /* NETFILES: 0x0001   Allow outgoing NFS
                                               0x0002   Allow incoming SDNet */
    int16_t pdump;              /* PDUMP:    0x0001   Ban dump of other username */

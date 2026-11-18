@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 4 (P-7689), as Linux k_error.c: an audit record cut to the buffer still ends in
+ *           a line end, so the next record starts its own line; the event log copy is unchanged.
  * 18 Nov 26 Windows port - four-version audit round 2 (P-0288), as Linux W.11 F4 option B: audit_message() copies each record to the
  *           Application event log (win32_audit_event(), source sd-audit, registered by the installer), whether the service or this
  *           process wrote the trail, outside ERRLOG_SEM, and never failing the trail's own write.
@@ -1045,10 +1047,16 @@ void audit_message(char* msg) {
     }
 
     /* snprintf reports the length it WANTED, not what it wrote, so a long
-       record would otherwise send WriteFile past the end of the buffer.   */
+       record would otherwise send WriteFile past the end of the buffer.
+       17 Nov 26 (four-version audit round 4, P-7689; Linux k_error.c): a
+       record that did not fit is cut and still ends in Newline, so the
+       next record starts its own line.  The event log copy (ebuff) is
+       made apart, never cut, and carries no line end.                    */
 
-    if (bytes > (int)sizeof(buff) - 1)
+    if (bytes > (int)sizeof(buff) - 1) {
       bytes = (int)sizeof(buff) - 1;
+      memcpy(buff + bytes - NewlineBytes, Newline, NewlineBytes);
+    }
 
     if (bytes > 0)
       (void)win32_audit_append(path, buff, bytes);

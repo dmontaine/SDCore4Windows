@@ -31,6 +31,7 @@
  * 14 Sep 26 Windows port - from Linux d93ea0d - S.18: api_login removed (APILOGIN retired).
  * 19 Oct 26 Windows port - from Linux d93ea0d - netwait and netreply are 32 bit (verifier finding of the SDNet finish): a value in sd.conf is read into an int and a 16 bit field wrapped 65541 to 5 before rangecheck saw it.
  * 14 Nov 26 dm  S.242 stage 1: xfer, xferfile, xferslot, xferwait, xferidle, xfermax, xferkind - file transfer over the ssh login (delivered off).
+ * 17 Nov 26 Windows port - four-version audit round 4 (P-6841, Linux S.62): netdirs moves from CONFIG to PCFG, read by each session.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -61,11 +62,7 @@ struct CONFIG {
   int16_t phantoms_base;           /* PHANTOMS: Lowest user number reserved for PHANTOM ... USER n, and... (16 Oct 26) */
   int16_t phantoms_range;          /*           ...how many are reserved; 0 = none */
   int16_t maxidlen;                /* MAXIDLEN: Maximum record id length */
-  /* 21 Aug 26 Windows port - NETDIRS: directories outside its own account
-     that a network session may reach.  Semicolon separated, because a
-     Windows pathname contains a colon.  EMPTY IS THE STRICT VALUE and is
-     what an sd.conf not mentioning it gets.  See op_dio2.c.               */
-  char netdirs[MAX_NETDIRS_LEN+1]; /* NETDIRS:  Network session data dirs */
+  /* NETDIRS is in PCFG below since 17 Nov 26 (four-version audit round 4): each session reads it, as Linux's does. */
   int16_t netfiles;                /* NETFILES:
                                       0x0001    Allow outgoing NFS
                                       0x0002    Allow incoming SDNet   */
@@ -104,6 +101,10 @@ struct PCFG  {
    JNLMODE, PORTMAP in the shared part) are gone. */
   int16_t dhcache;                      /* DHCACHE:  Closed dynamic files kept open for quick reopening */
   char dumpdir[MAX_PATHNAME_LEN+1];     /* DUMPDIR:  Directory for process dump files */
+  /* 17 Nov 26 Windows port - four-version audit round 4 (Linux config.h S.62): NETDIRS, directories outside its own account, separated by
+     ";" (a Windows pathname holds a colon), that a session held to its account may still reach.  Per process, as Linux's: every session
+     reads sd.conf itself (session_trust(), sysseg.c), so an edit reaches the sessions started after it.  Empty is the strict value. */
+  char netdirs[MAX_NETDIRS_LEN+1];      /* NETDIRS:  Directories outside the account a gated session may reach */
   double fltdiff;                       /* FLTDIFF : Wide zero for float comparisons */
   int16_t fsync;                        /* FSYNC:    Controls when to do fsync() */
  /* 20240219 mab create-account based on type (user / group / other) */  

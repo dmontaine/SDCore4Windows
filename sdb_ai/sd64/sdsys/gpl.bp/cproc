@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 4 (P-5468, P-7691 to P-7693), layout as Linux: .S reads a sentence's name once and
+*           lowers a new one in the ELSE branch; ri.narrow and ri.plain.word sit after ri.trigger.found.  No change in effect.
 * 18 Nov 26 Windows port - from Linux 48161ccf (S.62, P-6632; four-version audit cycle 3): RUN.IN's two refusals are Linux's 14173 / 14174 in this tree's
 *           12566 / 12567, in Linux's words and audit line (run.in refused account= file= reason=), and ask what Linux asks: a trigger on the account's VOC
 *           first, by its path, before ri.own.words reads it (ri.voc.trigger); ri.windows.checks is ri.account.checks, which adds the object a V CS entry
@@ -1588,11 +1590,8 @@ stack.manipulation:
 * 17 Nov 26 Windows port - four-version audit round 3 (P-4649, P-5468, P-7024, P-7025; the case fallbacks, the Linux audit
 *   session's D4): ONE READ, as Linux and Windows Solo.  The VOC folds case itself (NOCASE), so an existing sentence is found
 *   in any case by this read, and a new one is saved lower case; the as-typed / lower / upper retries above it are gone.
-         readvu voc.rec from voc, arg1, 0 else
-            release voc, arg1
-            arg1 = downcase(arg1)
-         end
-
+* 17 Nov 26 Windows port - four-version audit round 4 (P-5468, P-7691, P-7692): and it IS one read now - the new id is lowered in
+*   the ELSE branch, as Linux cproc and Windows Solo (it was a first read to lower it, then a second).
          readvu voc.rec from voc, arg1, 0 then
 * 17 Oct 26 dm - S.64: the record exists, so this would REPLACE it (a verb, a file pointer, the LOGIN paragraph) - a change to the VOC
 *   that a session without voc.edit may not make.  A name that does not exist yet is a new saved sentence, which stays open to
@@ -1619,6 +1618,9 @@ stack.manipulation:
                end
             until upcase(s[1,1]) = "Y"
             repeat
+         end else
+            release voc, arg1
+            arg1 = downcase(arg1)
          end
 
          voc.rec = if arg2 = arg3 then "S" else "PA"
@@ -3483,36 +3485,6 @@ ri.debug:
    void kernel(K$AUDIT, 'run.in end account=' : ri.acct : ' command=debug')
    return
 
-* 10 Nov 26 Windows port - from Linux ca137620 (S.213).  Not the administrator: called once, just before the command.  The three edit gates are SET, not added to
-*   (the administrator's own session may hold any of them): only the one the command needs is on.  SH and OS.EXECUTE are off already (load.account.switches) and are
-*   set off again here, so that this routine alone says what the command runs with.  The flag goes LAST.  Everything here is undone by revert.account from ri.sw<7>
-*   to ri.sw<10>.  The process token is NOT changed: an SDSYS session is elevated for its life, which is why BCOMP and _VOC_REF also hold the command's reads.
-ri.narrow:
-   void kernel(K$VOC.EDIT,  0)
-   void kernel(K$BP.EDIT,   (ri.cmd = 'basic') or (ri.cmd = 'catalog') or (ri.cmd = 'decatalog') or (ri.cmd = 'delete.catalog'))
-   void kernel(K$DICT.EDIT, (ri.cmd = 'compile.dict'))
-   void kernel(K$SH, 0)
-   void kernel(K$OS.EXEC, 0)
-   void kernel(K$ADMINISTRATOR, 0)
-   return
-
-* One plain word: in ri.word, answer in ri.ok.  No early return from the loop.
-ri.plain.word:
-   ri.ok = @true
-   if ri.word = '' or len(ri.word) > 64 then ri.ok = @false
-   if ri.ok then
-      if not(index('abcdefghijklmnopqrstuvwxyz0123456789', ri.word[1, 1], 1)) then ri.ok = @false
-   end
-   if ri.ok then
-      for ri.i = 1 to len(ri.word)
-         if not(index('abcdefghijklmnopqrstuvwxyz0123456789._-', ri.word[ri.i, 1], 1)) then ri.ok = @false
-      next ri.i
-   end
-   if ri.ok then
-      if index(' ' : ri.kwords : ' ', ' ' : ri.word : ' ', 1) then ri.ok = @false
-   end
-   return
-
 * 11 Nov 26 Windows port, as Linux (S.213).  SD's own words: the command word (the first of ri.sentence) and the option words (those after the names) against the shipped VOC.
 *   The answer is ri.bad (the first word that fails, '' when all pass) and ri.why (for the audit line).  What is compared is what decides what runs: the type letter and
 *   every field after the first (a V record's dispatch and program, a K record's number and anything it hands over to); the first field's description is not (an account
@@ -3682,6 +3654,37 @@ ri.path.inside:
 ri.trigger.found:
    display sysmsg(12566, ri.pn[1, 40], ri.acct)   ;* run.in: %1 in account %2 has a trigger; nothing was run
    ri.why = 'a trigger on a file the command opens'
+   return
+
+* 10 Nov 26 Windows port - from Linux ca137620 (S.213).  Not the administrator: called once, just before the command.  The three edit gates are SET, not added to
+*   (the administrator's own session may hold any of them): only the one the command needs is on.  SH and OS.EXECUTE are off already (load.account.switches) and are
+*   set off again here, so that this routine alone says what the command runs with.  The flag goes LAST.  Everything here is undone by revert.account from ri.sw<7>
+*   to ri.sw<10>.  The process token is NOT changed: an SDSYS session is elevated for its life, which is why BCOMP and _VOC_REF also hold the command's reads.
+*   (17 Nov 26, four-version audit round 4, P-7693: this routine and ri.plain.word sit after ri.trigger.found, as Linux's.)
+ri.narrow:
+   void kernel(K$VOC.EDIT,  0)
+   void kernel(K$BP.EDIT,   (ri.cmd = 'basic') or (ri.cmd = 'catalog') or (ri.cmd = 'decatalog') or (ri.cmd = 'delete.catalog'))
+   void kernel(K$DICT.EDIT, (ri.cmd = 'compile.dict'))
+   void kernel(K$SH, 0)
+   void kernel(K$OS.EXEC, 0)
+   void kernel(K$ADMINISTRATOR, 0)
+   return
+
+* One plain word: in ri.word, answer in ri.ok.  No early return from the loop.
+ri.plain.word:
+   ri.ok = @true
+   if ri.word = '' or len(ri.word) > 64 then ri.ok = @false
+   if ri.ok then
+      if not(index('abcdefghijklmnopqrstuvwxyz0123456789', ri.word[1, 1], 1)) then ri.ok = @false
+   end
+   if ri.ok then
+      for ri.i = 1 to len(ri.word)
+         if not(index('abcdefghijklmnopqrstuvwxyz0123456789._-', ri.word[ri.i, 1], 1)) then ri.ok = @false
+      next ri.i
+   end
+   if ri.ok then
+      if index(' ' : ri.kwords : ' ', ' ' : ri.word : ' ', 1) then ri.ok = @false
+   end
    return
 
 *****************************************************************************

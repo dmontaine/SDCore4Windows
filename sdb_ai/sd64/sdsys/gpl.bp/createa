@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 4 (P-7695): no acc.name = '' before the type's begin case, as Linux (every arm that
+*           goes on assigns it; case 1 stops).  Layout only.
 * 17 Nov 26 Windows port - four-version audit round 3 (P-5471, P-5473): attach.marker's fallback is set just before the type's begin case,
 *           as Linux's (layout only).
 * 18 Nov 26 Windows port - four-version audit round 2 (P-5472, P-5474): ADMINISTRATOR and PROGRAMMER are no longer matched; case 1 refuses them
@@ -643,7 +645,6 @@ $include createacc.h
    call @parser(PARSER$GET.TOKEN, token.type, acc.type, keyword)
    acc.type = upcase(acc.type)
 
-   acc.name = ''
    attach.marker = @sdsys:@ds:'$attach'     ;* the fallback for GROUP and OTHER (see the paragraphs above); USER names its own
    begin case
    case acc.type = 'USER'

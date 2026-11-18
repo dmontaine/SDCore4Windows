@@ -838,12 +838,14 @@ APIPORT=4247
 # an absolute path, is not an existing directory, is the root of a drive, holds
 # or lies inside the SD system directory, the directory of this file, USRDIR,
 # GRPDIR or any registered account, or comes after the first 16.  The whole
-# value may be at most 191 characters; a longer one stops SD starting, by name.
+# value may be at most 191 characters; a longer one stops SD starting, and
+# refuses a new session, by name.
 #
 # A directory named here is reachable by EVERY such session in every account,
 # so it is a decision about the machine and not about one account.
 #
-# Changing it takes effect when SD is next started, not when a session begins.
+# A session reads this line when it starts, so a change reaches the sessions
+# started after it; the ignored entries are named when SD is next started.
 # NETDIRS=
 USRDIR=C:\\ProgramData\\SD\\user_accounts
 GRPDIR=C:\\ProgramData\\SD\\group_accounts

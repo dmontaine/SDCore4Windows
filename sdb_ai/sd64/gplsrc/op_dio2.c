@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 4 (P-6841): NETDIRS is the session's own (pcfg.netdirs, read from sd.conf when each
+ *              session starts), as Linux's; it was the segment's, read once when SD started.
  * 18 Nov 26 Windows port - four-version audit round 2 (P-6131): a NETDIRS entry that is the root of a network share (//server/share,
  *              \\server\share) is refused as a whole volume (os_root_share()), as Solo's netdir_whole_volume() refuses it.
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62, NETDIRS made stricter): path_in_netdirs() is asked last (account_path_permitted() is
@@ -2453,8 +2455,9 @@ bool account_path_permitted(char* path,     /* Absolute, as left by fullpath() *
 /* ======================================================================
    NETDIRS (21 Aug 26 Windows port; made stricter 17 Nov 26 from Linux 1557e270, S.62, the owner's decision of 17 Nov).  sd.conf's
    NETDIRS= names directories, separated by ";" (a Windows pathname holds a colon), OUTSIDE ITS OWN ACCOUNT that a session held to its
-   account may still reach, to read and to write.  Empty as delivered: nothing is added.  The list is read at start into the shared
-   segment (sysseg->netdirs), as it always was here (Linux reads it per session; the mail of 18 Nov: "Yours reads at start: keep").
+   account may still reach, to read and to write.  Empty as delivered: nothing is added.  Each session reads the list from sd.conf
+   (pcfg.netdirs, session_trust()), as Linux's does, so a change reaches the sessions started after it (17 Nov 26, four-version audit
+   round 4; it was read once, at start, into the shared segment).
 
    WHO IT REACHES: only a session the gate would refuse - not the administrator or an account with os-on (net_path_permitted() and
    os_path_ok_for_account() pass them before), not an $internal program.  Asked LAST, after the account's own directory (and, in
@@ -2583,7 +2586,7 @@ Private void netdirs_load(bool report) {
   bool have_sys, have_conf;
 
   netdirs_count = 0;
-  if (sysseg->netdirs[0] == '\0')
+  if (pcfg.netdirs[0] == '\0')
     return;
 
   have_sys = netdir_resolved(sd_sysdir(), sysdir);
@@ -2597,7 +2600,7 @@ Private void netdirs_load(bool report) {
     have_conf = netdir_resolved(other, confdir) && !os_root_whole_machine(confdir);  /* sd.conf at a drive root: no entry is taken */
   }
 
-  p = (const char*)(sysseg->netdirs);
+  p = (const char*)(pcfg.netdirs);
   while (*p != '\0') {
     n = strcspn(p, ";");
     if (n > MAX_PATHNAME_LEN) {
@@ -2653,7 +2656,7 @@ void netdirs_report(void) {
 bool path_in_netdirs(char* cand) {
   int i;
 
-  if (sysseg->netdirs[0] == '\0')
+  if (pcfg.netdirs[0] == '\0')
     return FALSE;
   if ((cand == NULL) || (cand[0] == '\0') || has_parent_ref(cand) || netdir_dot_component(cand))
     return FALSE;

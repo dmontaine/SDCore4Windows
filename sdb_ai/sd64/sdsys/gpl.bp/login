@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 4 (P-7388, P-7391, P-7696, P-7697): $release and $command.stack are read with a
+*           THEN branch, as Linux and Windows Solo (no release.found flag, no ELSE voc.rec = '').  No change in effect.
 * 17 Nov 26 Windows port - four-version audit round 3, the case fallbacks (the Linux audit session's D4): $release and
 *   $command.stack are read once, and update.voc reads each id once, with no upper-case takeover and no delete of an old id,
 *   as Linux and Windows Solo.  10096, 10097 and 10098 have real line ends, as Linux's 11000-11002, and the batch gate
@@ -1274,9 +1276,8 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   upper one when this account is next refreshed.
 *   17 Nov 26 Windows port - four-version audit round 3 (P-3369, P-7034; the case fallbacks, D4): ONE READ, as Linux and
 *   Windows Solo.  The VOC is NOCASE, so $RELEASE is the same record.
-      release.found = @true
-      read voc.rec from voc, "$release" else release.found = @false
-      if release.found then
+*   17 Nov 26 (four-version audit round 4, P-7391, P-7696): read with a THEN branch, as Linux and Windows Solo (no flag).
+      read voc.rec from voc, "$release" then
 * 16 Sep 26 Windows port - RELEASE_1.1 39.  THE OLD PER-LOGIN RELEASE-MISMATCH
 *   PROMPT (5025/5026/5027, Field 2) IS REMOVED.  It ran an unguarded `input` on
 *   the mode-0 path, so the installer's HIDDEN upgrade sessions
@@ -1318,16 +1319,16 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   PROJECT_STATUS.md 5.12 (b).
 *   17 Nov 26 Windows port - four-version audit round 3 (P-3376, P-7033; the case fallbacks, D4): one read, as Linux and
 *   Windows Solo (the VOC is NOCASE).
-      read voc.rec from voc,'$command.stack' else
-         voc.rec = ''
-      end
-      if upcase(voc.rec[1,1]) = "X" THEN
+*   17 Nov 26 (four-version audit round 4, P-7388, P-7697): with a THEN branch, as Linux and Windows Solo (no ELSE voc.rec = '').
+      read voc.rec from voc,"$command.stack" then
+         if upcase(voc.rec[1,1]) = "X" THEN
 
-        openpath initial.account.path:@ds:'stacks' to stk.f then
-           read command.stack from stk.f, @logname else null
-           close stk.f
-        end
+           openpath initial.account.path:@ds:'stacks' to stk.f then
+              read command.stack from stk.f, @logname else null
+              close stk.f
+           end
 
+         end
       end
    end
 

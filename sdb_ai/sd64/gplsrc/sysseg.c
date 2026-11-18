@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 4 (P-6841): NETDIRS is no longer copied to the segment; each session reads it.
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 NETDIRS): start_sd() calls netdirs_report() after audit_rotate(), so each NETDIRS
  *           entry SD ignores is named once at start.
  * 17 Nov 26 Windows port - four-version audit round 1 (P-3195): parentheses as Linux's, no change in effect.
@@ -278,7 +279,6 @@ bool bind_sysseg(bool create, char* errmsg) {
   sysseg->errlog = cfg->errlog;                       /* ERRLOG */
   sysseg->fds_limit = cfg->fds_limit;                 /* FDS */
   sysseg->maxidlen = cfg->maxidlen;                   /* MAXIDLEN */
-  strcpy((char*)(sysseg->netdirs), cfg->netdirs);     /* NETDIRS */
   sysseg->netfiles = cfg->netfiles;                   /* NETFILES */
   sysseg->pdump = cfg->pdump;                         /* PDUMP */
   sysseg->api_port = cfg->api_port;                   /* APIPORT */
