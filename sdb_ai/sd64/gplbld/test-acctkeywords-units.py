@@ -57,6 +57,10 @@ for _i, _a in enumerate(sys.argv):
 DECLARED = {
     "verify-routes.ps1":
         "step 2 drives the create-time 2018 refusal and reads it back",
+    # 18 Nov 26: seen once createa's Linux shape let this guard read the refused set again - $badCreate is a POSITIVE CONTROL
+    # (section 6): the module's STANDARD rule must reject exactly that line, so the word is its subject.
+    "test-sdtestuser-units.ps1":
+        "section 6's positive control: $badCreate must be rejected by the STANDARD rule",
 }
 
 # ***THE PARTITION'S SECOND HALF, AND IT IS NOT A WAY TO HIDE A RED ROW.***
@@ -131,7 +135,17 @@ def refused_keywords(path):
         if stop_rx.match(line):
             out.append(pending)
             pending = None
-    return out
+    if out:
+        return out
+    # 18 Nov 26 - round 2 put createa in Linux's shape: the three tier words have no arm of their own any more and reach
+    # the catch-all "case 1 / stop sysmsg(2018, token)", as every unknown word does.  So when no explicit arm refuses,
+    # the refused set is the retired tier words that NO accepted arm names, provided the catch-all really stops with
+    # 2018; without the catch-all the parse is blind and the empty set is returned (main refuses it).
+    text = "\n".join(l for l in lines if not l.strip().startswith("*"))
+    if not re.search(r"^\s*case\s+1\s*\n\s*stop\s+sysmsg\(\s*2018\b", text, re.I | re.M):
+        return []
+    accepted = {m.group(1).upper() for m in case_rx.finditer(text)}
+    return [w for w in ("STANDARD", "PROGRAMMER", "ADMINISTRATOR") if w not in accepted]
 
 
 def command_lines(text):
