@@ -493,7 +493,7 @@ clause of `execute` — run at the current command level ***(clause word)***
 `loop` … `do` … `repeat`
 
 - a statement of SD BASIC
-- docs: `User/markdown/37a-sd-basic-python-integration.md` line 234
+- docs: `User/markdown/37a-sd-basic-python-integration.md` line 212
 
 ### basic:stmt:dparse
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:483#c137eb53 src2=docs:tools/syntax-shapes.txt:69#4e9120fd
@@ -1118,7 +1118,7 @@ clause of `input` and `input @` — show nothing of what is typed
 `osdelete` *path* — a path outside the account's own directory needs the account's `os` switch
 
 - a statement of SD BASIC
-- docs: `User/markdown/07a-sd-basic-locking-and-asking-about-a-file.md` line 194
+- docs: `User/markdown/07a-sd-basic-locking-and-asking-about-a-file.md` line 192
 
 ### basic:stmt:osread
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:532#561a5e43 src2=docs:tools/syntax-shapes.txt:355#807c8c6d
@@ -1726,7 +1726,7 @@ clause of `execute` — take the list the command left
 `set.trigger` *file.var*, *mode*, *program* {, *modes*}
 
 - a RESTRICTED statement: it compiles only in a program with `$internal`, which an ordinary account cannot make; an ordinary program is told "Unrecognised statement"
-- docs: `User/markdown/07a-sd-basic-locking-and-asking-about-a-file.md` line 190
+- docs: `User/markdown/07a-sd-basic-locking-and-asking-about-a-file.md` line 188
 
 ### basic:stmt:set.unassigned
 > kind=basic.restricted tier=reference since=- src=sdsys/gpl.bp/bcomp:562#b233e95e src2=docs:tools/syntax-shapes.txt:213#477d6f21
@@ -2100,7 +2100,7 @@ clause of `loop`: `loop` … `while` *condition* … `repeat`
 `writepkt` *data*
 
 - a RESTRICTED statement: it compiles only in a program with `$internal`, which an ordinary account cannot make; an ordinary program is told "Unrecognised statement"
-- docs: `User/markdown/15-sd-basic-sockets.md` line 317
+- docs: `User/markdown/15-sd-basic-sockets.md` line 315
 
 ### basic:stmt:writeseq
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:528#bfa4d305 src2=docs:tools/syntax-shapes.txt:254#98338a11

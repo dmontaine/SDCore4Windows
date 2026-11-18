@@ -3904,7 +3904,7 @@
 "part": "core.md",
 "since": "-",
 "tier": "core",
-"words": 350
+"words": 370
 },
 "core:tcl-verbs": {
 "kind": "core.digest",
@@ -27039,7 +27039,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "0.6.3",
 "tier": "reference",
-"words": 79
+"words": 83
 },
 "tcl:create.file": {
 "kind": "tcl.verb",
@@ -29216,14 +29216,14 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 119
+"words": 120
 },
 "tcl:tool.entries": {
 "kind": "tcl.verb",
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 125
+"words": 160
 },
 "tcl:tool.files": {
 "kind": "tcl.verb",
@@ -29293,7 +29293,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 104
+"words": 108
 },
 "tcl:top.margin": {
 "kind": "tcl.keyword",
