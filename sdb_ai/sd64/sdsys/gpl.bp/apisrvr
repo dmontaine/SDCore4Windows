@@ -2339,7 +2339,7 @@ vb.scram.final:
                   end else
                      api.local.word = kernel(K$SDSYS.LOCAL, 1)
                      if api.local.word # 'list-empty' then api.local.why = ' why=' : api.local.word
-                     scram.refuse.reason = 'sdsys api from this machine by ' : (if api.local.user = '' then 'a program not named' else api.local.user) : ', not listed by local.sdsys api' : api.local.why
+                     scram.refuse.reason = 'sdsys API session opened by ' : (if api.local.user = '' then 'unknown' else api.local.user) : ' from this machine' : api.local.why   ;* round 6 P-8070: the template's shape
                      abort.message = sysmsg(12992)
                      * SDSYS may use the API from this computer only from a program of a user listed with local.sdsys api
                      server.error = SV$ON.ERROR
