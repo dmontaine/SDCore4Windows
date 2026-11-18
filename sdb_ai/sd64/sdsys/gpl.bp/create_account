@@ -18,6 +18,15 @@
 *
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - four-version audit round 6, D3 (RELEASE_1.1 336): the routine takes the shape of Linux's create_account.  The settings are read
+*              in Linux's order and names (os.sh.want, os.exec.want; the duplicated files.write.want line goes); ROOT / SDSYS / SDUSERS are one case; the
+*              early register read before the name checks goes (the locked read below is the test); the account directory and the groups are made in a
+*              flat sequence, not inside the "directory exists" else; set.access is inlined into the USER arm in Linux's shape (join.files.group,
+*              leave.route.group, the reused user's routes left widest first and sdssh last); create.group sets err itself (10015 with status 2 for an
+*              invalid name, as Linux, where it said "invalid group name"); the register record is written in Linux's order and the state lines are
+*              printed in Linux's order (12520 after 12416, before the files lines); the end falls through to exit.create; the dead omit-list
+*              wrapper round the NEWVOC copy goes; a GROUP account's name is folded before its directory is named, so the directory is lower case.
+*              Windows mechanisms stay: os_group, sdsshonly, secure.account.dir, the Windows password arms, no setgid / chown / sdsys-join.
 * 17 Nov 26 Windows port - four-version audit round 3 (P-7027), as Linux's leave.route.group: for a reused user, a membership of sdfilesadmin,
 *              sdfileswrite, sdfiles, sdaiusers or sdsshnokey that cannot be read stops the verb (10081), as it did for sdssh and sdapi.
 * 18 Nov 26 Windows port - four-version audit round 2 (P-5470), as Linux S.62 (P-1284): a Windows user SD made that a restore takes over again
@@ -176,10 +185,8 @@ deffun ps_script(script) calling '!ps_script'
 *   them" from S.29 until today.  A setting is a request only when it is exactly 1: a blank or a 0 is off.
    access.ssh = (settings<CA$ROUTE.SSH> = 1)
    access.api = (settings<CA$ROUTE.API> = 1)
-   no.query = settings<CA$NO.QUERY> = 1
-   reuse.sd.user = settings<CA$REUSE.SD.USER> = 1   ;* owner, 2 Oct 2026 - see the USER arm
-   os.sh   = settings<CA$OS.SH> = 1
-   os.exec = settings<CA$OS.EXECUTE> = 1
+   os.sh.want = (settings<CA$OS.SH> = 1)
+   os.exec.want = (settings<CA$OS.EXECUTE> = 1)
 * 23 Oct 26 Windows port - from Linux d7cda81 (17 Oct 26), S.64: the edit gates, the same rule: off unless named (VOC-ON, BP-ON, DICT-ON), exactly 1 to be a request.
    edit.voc.want = (settings<CA$VOC.EDIT> = 1)
    edit.bp.want = (settings<CA$BP.EDIT> = 1)
@@ -188,8 +195,6 @@ deffun ps_script(script) calling '!ps_script'
    net.want = (settings<CA$NET> = 1)
 * 17 Oct 26 dm - S.65 slice 2c: the files-only login (membership of sdfiles), the same rule: off unless named (FILES-ON), exactly 1 to be a request.
    files.want = (settings<CA$FILES> = 1)
-* 18 Oct 26 dm - S.65 write group: FILES-WRITE-ON, the same rule, and it needs FILES-ON.
-   files.write.want = (settings<CA$FILESWRITE> = 1)
 * 18 Oct 26 dm - S.65 write group: FILES-WRITE-ON, the same rule; it is a request only with FILES-ON (sdfileswrite alone gives nothing).
    files.write.want = (settings<CA$FILESWRITE> = 1)
 * 21 Oct 26 dm - S.73 item 3: FILES-ADMIN-ON, the same rule; it is a request only with FILES-ON and FILES-WRITE-ON (sdfilesadmin alone gives nothing).
@@ -208,6 +213,8 @@ deffun ps_script(script) calling '!ps_script'
 *   Write is OFF by default: exactly 1 grants it.
    shared.read.off = (settings<CA$SHARED.READ.OFF> = 1)
    shared.write.want = (settings<CA$SHARED.WRITE> = 1)
+   no.query = settings<CA$NO.QUERY> = 1
+   reuse.sd.user = settings<CA$REUSE.SD.USER> = 1   ;* owner, 2 Oct 2026 - see the USER arm
 
 *  ATTACH, re-checked here: -internal and the one-shot marker for THIS account
 *  (RELEASE_1.1 66).  The verb refuses the word with 2018 when either gate is
@@ -296,20 +303,11 @@ deffun ps_script(script) calling '!ps_script'
      * Check reserved names then
      * Check user name as entered, then force to lower case and re check
      begin case
-     
-     * is user reserved?
-     case upcase(acc.uname) = 'ROOT' 
+     case upcase(acc.uname) = 'ROOT' or upcase(acc.uname) = 'SDSYS' or upcase(acc.uname) = 'SDUSERS'
        @system.return.code = -ER$ARGS
-       err = 6052 ; goto exit.create ;* User name is invalid
-     
-     case upcase(acc.uname) = 'SDSYS' 
-       @system.return.code = -ER$ARGS
-       err = 6052 ; goto exit.create ;* User name is invalid
-      
-     case upcase(acc.uname) = 'SDUSERS' 
-       @system.return.code = -ER$ARGS
-       err = 6052 ; goto exit.create ;* User name is invalid
-          
+       err = 6052 ;* User name is invalid
+       goto exit.create
+
 * 14 Aug 26 Windows port - THE TWO ADOPT BRANCHES ARE GONE.  They admitted any
 *   pre-existing OS user, which is not the model: the repository owner's rule
 *   of 14 Aug 2026 is that the ONLY pre-existing OS user that may be given an
@@ -436,7 +434,8 @@ PW.REUSE.AGAIN:
 
          case 1
            @system.return.code = -ER$ARGS
-           err = 10038:@vm:acc.uname ; goto exit.create ;* Windows account %1 already exists
+           err = 10038:@vm:acc.uname ;* Windows account %1 already exists
+           goto exit.create
        end case
 
      case attach
@@ -445,7 +444,8 @@ PW.REUSE.AGAIN:
 *      asked - the account exists in Windows and the SD account must be bound
 *      to THAT one, or `sd` at the person's console lands nowhere.
        @system.return.code = -ER$ARGS
-       err = 6074 ; goto exit.create ;*    Invalid user name
+       err = 6074  ;* Invalid user name
+       goto exit.create
 
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE 'ADOPT' CASE IS DELETED WITH THE
 *   KEYWORD.  It read: ADOPT names an OS account that is not there, so there is
@@ -460,8 +460,9 @@ PW.REUSE.AGAIN:
 *   was not an existing user, and said "Invalid user name", which was already
 *   the wrong reason: the name is fine, it is NO.QUERY that cannot work.
 *   Creating an OS account means setting its password, and SET_PASSWD prompts.
-         @system.return.code = -ER$ARGS
-         err = 10039:@vm:acc.uname ; goto exit.create  ;* Cannot create %1 with NO.QUERY
+       @system.return.code = -ER$ARGS
+       err = 10039:@vm:acc.uname  ;* Cannot create %1 with NO.QUERY
+       goto exit.create
 
      case 1
 * 14 Aug 26 Windows port - THE config('CREATUSR') GATE IS GONE.  Decision from
@@ -503,11 +504,13 @@ PW.REUSE.AGAIN:
          prof.stat = status()
          if prof.stat # 0 then
            @system.return.code = -ER$NOT.CREATED
-           err = 10125:@vm:acc.uname:@vm:prof.stat ; goto exit.create ;* could not check for a leftover profile
+           err = 10125:@vm:acc.uname:@vm:prof.stat ;* could not check for a leftover profile
+           goto exit.create
          end
          if prof.dir # '' then
            @system.return.code = -ER$NOT.CREATED
-           err = 10124:@vm:acc.uname:@vm:prof.dir ; goto exit.create ;* a profile directory is already there
+           err = 10124:@vm:acc.uname:@vm:prof.dir ;* a profile directory is already there
+           goto exit.create
          end
 
 		 * Check INVERT/NOINVERT STATUS (1=INVERT on)
@@ -531,7 +534,8 @@ PW.REUSE.AGAIN:
 *   command it just ran failed.  It was being told this one had not.
 *   Upstream too: UPSTREAM_FIXES.md #11.
            @system.return.code = -ER$NOT.CREATED
-           err = 10006:@vm:STATUS() ; goto exit.create ;* Create User Failed, OS Error: %1
+           err = 10006:@vm:status() ;* Create User Failed, OS Error: %1
+           goto exit.create
          end else
            crt sysmsg(10007,acc.uname)  ;* 'User ':acc.uname:' Created'
            * user created set passowrd
@@ -644,8 +648,9 @@ PW.TRY.AGAIN:
 *    CREATE.ACCOUNT GROUP <grp acct name>
      pathname = CONFIG('GRPDIR')
      if pathname = '' then pathname = 'C:\ProgramData\SD\group_accounts'
+     acc.name = downcase(acc.name)
      pathname := @ds:acc.name
-     if upcase(acc.name) = 'SDUSERS' then
+     if acc.name = 'sdusers' then
        @system.return.code = -ER$ARGS
        err = 2202 ;* Account name is invalid
        goto exit.create
@@ -657,7 +662,7 @@ PW.TRY.AGAIN:
        err = 10087:@vm:acc.name ;* %1 is a group account and has no remote access
        goto exit.create
      end
-     if os.sh or os.exec then
+     if os.sh.want or os.exec.want then
        @system.return.code = -ER$ARGS
        err = 10105:@vm:acc.name ;* %1 is a group account and has no Windows user, so it has no shell to permit
        goto exit.create
@@ -694,7 +699,7 @@ PW.TRY.AGAIN:
        err = 2202 ;* Account name is invalid
        goto exit.create
      end
-     if os.sh or os.exec then
+     if os.sh.want or os.exec.want then
        @system.return.code = -ER$ARGS
        err = 10105:@vm:acc.name ;* %1 has no Windows user of its own, so it has no shell to permit
        goto exit.create
@@ -735,17 +740,8 @@ PW.TRY.AGAIN:
      goto exit.create
    end case
 
-
-   * Check if already exists in ACCOUNTS file.  We will need to do this
-   * again when we are ready to create the account but doing it here
-   * saves the user typing the path name before we spot the error.
-
-   read acc.rec from acc.f, acc.name then      ;* 0275
-      @system.return.code = -ER$ACC.EXISTS
-      err = 6002 ; goto exit.create ;* Account already exists
-   end
-
-   * Validate account name
+* 18 Nov 26 Windows port - D3 (P-3314): the early "read acc.rec ... then 6002" that stood here goes, as Linux has none: the locked read below is the
+*   test, and nothing between the two can be reached by a name already in the register that the first would have stopped.
 
 * 22 Aug 26 Windows port - THE REGISTER KEY IS LOWER CASE.  Owner's instruction,
 *   on seeing "sdsys\accounts\DON" sitting beside "user_accounts\don" for the
@@ -776,58 +772,55 @@ PW.TRY.AGAIN:
    acc.name = downcase(acc.name)
 
    if len(acc.name) > 32 or not(alpha(acc.name[1,1])) or index(acc.name, ' ', 1) then
-      err = 6003 ; goto exit.create ;* Account name is invalid
+      err = 6003 ;* Account name is invalid
+      goto exit.create
    end
-
-   * Validate pathname
 
    if not(ospath(pathname, OS$PATHNAME)) then
-      err = 6005 ; goto exit.create ;* Invalid account pathname
+      err = 6005 ;* Invalid account pathname
+      goto exit.create
    end
 
-
-   * Check if already exists in ACCOUNTS file
-
    readu acc.rec from acc.f, acc.name locked
-      err = 6006:@vm:status() ; goto exit.create ;* ACCOUNTS record is locked by user xx
+      err = 6006:@vm:status() ;* ACCOUNTS record is locked by user xx
+      goto exit.create
    end then
       locked = @true
       @system.return.code = -ER$ACC.EXISTS
-      err = 6002 ; goto exit.create ;* Account already exists
+      err = 6002 ;* Account already exists
+      goto exit.create
    end
 *  02 Oct 26 Windows port - the record is locked from here until the register
 *  write below; exit.create releases it on any failure in between.
    locked = @true
-
-   * Check parent directory exists
-
 
    if index(pathname, @ds, 1) then
       parent.dir = field(pathname, @ds, 1, dcount(pathname, @ds) - 1)
       if parent.dir # '' and not(parent.dir matches "1A':") then
          if not(ospath(parent.dir, OS$EXISTS)) then
             @system.return.code = -ER$NO.DIR
-            err = 6008 ; goto exit.create ;* Parent directory does not exist
+            err = 6008 ;* Parent directory does not exist
+            goto exit.create
          end
       end
    end
 
    pathname = ospath(pathname, OS$FULLPATH)
 
-   * Check if account directory exists
    * rev 0.9.0 we no longer support conversion of existing directoris to sd accounts
    * too many unknows with whether this is a non sd type account (Scarlett or other)
-
    if ospath(pathname, OS$EXISTS) then
       @system.return.code = -ER$NOT.CREATED
-      err = 10009 ; goto exit.create ;* 'Cannot Create a New SD Account in an Existing Directory'
-   end else
-   * create the new account directory
-      create.file pathname directory on error
-         @system.return.code = -ER$NOT.CREATED
-         err = 6013 ; goto exit.create ;* Unable to create account directory
-      end
-      
+      err = 10009 ;* 'Cannot Create a New SD Account in an Existing Directory'
+      goto exit.create
+   end
+
+   create.file pathname directory on error
+      @system.return.code = -ER$NOT.CREATED
+      err = 6013 ;* Unable to create account directory
+      goto exit.create
+   end
+
 * 15 Aug 26 Windows port - THE setgid BIT IS GONE, AND SO IS sudo.  It ran
 *   "sudo chmod g+s <dir>" on every account directory to make files inherit the
 *   directory's group, which is a POSIX mechanism Windows does not have and
@@ -841,9 +834,9 @@ PW.TRY.AGAIN:
 *   Messages 10010 and 10011 lose their only caller with it.
 
 
-     * rev 0.9.0  create group for the account *   
-      begin case
-      case upcase(acc.type) = "USER" 
+     * rev 0.9.0  create group for the account *
+   begin case
+   case acc.type = "USER"
 
      *  is this user a member or sdusers?
         if not(is_grp_member(acc.uname,'sdusers')) then
@@ -870,7 +863,8 @@ PW.TRY.AGAIN:
             crt sysmsg(10013,acc.uname)   ;* %1 added to sdusers'
           end else
             @system.return.code = -ER$FAILED
-            err = 10012:@vm:acc.uname:@vm:stat ; goto exit.create ;* Unable to add user %1 to sdusers, status: %2
+            err = 10012:@vm:acc.uname:@vm:stat ;* Unable to add user %1 to sdusers, status: %2
+            goto exit.create
           end
           end
         end
@@ -999,7 +993,8 @@ PW.TRY.AGAIN:
             crt sysmsg(10034,acc.uname)   ;* %1 is denied console and Remote Desktop
           end else
             @system.return.code = -ER$FAILED
-            err = 10035:@vm:acc.uname:@vm:stat ; goto exit.create ;* Unable to restrict %1 to ssh, status: %2
+            err = 10035:@vm:acc.uname:@vm:stat ;* Unable to restrict %1 to ssh, status: %2
+            goto exit.create
           end
         end       ;* already a Windows administrator
 
@@ -1025,26 +1020,133 @@ PW.TRY.AGAIN:
 *   reasoning was that an API session runs as LocalSystem and could rewrite
 *   $cred - measured 20 Aug 2026 - which the containment gate closed on 21 Aug.
 *   There is no default any more in any case: the caller says.
-        gosub set.access
-        if err # '' then goto exit.create
+*
+* 18 Nov 26 Windows port - D3 (P-7694): what was the set.access subroutine is here, in Linux's shape.  The routes: membership of sdssh and sdapi
+*   IS the route.  A join that fails is reported (10081) and the account stops here.  A FAILURE STOPS THE VERB, matching every other group step:
+*   an account whose access is not what was asked for is worse than no account.  No "already a member" test: the Windows user was made moments
+*   ago and is in no group but the ones added above (a reused user is the one exception, and the leaves below handle it).
+      route.stat = 0
+      if access.ssh then
+         route.stat = os_group("ADDMEM", "sdssh", acc.uname)
+      end
+      if route.stat = 0 and access.api then
+         route.stat = os_group("ADDMEM", "sdapi", acc.uname)
+      end
+      if route.stat # 0 then
+         @system.return.code = -ER$FAILED
+         err = 10081:@vm:acc.uname:@vm:route.stat ;* Unable to change remote access for %1
+         goto exit.create
+      end
+* 17 Oct 26 dm - S.65 slice 2c (Windows port 25 Oct 26): the files-only login, the group sdfiles, joined the same way; a failed join is reported with its
+*   status and the account stops here, as for the routes.  The group's existence was checked before the Windows user was made.  Nothing is said on
+*   success: the state line (12487) is printed with the others after the register record is written.
+      if files.want then
+         files.grp.name = 'sdfiles'
+         gosub join.files.group
+         if route.stat # 0 then goto exit.create
+      end
+* 18 Oct 26 dm - S.65 write group (Linux 3fbfc0d): and the write group, after sdfiles, the same way (the group's existence was checked above).  The state line
+*   (12527) is printed with the others.
+      if files.write.want then
+         files.grp.name = 'sdfileswrite'
+         gosub join.files.group
+         if route.stat # 0 then goto exit.create
+      end
+* 21 Oct 26 dm - S.73 item 3: and the administration group, after sdfileswrite, the same way.  The state line (12530) is printed with the others.
+      if files.admin.want then
+         files.grp.name = 'sdfilesadmin'
+         gosub join.files.group
+         if route.stat # 0 then goto exit.create
+      end
+* 23 Oct 26 dm - S.69 step 2 (Windows port 13 Nov 26, RELEASE_1.1 246): and the AI group, on its own.  The state line (12611) is printed with the others.
+      if ai.want then
+         files.grp.name = 'sdaiusers'
+         gosub join.files.group
+         if route.stat # 0 then goto exit.create
+      end
+*  9 Oct 26 Windows port - RELEASE_1.1 130 (and Linux S.62, P-1284): A WINDOWS USER SD MADE, TAKEN OVER AGAIN (a restore's CA$REUSE.SD.USER), KEEPS NO
+*   ROUTE IT WAS NOT GIVEN NOW.  The joins above only ADD, so a reused user kept whatever memberships its earlier account had.  Each route group the
+*   request does not name is left, the widest last, through leave.route.group: a membership that cannot be read (status() 1) stops the verb like a
+*   failed DELMEM (P-7027; skipping it would leave the route in place without a word - test-groupmember-units, READS_STATUS).  A new user is in no
+*   such group, so this runs for a reused user only.  18 Nov 26 (D3): Linux's loop and order (sdssh and sdapi last), where it was typed out six times.
+      if reuse.sd.user then
+         for leave.i = 1 to 6
+            begin case
+               case leave.i = 1
+                  files.grp.name = 'sdfilesadmin'
+                  leave.it = not(files.admin.want)
+               case leave.i = 2
+                  files.grp.name = 'sdfileswrite'
+                  leave.it = not(files.write.want)
+               case leave.i = 3
+                  files.grp.name = 'sdfiles'
+                  leave.it = not(files.want)
+               case leave.i = 4
+                  files.grp.name = 'sdaiusers'
+                  leave.it = not(ai.want)
+               case leave.i = 5
+                  files.grp.name = 'sdapi'
+                  leave.it = not(access.api)
+               case 1
+                  files.grp.name = 'sdssh'
+                  leave.it = not(access.ssh)
+            end case
+            if leave.it then
+               gosub leave.route.group
+               if route.stat # 0 then goto exit.create
+            end
+         next leave.i
+      end
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3; the owner, 17 Nov 2026: "key sign-in is FORBIDDEN as delivered ... only the accounts SD itself made lose key
+*   sign-in").  A Windows user this routine made, or a restore took over (SD made it: !is_sd_user, CA$REUSE.SD.USER), is put in sdsshnokey, the group whose members sshd
+*   offers no key sign-in (allow-ssh-groups.ps1's "Match Group sdsshnokey" arm), unless SSH-KEY-ON was asked; a reused user given SSH-KEY-ON is taken out of it.  AN
+*   ATTACHED USER IS NEVER TOUCHED: it is the installing user's own sign-in, and the keys it set up outside SD are its own.  A failure is reported (10081) and the account
+*   stops here, as for a route.  This is the only place a Windows user joins the group unasked, so an upgrade, which makes no account, changes nobody's key sign-in.
+*   NOT sdsshonly: that group carries the deny-logon rights (deny-logon.ps1), which no verb may lift, and ssh-key-on must be able to take an account out of this one.
+      if not(attach) then
+         files.grp.name = 'sdsshnokey'
+         if ssh.key.want then
+            if reuse.sd.user then
+               gosub leave.route.group
+               if route.stat # 0 then goto exit.create
+            end
+         end else
+            gosub join.files.group
+            if route.stat # 0 then goto exit.create
+         end
+      end
+*  Says the whole resulting state, in the same four messages MODIFY.ACCOUNT uses, so an account's access reads identically whether it was just made
+*  or just changed.
+      begin case
+         case access.ssh and access.api
+            crt sysmsg(10078, acc.uname)  ;* SD routes for %1: ssh and the API.
+         case access.ssh
+            crt sysmsg(10076, acc.uname)  ;* SD routes for %1: ssh only, not the API.
+         case access.api
+            crt sysmsg(10077, acc.uname)  ;* SD routes for %1: the API only, not ssh.
+         case 1
+            crt sysmsg(10079, acc.uname)  ;* %1 has no remote access: not ssh, not the API
+      end case
 
-      *
-      * create user's sd group
-        group_name = "sdu_":acc.uname
-        gosub create.group
-        if not(group_success) then
-          err = 10015:@vm:group_name:@vm:gc.why ; goto exit.create ;* Unable to create group: %1 status: %2
-        end
+*  PRE_RELEASE_FIXES 125: A ROUTE WITH NOTHING BEHIND IT IS SAID, NOT REFUSED.  The membership above is made either way and takes effect when the
+*  transport comes on (the owner ruled that provisioning first is a legitimate workflow).  Native checks only, so create.account gains no PowerShell
+*  probe on its hot path: sshd.exe on disk (the Windows feature's place, or the OpenSSH MSI's in Program Files\OpenSSH, RELEASE_1.1 121), and
+*  sd.conf's APIPORT for the listener.
+      if access.ssh and not(ospath('C:\WINDOWS\System32\OpenSSH\sshd.exe', OS$EXISTS)) and not(ospath('C:\Program Files\OpenSSH\sshd.exe', OS$EXISTS)) then
+         crt sysmsg(10161, acc.uname)  ;* %1 is set up for ssh, but this machine has no ssh server yet
+      end
+      if access.api and (config('APIPORT') + 0) <= 0 then
+         crt sysmsg(10162, acc.uname)  ;* %1 is set up for the API, but this machine provides no API listener yet
+      end
 
-      case upcase(acc.type) = "GROUP"
-      *
-      * create account's sd group
-* rev 1.0-1
-        group_name = downcase("sdg_" : acc.name) ;* callers entered group name, force lower case with sdg_prefix
-        gosub create.group
-        if not(group_success) then
-          err = 10015:@vm:group_name:@vm:gc.why ; goto exit.create ;* Unable to create group: %1 status: %2
-        end
+      group_name = "sdu_":downcase(acc.uname)
+      gosub create.group
+      if err # '' then goto exit.create
+
+   case acc.type = "GROUP"
+      group_name = downcase("sdg_" : acc.name)
+      gosub create.group
+      if err # '' then goto exit.create
 * 02 Oct 26 Windows port - CA$MEMBERS (RELEASE_1.1 116): a restored GROUP
 *   account gets its members back, as GRANT would add them (os_group ADDMEM).
 *   A member that cannot be added is named and the account still stands - the
@@ -1057,114 +1159,87 @@ PW.TRY.AGAIN:
           stat = os_group("ADDMEM", group_name, member)
           if stat # 0 then crt sysmsg(12006, member, group_name, stat) ;* could not be added
         next mi
-      end case
-      
-      *      
-*     make the accountfolders and copy files    
-*     Note --> if there is a failure in make.account the program terminates
-*     We could end up with groups created and no acctual account
-*
-      gosub make.account
-      if err # '' then goto exit.create
+   end case
 
-   end
-
-   * Add ACCOUNTS entry
+   gosub make.account
+   if err # '' then goto exit.create
 
    display sysmsg(6014) ;* Adding to register of accounts...
 
    acc.rec = ''
    acc.rec<ACC$PATH> = pathname
-   * rev 0.9.0 add group name to ACCOUNT record
-   * group name depends on which type of ACCOUNT we are creating
-   * We do not default to ACCOUNT name because account names are (historically?) always upper case
-   * Not sure what to do about account type "OTHER" ???
-   begin case
-   case upcase(acc.type) = "USER"
-     acc.rec<ACC$GROUP> = "sdu_":acc.uname
-   case upcase(acc.type) = "GROUP"
-     acc.rec<ACC$GROUP> = group_name
-   end case
-* 02 Oct 26 Windows port - CA$DESC and CA$SUSPENDED (RELEASE_1.1 116): a
-*   restored account keeps its description and its suspension.  CREATE.ACCOUNT
+* 02 Oct 26 Windows port - CA$DESC and CA$SUSPENDED (RELEASE_1.1 116): a restored account keeps its description and its suspension.  CREATE.ACCOUNT
 *   itself sets neither, so the record is as it always was for the verb.
-   if settings<CA$DESC> # '' then acc.rec<ACC$DESCR> = settings<CA$DESC>
-   if settings<CA$SUSPENDED> = 1 then acc.rec<ACC$SUSPENDED> = 'SUSPENDED'
-* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIER WRITE IS GONE WITH THE
-*   FIELDS.  Nothing is recorded on the account record any more: there is no
-*   tier to record, ACC$SUSPENDED starts blank (nothing can suspend an account
-*   that does not exist yet), and the VOC walk at LOGIN copies the whole of
-*   NEWVOC for every account, so there is no omit list for the record to carry.
-*   AND THE TIER VARIABLE IS GONE WITH THEM, not merely left unused: its last
-*   three readers were the register write and the two ADMINISTRATOR arms, all
-*   deleted on 18 Sep 2026.
+   acc.rec<ACC$DESCR> = settings<CA$DESC>
+   begin case
+   case acc.type = "USER"
+     acc.rec<ACC$GROUP> = "sdu_":downcase(acc.uname)
 * 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  The OS-access gates are written to the register explicitly, 'no'
 *   unless asked, so that a record that says 'no' (somebody decided) can be told from one that says nothing (never told, read as
 *   denied too).  They replace the person-keyed OS.USERS record that grant.os.access used to write.
-   if acc.type = "USER" then
-      acc.rec<ACC$SH> = if os.sh then 'yes' else 'no'
-      acc.rec<ACC$OS.EXEC> = if os.exec then 'yes' else 'no'
-*     17 Oct 26 dm (Linux d7cda81) - S.64: the edit gates, written explicitly for a user account.
-      acc.rec<ACC$VOC.EDIT> = if edit.voc.want then 'yes' else 'no'
-      acc.rec<ACC$BP.EDIT> = if edit.bp.want then 'yes' else 'no'
-      acc.rec<ACC$DICT.EDIT> = if edit.dict.want then 'yes' else 'no'
+     acc.rec<ACC$SH> = if os.sh.want then 'yes' else 'no'
+     acc.rec<ACC$OS.EXEC> = if os.exec.want then 'yes' else 'no'
+*    17 Oct 26 dm (Linux d7cda81) - S.64: the edit gates, written explicitly for a user account.
+     acc.rec<ACC$VOC.EDIT> = if edit.voc.want then 'yes' else 'no'
+     acc.rec<ACC$BP.EDIT> = if edit.bp.want then 'yes' else 'no'
+     acc.rec<ACC$DICT.EDIT> = if edit.dict.want then 'yes' else 'no'
 * 17 Oct 26 dm - S.65 slice 1: the NET gate, written explicitly for a user account.
-      acc.rec<ACC$NET> = if net.want then 'yes' else 'no'
+     acc.rec<ACC$NET> = if net.want then 'yes' else 'no'
 * 18 Oct 26 dm - S.66: the shared-account gates, written explicitly for a user account (read 'yes' unless withdrawn, write 'no' unless granted), so that a
 *   decided state can be told from a blank one.
-      acc.rec<ACC$SHARED.READ> = if shared.read.off then 'no' else 'yes'
-      acc.rec<ACC$SHARED.WRITE> = if shared.write.want then 'yes' else 'no'
+     acc.rec<ACC$SHARED.READ> = if shared.read.off then 'no' else 'yes'
+     acc.rec<ACC$SHARED.WRITE> = if shared.write.want then 'yes' else 'no'
 * 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): the recovery copy, written explicitly for a user account ('no' unless asked).
-      acc.rec<ACC$RECOVERY> = if recovery.want then 'yes' else 'no'
+     acc.rec<ACC$RECOVERY> = if recovery.want then 'yes' else 'no'
 * 15 Nov 26 Windows port - from Linux e080527e (S.242, RELEASE_1.1 299): file transfer, written explicitly for a user account ('no' unless asked).  Fields
 *   20-21 are Solo's (keys.h) and stay blank here.
-      acc.rec<ACC$XFER> = if xfer.want then 'yes' else 'no'
-   end else
-*     A group or other account has no sign-on of its own to carry them, but MODIFY.ACCOUNT allows the switches there, so the words
-*     are honoured here too: written only when asked (blank is off).
-      if edit.voc.want then acc.rec<ACC$VOC.EDIT> = 'yes'
-      if edit.bp.want then acc.rec<ACC$BP.EDIT> = 'yes'
-      if edit.dict.want then acc.rec<ACC$DICT.EDIT> = 'yes'
-      if net.want then acc.rec<ACC$NET> = 'yes'
-      if shared.read.off then acc.rec<ACC$SHARED.READ> = 'no'      ;* 18 Oct 26, S.66: blank stays the default (read on, write off)
-      if shared.write.want then acc.rec<ACC$SHARED.WRITE> = 'yes'
+     acc.rec<ACC$XFER> = if xfer.want then 'yes' else 'no'
+   case acc.type = "GROUP"
+     acc.rec<ACC$GROUP> = group_name
+   end case
+* A group or other account has no sign-on of its own to carry them, but MODIFY.ACCOUNT allows the switches there, so the words are
+*   honoured here too: written only when asked (blank is off).
+   if acc.type # "USER" then
+     if edit.voc.want then acc.rec<ACC$VOC.EDIT> = 'yes'
+     if edit.bp.want then acc.rec<ACC$BP.EDIT> = 'yes'
+     if edit.dict.want then acc.rec<ACC$DICT.EDIT> = 'yes'
+     if net.want then acc.rec<ACC$NET> = 'yes'
+     if shared.read.off then acc.rec<ACC$SHARED.READ> = 'no'      ;* 18 Oct 26, S.66: blank stays the default (read on, write off)
+     if shared.write.want then acc.rec<ACC$SHARED.WRITE> = 'yes'
    end
+   if settings<CA$SUSPENDED> = 1 then acc.rec<ACC$SUSPENDED> = 'SUSPENDED'
 * 28 Oct 26 (from Linux ec8459b) - S.75, home: the start word and the permission to add programs, for any type of account (MODIFY.ACCOUNT allows them on any); written only when asked, so a blank
 *   stays the system default and 'no'.
    if start.want # '' then acc.rec<ACC$START> = start.want
    if pins.want then acc.rec<ACC$PINS> = 'yes'
+
    write acc.rec to acc.f, acc.name
    locked = @false
-   close acc.f
-   acc.f.open = @false
    if acc.type = "USER" then
-      crt sysmsg(10102, acc.name, acc.rec<ACC$SH>, acc.rec<ACC$OS.EXEC>)  ;* Account %1 has SH %2, OS.EXECUTE %3
-      crt sysmsg(12414, acc.name, acc.rec<ACC$VOC.EDIT>, acc.rec<ACC$BP.EDIT>, acc.rec<ACC$DICT.EDIT>)  ;* Account %1 has VOC.EDIT %2, BP.EDIT %3, DICT.EDIT %4
-      crt sysmsg(12416, acc.name, acc.rec<ACC$NET>)  ;* Account %1 has NET %2
-*     17 Oct 26, S.65 slice 2c: FILES is membership of sdfiles, so the line is read off the group, not off the request.
-      files.now = is_grp_member(acc.uname, 'sdfiles')
-      crt sysmsg(12487, acc.name, if files.now then 'yes' else 'no')  ;* Account %1 has FILES %2
-*     18 Oct 26, S.65 write group: the same, for sdfileswrite.
-      files.wnow = is_grp_member(acc.uname, 'sdfileswrite')
-      crt sysmsg(12527, acc.name, if files.wnow then 'yes' else 'no')  ;* Account %1 has FILES-WRITE %2
-*     21 Oct 26, S.73 item 3: and for sdfilesadmin.
-      files.anow = is_grp_member(acc.uname, 'sdfilesadmin')
-      crt sysmsg(12530, acc.name, if files.anow then 'yes' else 'no')  ;* Account %1 has files-admin %2
-*     13 Nov 26 Windows port (Linux S.69 step 2, RELEASE_1.1 246): and for sdaiusers.
-      ai.now = is_grp_member(acc.uname, 'sdaiusers')
-      crt sysmsg(12611, acc.name, if ai.now then 'yes' else 'no')  ;* Account %1 has ai %2
-      crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3
-*     10 Nov 26 (from Linux 44807a43, S.88 plan 2.9, D2): the recovery copy, in the words MODIFY.ACCOUNT says it with.
-      crt sysmsg(12775, acc.name, acc.rec<ACC$RECOVERY>)  ;* Account %1 keeps a recovery copy of unsaved editor text: %2
-*     15 Nov 26 (from Linux e080527e, S.242, RELEASE_1.1 299): file transfer, in the words MODIFY.ACCOUNT says it with.
-      crt sysmsg(15074, acc.name, acc.rec<ACC$XFER>)  ;* Account %1 may move files over its ssh login (receive / send): %2
-*     17 Nov 26 (from Linux 1557e270, S.62 LC3): key sign-in is NOT being in sdsshnokey, read off the group.  Not said for an attached user, whose keys SD does not manage.
-      if not(attach) then crt sysmsg(15171, acc.name, if is_grp_member(acc.uname, 'sdsshnokey') then 'no' else 'yes')  ;* Account %1 may sign in over ssh with a key: %2
+     crt sysmsg(10102, acc.name, acc.rec<ACC$SH>, acc.rec<ACC$OS.EXEC>)  ;* Account %1 has SH %2, OS.EXECUTE %3
+     crt sysmsg(12414, acc.name, acc.rec<ACC$VOC.EDIT>, acc.rec<ACC$BP.EDIT>, acc.rec<ACC$DICT.EDIT>)  ;* Account %1 has VOC.EDIT %2, BP.EDIT %3, DICT.EDIT %4
+     crt sysmsg(12416, acc.name, acc.rec<ACC$NET>)  ;* Account %1 has NET %2
+     crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3
+*    17 Oct 26, S.65 slice 2c: FILES is membership of sdfiles, so the line is read off the group, not off the request.
+     crt sysmsg(12487, acc.name, if is_grp_member(acc.uname, 'sdfiles') then 'yes' else 'no')  ;* Account %1 has files %2
+*    18 Oct 26, S.65 write group: the same, for sdfileswrite.
+     crt sysmsg(12527, acc.name, if is_grp_member(acc.uname, 'sdfileswrite') then 'yes' else 'no')  ;* Account %1 has files-write %2
+*    21 Oct 26, S.73 item 3: and for sdfilesadmin.
+     crt sysmsg(12530, acc.name, if is_grp_member(acc.uname, 'sdfilesadmin') then 'yes' else 'no')  ;* Account %1 has files-admin %2
+*    13 Nov 26 Windows port (Linux S.69 step 2, RELEASE_1.1 246): and for sdaiusers.
+     crt sysmsg(12611, acc.name, if is_grp_member(acc.uname, 'sdaiusers') then 'yes' else 'no')  ;* Account %1 has ai %2
+*    10 Nov 26 (from Linux 44807a43, S.88 plan 2.9, D2): the recovery copy, in the words MODIFY.ACCOUNT says it with.
+     crt sysmsg(12775, acc.name, acc.rec<ACC$RECOVERY>)  ;* Account %1 keeps a recovery copy of unsaved editor text: %2
+*    15 Nov 26 (from Linux e080527e, S.242, RELEASE_1.1 299): file transfer, in the words MODIFY.ACCOUNT says it with.
+     crt sysmsg(15074, acc.name, acc.rec<ACC$XFER>)  ;* Account %1 may move files over its ssh login (receive / send): %2
+*    17 Nov 26 (from Linux 1557e270, S.62 LC3): key sign-in is NOT being in sdsshnokey, read off the group.  Not said for an attached user, whose keys SD does not manage.
+     if not(attach) then crt sysmsg(15171, acc.name, if is_grp_member(acc.uname, 'sdsshnokey') then 'no' else 'yes')  ;* Account %1 may sign in over ssh with a key: %2
    end
 *  28 Oct 26, S.75, home: the two settings are said when they were asked for, in the words MODIFY.ACCOUNT says them with.
    if start.want # '' then crt sysmsg(12873, acc.name, start.want)  ;* Account %1 starts at: %2
    if pins.want then crt sysmsg(12890, acc.name, 'yes')  ;* Account %1 may add its own programs to the home screen: %2
 
+* 19 Aug 26 Windows port - the account's directory is locked to its own group (NTFS ACL); Linux's set.owner / setgid have no Windows counterpart.
    gosub secure.account.dir
 
 * 27 Aug 26 Windows port - AN ADMINISTRATOR REACHES THE OPERATING SYSTEM
@@ -1195,19 +1270,20 @@ PW.TRY.AGAIN:
 *   register (ACC$SH, ACC$OS.EXEC) a few lines up, and the person-keyed OS.USERS record is retired.  grant.os.access is gone.
 
    @system.return.code = 0
-   return
 
 * ======================================================================
-* exit.create - every failure after the register is open comes here.
+* exit.create - every failure after the register is open comes here, and the success path falls into it (18 Nov 26, D3, as Linux).
 *
 * A subroutine gets no stop's implicit release, so the ACCOUNTS readu taken
-* below is released here, and the file closed.  Reached only by goto from the
+* above is released here, and the file closed.  Reached only by goto from the
 * main body, never from inside a gosub: a goto out of a gosub would leave its
 * return address on the stack, and this return would resume the gosub's caller
 * instead of leaving the subroutine (SD Core for Linux's split, 1 Oct 2026).
 exit.create:
-   if locked then release acc.f, acc.name
-   if acc.f.open then close acc.f
+   if acc.f.open then
+      if locked then release acc.f, acc.name
+      close acc.f
+   end
    return
 
 * ======================================================================
@@ -1230,6 +1306,39 @@ check.files.group:
          err = 10024:@vm:files.grp.name ;* %1 is not a valid Windows group
          files.bad = @true
       end
+   end
+   return
+
+* ======================================================================
+* JOIN.FILES.GROUP  -  put the new user in the Windows group files.grp.name through os_group.  route.stat is 0 when it said yes; otherwise the return code and err
+* are set (10081 with the status) and the caller stops, as for the routes.  Nothing is said on success: the state lines are printed with the others after the
+* register record is written.  (18 Nov 26, D3: Linux's subroutine, os_group for sd-elevate; os_group returns 0 on success, PRE_RELEASE_FIXES 94.)
+
+join.files.group:
+   route.stat = os_group("ADDMEM", files.grp.name, acc.uname)
+   if route.stat # 0 then
+      @system.return.code = -ER$FAILED
+      err = 10081:@vm:acc.uname:@vm:route.stat ;* Unable to change remote access for %1
+   end
+   return
+
+* ======================================================================
+* leave.route.group - take acc.uname out of files.grp.name if it is a member (Linux S.62, P-1284; here RELEASE_1.1 130 and P-7027).  A non-member is
+*   nothing to do; a membership that cannot be read is a failure, not a "no".  Out: route.stat (0 = done), err set on a failure.
+
+leave.route.group:
+   route.stat = 0
+   leave.member = is_grp_member(acc.uname, files.grp.name)
+   leave.told = status()                                  ;* 1 when !is_grp_member could not tell
+   if leave.told # 0 then
+      route.stat = leave.told
+   end else
+      if not(leave.member) then return
+      route.stat = os_group("DELMEM", files.grp.name, acc.uname)
+   end
+   if route.stat # 0 then
+      @system.return.code = -ER$FAILED
+      err = 10081:@vm:acc.uname:@vm:route.stat ;* Unable to change remote access for %1
    end
    return
 
@@ -1357,17 +1466,20 @@ make.account:
 * rev 0.9-3 Nov 25 move voc back to dynamic file
    create.file pathname:@ds:'voc' dynamic on error
       @system.return.code = -6
-      err = 6016 ; return ;* Unable to create VOC
+      err = 6016 ;* Unable to create VOC
+      return
    end
 
    openpath pathname:@ds:'voc' to voc.f else
       @system.return.code = -status()
-      err = 6017 ; return ;* Unable to open new VOC
+      err = 6017 ;* Unable to open new VOC
+      return
    end
 
    openpath @sdsys:@ds:"newvoc" to newvoc.f else
       @system.return.code = -status()
-      err = 6018 ; return ;* Cannot open SDSYS NEWVOC
+      err = 6018 ;* Cannot open SDSYS NEWVOC
+      return
    end
 
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIER POLICY FILE IS NO LONGER
@@ -1407,51 +1519,13 @@ make.account:
 *     skip that did not skip would copy the whole VOC and look like success.
 *     A copy.it flag round the write says the same thing in constructs this
 *     file already uses.
-   omit.rec = ''
-*  18 Sep 26 - RELEASE_1.1 64: no omit list is read, so nothing below is
-*  filtered and the account gets the whole of NEWVOC.  omit.count MUST STILL BE
-*  ASSIGNED - the copy loop reads it, and ERRGEN dies on a use with no
-*  assignment - and 0 is what makes that loop a no-op.  Do not delete this line.
-   omit.count = 0
-
+* 18 Nov 26 Windows port - D3 (P-3308, P-3316): the omit list (omit.rec, omit.count) and the copy.it wrapper round the copy are gone, as Linux has
+*   neither: since RELEASE_1.1 64 (18 Sep 26) omit.count was always 0, so the wrapper copied every record and the test could not be false.  One VOC
+*   layer: the new account gets all of NEWVOC, each record whole.
    select newvoc.f to 11
    loop
       readnext id from 11 else exit
-
-      copy.it = @true
-
-* 13 Sep 26 Windows port - RELEASE_1.1 5.  The two copy.it = @false tests that
-*     stood here - for TIER.OMIT.STANDARD and TIER.ADD.ADMINISTRATOR - are gone
-*     with the records: the tier lists moved to sdsys/tier.policy, so NEWVOC no
-*     longer holds anything that is not a VOC entry and there is nothing here to
-*     skip.  An upgrade replaces NEWVOC wholesale (stage.py), so no pre-move
-*     NEWVOC survives to reintroduce them into an account.
-
-* 17 Aug 26 Windows port - an explicit comparison rather than LOCATE, and not
-*   from taste: CPROC has two LOCATE precedents and NEITHER can be copied
-*   safely.  privileged_commands is built with <-1>, which appends FIELDS, and
-*   is then searched with "locate ... in privileged_commands<1>", which
-*   searches the VALUES of field 1; aliased.commands is set to '' and never
-*   populated at all.  A membership test that silently matched nothing would
-*   omit nothing, and this whole change would look like it had worked.
-* 5 Sep 26 Windows port - privileged_commands has since been DELETED from CPROC
-*   (PRE_RELEASE_FIXES 168), so do not go looking for it.  The reasoning above
-*   is why this line is a comparison and still holds; only the example is gone.
-      if copy.it and omit.count > 1 then
-         for omit.i = 2 to omit.count       ;* field 1 is the description
-*           18 Aug 26 Windows port - AND SO IS THIS ONE, and it is the one that
-*           matters: the list holds verb ids and id is a verb id, so if either
-*           side is lower-cased without the other NOTHING is omitted and a
-*           standard account silently gets the full VOC.  5.12 (b).
-            if upcase(omit.rec<omit.i>) = upcase(id) then
-               copy.it = @false
-               omit.i = omit.count          ;* stop looking
-            end
-         next omit.i
-      end
-
-      if copy.it then
-         read rec from newvoc.f, id then
+      read rec from newvoc.f, id then
 * 02 Sep 26 Windows port - PRE_RELEASE_FIXES 136.  THE RECORD IS COPIED WHOLE.
 *   Two lines used to stand here, and both threw information away:
 *
@@ -1519,9 +1593,7 @@ make.account:
 *   AND IT IS WHAT MAKES 70's LOCK FLAG POSSIBLE: a marker written after the
 *   type code in field 1 is exactly what these lines deleted, so the lock
 *   would have been destroyed by the refresh it exists to prevent.
-            write rec to voc.f, id
-
-         end
+         write rec to voc.f, id
       end
    repeat
 
@@ -1607,49 +1679,28 @@ make.account:
 *   _VOC_REF folds the VOC id UP as well as down, so GPL.BP's hard-coded
 *   open "$savedlists" and open "$hold" still reach an upper-case id.  There is
 *   no flag day and no upgrade step.
-   * Create $hold
-
-   fn = '$hold'
-   os.name = '$hold'
-   descr = 'File for deferred prints'
-   dict = @true
+   fn = '$hold' ; os.name = '$hold' ; descr = 'File for deferred prints' ; dict = @true
    gosub create.dir.file
    if err # '' then return
 
-
-   * Create $savedlists
-
-   fn = '$savedlists'
-   os.name = '$svlists'
-   descr = 'File for saved select lists'
-   dict = @false
+   fn = '$savedlists' ; os.name = '$svlists' ; descr = 'File for saved select lists' ; dict = @false
    gosub create.dir.file
    if err # '' then return
 
 * 20240308 mab add BP when creating new account
-  * Create BP
-
-   fn = 'bp'
-   os.name = 'bp'
-   descr = 'File for BASIC programs'
-   dict = @false
+   fn = 'bp' ; os.name = 'bp' ; descr = 'File for BASIC programs' ; dict = @false
    gosub create.dir.file
    if err # '' then return
 
-
-   * Create private catalogue
-
    display sysmsg(6019) ;* Creating private catalogue directory..."
-
    s = pathname:@ds:'cat'
    if not(ospath(s, OS$EXISTS)) then
       create.file s directory on error
          @system.return.code = -ER$NOT.CREATED
-         err = 6020 ; return ;* Unable to create private catalogue directory
+         err = 6020 ;* Unable to create private catalogue directory
+         return
       end
-
    end
-
    return
 * ======================================================================
 
@@ -1658,7 +1709,8 @@ create.dir.file:
 
    create.file pathname:@ds:os.name directory on error
       @system.return.code = -ER$NOT.CREATED
-      err = 6022:@vm:fn ; return ;* Unable to create data part of xx
+      err = 6022:@vm:fn ;* Unable to create data part of xx
+      return
    end
 
    begin case
@@ -1673,20 +1725,22 @@ create.dir.file:
 *     18 Aug 26 Windows port - '.dic' lower case with the name it follows, so a
 *     per-account dictionary is $hold.dic and not $hold.DIC.  Only $hold reaches
 *     here with dict true; the shipped SDSYS dictionaries are named elsewhere.
-      create.file pathname:@ds:os.name:'.dic' dynamic on error
+      dict.name = os.name:'.dic'
+      create.file pathname:@ds:dict.name dynamic on error
          @system.return.code = -ER$NOT.CREATED
-         err = 6023:@vm:fn ; return ;* Unable to create dictionary part of xx
+         err = 6023:@vm:fn ;* Unable to create dictionary part of xx
+         return
       end
-
-      openpath pathname:@ds:os.name:'.dic' to dict.f else
+      openpath pathname:@ds:dict.name to dict.f else
          @system.return.code = -status()
-         err = 6024:@vm:fn ; return ;* Unable to open dictionary part of xx
+         err = 6024:@vm:fn ;* Unable to open dictionary part of xx
+         return
       end
 * 20240121 mab use @VM not hard coded hex fd 
       write raise('D':@VM:'0':@VM:@VM:fn:@VM:'10L':@VM:'S') to dict.f, '@id'
       close dict.f
 
-      voc.rec<3> = os.name:'.dic'
+      voc.rec<3> = dict.name
    end
 
    write voc.rec to voc.f, fn
@@ -1701,243 +1755,7 @@ create.dir.file:
 *   Windows - so it failed every time and said so.  Access comes from the
 *   installer's inheritable ACE instead; see the note at the setgid removal
 *   above and PROJECT_STATUS.md 5.7.
-
-return
-
-*=======================================================================
-* set.access
-*
-* 21 Aug 26 Windows port - put the new account's Windows user into the groups
-* its remote access calls for.  access.ssh and access.api come from the SSH /
-* API / BOTH / NONE keyword in more.args, or from the ADMINISTRATOR tier, which
-* forces both.
-*
-* USER ACCOUNTS ONLY.  A GROUP account has no Windows user - the GROUP arm
-* reaches neither create_user() nor set_passwd() - and is reached with LOGTO or
-* an F pointer, so there is nothing here for it and it never calls this.
-*
-* NO "already a member" TEST, unlike MODIFY.ACCOUNT's route.set.  The Windows
-* user was created moments ago in this same verb, so it is in no groups but the
-* ones already added above; asking would be asking a question whose answer is
-* known.  The ADOPT path is the one exception and it is deliberate that it
-* joins too - owner's rule of 21 Aug 2026 is that ALL administrators have both
-* routes, and an adopted account is always ADMINISTRATOR (see more.args).
-*
-* A FAILURE STOPS THE VERB, matching every other group step here.  An account
-* whose access is not what was asked for is worse than no account: nobody would
-* re-check, and the failure would surface later as "the client cannot connect".
-set.access:
-   if access.ssh then
-*     PRE_RELEASE_FIXES 94 - take the answer; see the sdusers site above.
-      stat = os_group("ADDMEM", "sdssh", acc.uname)
-      if stat # 0 then
-         @system.return.code = -ER$FAILED
-         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-      end
-   end
-
-   if access.api then
-*     PRE_RELEASE_FIXES 94 - take the answer; see the sdusers site above.
-      stat = os_group("ADDMEM", "sdapi", acc.uname)
-      if stat # 0 then
-         @system.return.code = -ER$FAILED
-         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-      end
-   end
-
-* 17 Oct 26 dm - S.65 slice 2c (Windows port 25 Oct 26): the files-only login, the group sdfiles, joined by the same call; a failed join is reported with its
-*   status and the account stops here, as for the routes.  The group's existence was checked before the Windows user was made.  Nothing is said on
-*   success: the state line (12487) is printed with the others after the register record is written.
-   if files.want then
-      stat = os_group("ADDMEM", "sdfiles", acc.uname)
-      if stat # 0 then
-         @system.return.code = -ER$FAILED
-         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-      end
-   end
-* 18 Oct 26 dm - S.65 write group (Linux 3fbfc0d): and the write group, after sdfiles, the same way (the group's existence was checked above).  The state line
-*   (12527) is printed with the others.
-   if files.write.want then
-      stat = os_group("ADDMEM", "sdfileswrite", acc.uname)
-      if stat # 0 then
-         @system.return.code = -ER$FAILED
-         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-      end
-   end
-* 21 Oct 26 dm - S.73 item 3: and the administration group, after sdfileswrite, the same way.  The state line (12530) is printed with the others.
-   if files.admin.want then
-      stat = os_group("ADDMEM", "sdfilesadmin", acc.uname)
-      if stat # 0 then
-         @system.return.code = -ER$FAILED
-         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-      end
-   end
-* 23 Oct 26 dm - S.69 step 2 (Windows port 13 Nov 26, RELEASE_1.1 246): and the AI group, on its own.  The state line (12611) is printed with the others.
-   if ai.want then
-      stat = os_group("ADDMEM", "sdaiusers", acc.uname)
-      if stat # 0 then
-         @system.return.code = -ER$FAILED
-         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-      end
-   end
-
-*  9 Oct 26 Windows port - RELEASE_1.1 130.  A REUSED SD USER (restore, CA$REUSE.SD.USER) may already
-*   sit in sdssh / sdapi from its earlier account, and the adds above never remove: a restore that
-*   asks for a narrower route left the old membership standing while the line below said "no remote
-*   access at all".  So on the reuse path a route not asked for is taken away, with MODIFY.ACCOUNT's
-*   own test and call (modifya:620-646).  A new user is in no such group, so nothing to remove there.
-*   A lookup that could not tell (status() 1) stops the verb like a failed DELMEM: skipping it would
-*   leave the route in place without a word (test-groupmember-units, READS_STATUS).
-   if reuse.sd.user then
-      if not(access.ssh) then
-         rm.member = is_grp_member(acc.uname, 'sdssh')
-         rm.told = status()
-         stat = rm.told
-         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdssh", acc.uname)
-         if stat # 0 then
-            @system.return.code = -ER$FAILED
-            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-         end
-      end
-      if not(access.api) then
-         rm.member = is_grp_member(acc.uname, 'sdapi')
-         rm.told = status()
-         stat = rm.told
-         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdapi", acc.uname)
-         if stat # 0 then
-            @system.return.code = -ER$FAILED
-            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-         end
-      end
-*     18 Nov 26 Windows port - four-version audit round 2 (P-5470), as Linux S.62 (P-1284): and sdfilesadmin, then sdfileswrite, the
-*     widest first, the same way as sdfiles below: a reused user kept the files-write and files-admin of its earlier account.
-      if not(files.admin.want) then
-         rm.member = is_grp_member(acc.uname, 'sdfilesadmin')
-         rm.told = status()
-         stat = rm.told
-         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdfilesadmin", acc.uname)
-         if stat # 0 then
-            @system.return.code = -ER$FAILED
-            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-         end
-      end
-      if not(files.write.want) then
-         rm.member = is_grp_member(acc.uname, 'sdfileswrite')
-         rm.told = status()
-         stat = rm.told
-         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdfileswrite", acc.uname)
-         if stat # 0 then
-            @system.return.code = -ER$FAILED
-            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-         end
-      end
-*     25 Oct 26 Windows port - S.65 slice 2c: the same for sdfiles.
-*     17 Nov 26 Windows port - four-version audit round 3 (P-7027), as Linux's leave.route.group: for sdfilesadmin, sdfileswrite, sdfiles,
-*     sdaiusers and sdsshnokey too, a membership that cannot be read stops the verb (10081), as for sdssh and sdapi; it is not read as
-*     "not a member" (a reused user then kept its files and AI routes).  The installer makes every one of the groups.
-      if not(files.want) then
-         rm.member = is_grp_member(acc.uname, 'sdfiles')
-         rm.told = status()
-         stat = rm.told
-         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdfiles", acc.uname)
-         if stat # 0 then
-            @system.return.code = -ER$FAILED
-            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-         end
-      end
-*     13 Nov 26 Windows port - RELEASE_1.1 246: and for sdaiusers, the AI gate, the same way (a reused user from an earlier account keeps no AI it was
-*     not asked for; a machine without the group has nothing to take away).
-      if not(ai.want) then
-         rm.member = is_grp_member(acc.uname, 'sdaiusers')
-         rm.told = status()
-         stat = rm.told
-         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdaiusers", acc.uname)
-         if stat # 0 then
-            @system.return.code = -ER$FAILED
-            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-         end
-      end
-   end
-
-* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3; the owner, 17 Nov 2026: "key sign-in is FORBIDDEN as delivered ... only the accounts SD itself made lose key
-*   sign-in").  A Windows user this routine made, or a restore took over (SD made it: !is_sd_user, CA$REUSE.SD.USER), is put in sdsshnokey, the group whose members sshd
-*   offers no key sign-in (allow-ssh-groups.ps1's "Match Group sdsshnokey" arm), unless SSH-KEY-ON was asked; a reused user given SSH-KEY-ON is taken out of it.  AN
-*   ATTACHED USER IS NEVER TOUCHED: it is the installing user's own sign-in, and the keys it set up outside SD are its own.  A failure is reported (10081) and the account
-*   stops here, as for a route.  This is the only place a Windows user joins the group unasked, so an upgrade, which makes no account, changes nobody's key sign-in.
-*   NOT sdsshonly: that group carries the deny-logon rights (deny-logon.ps1), which no verb may lift, and ssh-key-on must be able to take an account out of this one.
-   if not(attach) then
-      if ssh.key.want then
-         if reuse.sd.user then
-            rm.member = is_grp_member(acc.uname, 'sdsshnokey')
-            rm.told = status()
-            stat = rm.told
-            if stat = 0 and rm.member then stat = os_group("DELMEM", "sdsshnokey", acc.uname)
-            if stat # 0 then
-               @system.return.code = -ER$FAILED
-               err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-            end
-         end
-      end else
-         stat = os_group("ADDMEM", "sdsshnokey", acc.uname)
-         if stat # 0 then
-            @system.return.code = -ER$FAILED
-            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
-         end
-      end
-   end
-
-*  Says the whole resulting state, in the same four messages MODIFY.ACCOUNT
-*  uses, so an account's access reads identically whether it was just made or
-*  just changed.
-* 05 Sep 26 Windows port - ***AN ADMINISTRATOR'S ROUTES ARE LOCAL ONLY, AND
-*   SAYING "ssh and the API" WAS FALSE FROM THE MOMENT 167 LANDED.***
-*   PRE_RELEASE_FIXES 169 (a).  Found in verify-sshadmin's own PASSING
-*   transcript on b120: this verb printed "SD routes for SDSADMB120A: ssh and
-*   the API." and four seconds later LOGIN wrote "LOGIN REFUSED account=SDSYS
-*   reason=administrator...".  The same run said both.
-*
-*   ***THE GRANT IS NOT WRONG - THE SENTENCE WAS.***  :1718 forces access.ssh
-*   and access.api true for this tier and that is still right after the owner's
-*   refinement of 5 Sep: an administrator DOES use ssh and the API, from this
-*   machine.  What they cannot do is reach them from another one, which is
-*   LOGIN's peer test.  So the fix is a truthful message, not a narrower grant,
-*   and MODIFY.ACCOUNT's refusal to remove the two (10083) keeps its reason.
-*
-* 18 Sep 26 Windows port - RELEASE_1.1 64.  ***THE TIER CASE STOOD FIRST HERE AND
-*   IS DELETED, with the tier whose routes it reported.***  It printed 10175
-*   ("no routes; the console is the only door"), a message slice 4 deleted along
-*   with the administrator route model - so what stood here was unreachable code
-*   naming a message file that no longer exists.  What is left is the three
-*   general cases and the fallback, which is the whole of what an account's
-*   routes can be now: per-account, chosen when the account is made, with no
-*   rule anywhere that overrides them.
-   begin case
-      case access.ssh and access.api
-         crt sysmsg(10078,acc.uname) ;* may sign in over ssh and use the API
-      case access.ssh
-         crt sysmsg(10076,acc.uname) ;* ssh, and may not use the API
-      case access.api
-         crt sysmsg(10077,acc.uname) ;* the API, and may not sign in over ssh
-      case 1
-         crt sysmsg(10079,acc.uname) ;* no remote access at all
-   end case
-
-*  PRE_RELEASE_FIXES 125: warn (non-prohibitively) when the access just granted
-*  has no active transport on this machine.  The grant is a group membership
-*  that persists and takes effect when the transport comes on, so this is a
-*  heads-up for an account provisioned ahead of its transport, NOT a refusal -
-*  the owner ruled that provisioning first is a legitimate workflow.  Native
-*  checks only (sshd.exe on disk; sd.conf's APIPORT for the listener), so
-*  create.account gains no PowerShell probe on its hot path.
-*  06 Oct 26 - RELEASE_1.1 121: the OpenSSH MSI the installer can run puts sshd.exe in
-*  Program Files\OpenSSH, so either place counts as "an ssh server is here".
-   if access.ssh and not(ospath('C:\WINDOWS\System32\OpenSSH\sshd.exe', OS$EXISTS)) and not(ospath('C:\Program Files\OpenSSH\sshd.exe', OS$EXISTS)) then
-      crt sysmsg(10161, acc.uname)  ;* set up for ssh, but no ssh server yet
-   end
-   if access.api and (config('APIPORT') + 0) <= 0 then
-      crt sysmsg(10162, acc.uname)  ;* set up for the API, but no listener yet
-   end
-return
+* 18 Nov 26 Windows port - D3 (P-7694): set.access, which stood here, is in the USER arm now, in Linux's shape (join.files.group, leave.route.group).
 
 * rev 0.9.0
 *=======================================================================
@@ -1945,30 +1763,21 @@ return
 * group_name - name of group to create
 * acc.type   - account type (USER/GROUP)
 * acc.uname  - user name for acc.type USER
-* return group_success t/f
-*        group_stat
-* rem: stat groupadd
-* 0 success
-* 2 invalid command syntax
-* 3 invalid argument to option
-* 4 GID not unique (when -o not used)
-* 9 group name not unique
-* 10 can't update group file
-create.group:  *
- group_success = @TRUE
-* 02 Oct 26 Windows port - gc.why is the reason the caller returns in err as
-*   10015, so the failure is shown once, by CREATE.ACCOUNT or RESTORE.ACCOUNT,
-*   and not printed here and then again.  The two invalid-name returns below
-*   used to end the verb with a bare "stop" and no message at all.
- gc.why = ''
-* Modified by Composer AI - 2026/06/10.
-* Use shared !valid_os_name before groupadd OS.EXECUTE (phase 2).
-* os.name.chars = '...'
-if not(valid_os_name(group_name)) then
-   group_success = @FALSE
-   gc.why = 'invalid group name'
-   return
-end
+* Sets err on failure (10015, Unable to create group: %1 status: %2), which the caller tests; the failure is shown once, by CREATE.ACCOUNT or
+*   RESTORE.ACCOUNT, and not printed here as well.
+* 18 Nov 26 Windows port - D3 (P-3275, P-3287, P-3297, P-3298): Linux's shape.  group_success and gc.why are gone: the two invalid-name returns set
+*   err = 10015 with status 2 (they said "invalid group name" / "invalid user name" as the status), and a failed os_group sets it with its status.
+*   THE USER TEST IS ONE LINE AGAIN, as Linux's: the 21 Aug note below nested it because acc.uname was unassigned on the GROUP path, and since the
+*   2 Oct split acc.uname = '' is assigned at the top of this routine, so evaluating both operands of "and" is safe (valid_os_name('') is @false).
+create.group:
+   if not(valid_os_name(group_name)) then
+      err = 10015:@vm:group_name:@vm:2 ;* Unable to create group: %1 status: %2
+      return
+   end
+   if acc.type = 'USER' and not(valid_os_name(acc.uname)) then
+      err = 10015:@vm:group_name:@vm:2
+      return
+   end
 * 21 Aug 26 Windows port - NESTED, BECAUSE "and" DOES NOT SHORT-CIRCUIT.  This
 *   was one line:
 *
@@ -1998,37 +1807,22 @@ end
 *   creation is a wider change than this defect - and the verb's own comment
 *   above make.account already says "we could end up with groups created and no
 *   actual account".
-if upcase(acc.type) = 'USER' then
-   if not(valid_os_name(acc.uname)) then
-      group_success = @FALSE
-      gc.why = 'invalid user name'
-      return
-   end
-end
-* --------------------
-*
-* does group already exist in /etc/group?
-*      
-   if not(is_group(group_name)) then 
-*
-* no, attempt to create it
-*
+   if not(is_group(group_name)) then
 * 14 Aug 26 Windows port - was "sudo groupadd -U root,sdsys,<user> <group>".
 *   Windows has no root or sdsys account to seed the group with, and
 *   New-LocalGroup takes no member list, so the group is created and the SD
 *   user added to it as a second step.
       group_stat = os_group("ADD", group_name, "")
-      if group_stat = 0 and upcase(acc.type) = 'USER' then
-        group_stat = os_group("ADDMEM", group_name, acc.uname)
+      if group_stat = 0 and acc.type = 'USER' then
+         group_stat = os_group("ADDMEM", group_name, acc.uname)
       end
       if group_stat = 0 then
-        crt sysmsg(10014,group_name)   ;* Group -  %1 created
+         crt sysmsg(10014,group_name)   ;* Group -  %1 created
       end else
-        gc.why = group_stat   ;* the caller returns 10015 (Unable to create group: %1 status: %2)
-        group_success = @FALSE
+         err = 10015:@vm:group_name:@vm:group_stat ;* Unable to create group: %1 status: %2
       end
    end
-return
+   return
 
 
 end

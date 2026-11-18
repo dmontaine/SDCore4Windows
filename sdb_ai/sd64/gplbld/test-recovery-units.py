@@ -138,11 +138,11 @@ def checks(src, msgs):
            and slots[words.index("RECOVERY-ON")] == slots[words.index("RECOVERY-OFF")] == "RC" and slots.count("RC") == 2)
     ck("R3 modify.account: RECOVERY-ON and RECOVERY-OFF are in the word list one after the other and share a slot (RC) that no other word has", ok3, "")
     ck("R3b ...do.action: RECOVERY-ON sets ACC$RECOVERY wanted true and RECOVERY-OFF false, both through os.set (one register write, under the lock, one audit line)",
-       # 10 Nov 26 Windows port: `case upcase(action) = ...`, os.field and os.want on two lines, and the arm ends at the next case (Linux: one line, then return)
-       re.search(r"case upcase\(action\) = 'RECOVERY-ON'\s*\n\s*os\.field = ACC\$RECOVERY\s*\n\s*os\.want\s+= @true\s*\n\s*gosub os\.set\s*\n\s*case ", mo) is not None
-       and re.search(r"case upcase\(action\) = 'RECOVERY-OFF'\s*\n\s*os\.field = ACC\$RECOVERY\s*\n\s*os\.want\s+= @false\s*\n\s*gosub os\.set\s*\n\s*case ", mo) is not None, "")
+       # 18 Nov 26 (round 6, D3): Linux's form - `case action = ...`, os.field and os.want on one line, then return
+       re.search(r"case action = 'RECOVERY-ON'\s*\n\s*os\.field = ACC\$RECOVERY ; os\.want = @true\s*\n\s*gosub os\.set\s*\n\s*return\n", mo) is not None
+       and re.search(r"case action = 'RECOVERY-OFF'\s*\n\s*os\.field = ACC\$RECOVERY ; os\.want = @false\s*\n\s*gosub os\.set\s*\n\s*return\n", mo) is not None, "")
     osb = mo[mo.find("\nos.set:\n"):]
-    osb = osb[:osb.find("\ntier.set:\n")] if "\ntier.set:\n" in osb else osb   # 10 Nov 26 Windows port: os.set ends where tier.set begins
+    osb = osb[:osb.find("\nend\n")] if "\nend\n" in osb else osb   # 18 Nov 26 (D3): os.set is the last routine, as Linux's, and ends at the program's end
     refuse = osb[:osb.find("   return\n   end\n") + 1] if "\nos.set:\n" in mo else ""
     ck("R3c ...os.set refuses it for any account whose group is not sdu_ (ACC$RECOVERY is NOT among the fields let through on a group account) and says why with 12776, "
        "before the register is read for update",
@@ -172,7 +172,7 @@ def checks(src, msgs):
     ck("R5 !create_account: a request is exactly 1; a group account and an other account are refused with 12776 in their own arms, before anything is made",
        "recovery.want = (settings<CA$RECOVERY> = 1)" in cr and refuse_txt in grp and refuse_txt in oth
        and cr.find("recovery.want = (settings<CA$RECOVERY> = 1)") < cr.find(refuse_txt) < cr.find("gosub make.account"), "")
-    user = between(cr, '   if acc.type = "USER" then\n      acc.rec<ACC$SH>', '   end else\n')   # 10 Nov 26 Windows port: the user account's block
+    user = between(cr, '   case acc.type = "USER"\n     acc.rec<ACC$GROUP>', '   case acc.type = "GROUP"\n')   # 18 Nov 26 (round 6, D3): the register record's USER case, as Linux's
     ck("R5b ...a user account's record says 'yes' or 'no' explicitly ('no' unless asked: OFF AS DELIVERED), no other arm writes the field, and the state line 12775 is said",
        "acc.rec<ACC$RECOVERY> = if recovery.want then 'yes' else 'no'" in user and cr.count("acc.rec<ACC$RECOVERY>") == 2
        and "crt sysmsg(12775, acc.name, acc.rec<ACC$RECOVERY>)" in cr, "")
@@ -365,7 +365,7 @@ def report(rows):
 MUTANTS = [
     ("keys", "the field number is shared with ACC$PINS", "$define ACC$RECOVERY     19", "$define ACC$RECOVERY     18"),
     ("modifya", "the recovery words take the dict slot", "DICT,DICT,RC,RC,NET", "DICT,DICT,DICT,DICT,NET"),
-    ("modifya", "RECOVERY-ON writes no", "            os.field = ACC$RECOVERY\n            os.want  = @true\n", "            os.field = ACC$RECOVERY\n            os.want  = @false\n"),   # 10 Nov 26 Windows port: two lines
+    ("modifya", "RECOVERY-ON writes no", "         os.field = ACC$RECOVERY ; os.want = @true\n", "         os.field = ACC$RECOVERY ; os.want = @false\n"),   # 18 Nov 26 (round 6, D3): Linux's one line
     ("modifya", "a group account may have it", "and os.field # ACC$PINS then", "and os.field # ACC$PINS and os.field # ACC$RECOVERY then"),
     ("modifya", "the state line is not said", "      crt sysmsg(12775, acc.name, if upcase(trim(acc.new<ACC$RECOVERY>)) = 'YES' then 'yes' else 'no')", "      null"),
     ("createa", "recovery-on is not on the audit line", "   if settings<CA$RECOVERY> = 1 then gates<-1> = 'recovery-on'", "   null"),

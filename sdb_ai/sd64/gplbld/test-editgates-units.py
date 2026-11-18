@@ -310,8 +310,8 @@ def checks(srcs, messages_dir):
        all(re.search(r"api\.%s\.grant = @false" % k, ap) for k in ("voc", "bp", "dict")), "")
     mo = c["modifya"]
     ck("B5 MODIFY.ACCOUNT has the six words, each through os.set with its own field, and os.set allows them on any account",
-       # Windows: Core's main loop reads "case upcase(action) = 'X'", and os.field and os.want are on lines of their own
-       all(re.search(r"case upcase\(action\) = '%s'\s*\n\s*os\.field = ACC\$%s\s*\n\s*os\.want\s*= @%s\s*\n\s*gosub os\.set" % (w, f, b), mo)
+       # 18 Nov 26 (round 6, D3): Linux's shape - "case action = 'X'" (action is upcased once), "os.field = ... ; os.want = ..." on one line, then gosub os.set and return
+       all(re.search(r"case action = '%s'\s*\n\s*os\.field = ACC\$%s ; os\.want = @%s\s*\n\s*gosub os\.set\s*\n\s*return\n" % (w, f, b), mo)
            for w, f, b in (("VOC-ON", "VOC.EDIT", "true"), ("VOC-OFF", "VOC.EDIT", "false"), ("BP-ON", "BP.EDIT", "true"),
                            ("BP-OFF", "BP.EDIT", "false"), ("DICT-ON", "DICT.EDIT", "true"), ("DICT-OFF", "DICT.EDIT", "false")))
        and "os.field # ACC$VOC.EDIT" in mo and "sysmsg(12414" in mo, "")
@@ -545,7 +545,7 @@ MUTANTS = [
     ("LOGTO reloads the VOC gate", "cproc", "   void kernel(K$SD.ACCOUNTS, upcase(trim(acc.record<ACC$SD.ACCOUNTS>)) = 'YES')", "   void kernel(K$VOC.EDIT, upcase(trim(acc.record<ACC$VOC.EDIT>)) = 'YES')\n   void kernel(K$SD.ACCOUNTS, upcase(trim(acc.record<ACC$SD.ACCOUNTS>)) = 'YES')"),
     ("LOGIN forgets the bp gate", "login", "   void kernel(K$BP.EDIT,   upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES')\n", ""),
     ("the API server reloads at every SDLogto", "apisrvr", "if not(master.login.done) then\n   void kernel(K$VOC.EDIT,  api.voc.grant)", "if 1 then\n   void kernel(K$VOC.EDIT,  api.voc.grant)"),
-    ("MODIFY.ACCOUNT loses DICT-OFF", "modifya", "case upcase(action) = 'DICT-OFF'", "case upcase(action) = 'DICT-OFFX'"),     # Windows: Core's word order
+    ("MODIFY.ACCOUNT loses DICT-OFF", "modifya", "case action = 'DICT-OFF'", "case action = 'DICT-OFFX'"),     # 18 Nov 26 (round 6, D3): Linux's do.action form
     ("a new user account is written with the voc field blank", "create_account", "     acc.rec<ACC$VOC.EDIT> = if edit.voc.want then 'yes' else 'no'\n", ""),
     ("the manifest drops edit.bp", "acc_os_info", "info<-1> = 'edit.bp: ' : (if upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES' then 1 else 0)", "null"),     # Windows: Core's spacing
     ("upgrade_editgates writes its marker before the walk", "upgrade_editgates", "   changed = 0\n   kept = 0", "   openseq marker to marker.f then\n      weofseq marker.f\n   end else\n      create marker.f else null\n   end\n   changed = 0\n   kept = 0"),

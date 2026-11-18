@@ -64,7 +64,7 @@ def checks(src, msgs):
     words = m_words.group(1).split(",") if m_words else []
     slots = m_slots.group(1).split(",") if m_slots else []
     do_action = between(c, "\ndo.action:\n", "\nadd.delete.arm:\n")
-    case_words = re.findall(r"case upcase\(action\) = '([A-Z.-]+)'", do_action)   # Windows port: the case lines test upcase(action), and none of them stops
+    case_words = re.findall(r"case action = '([A-Z.-]+)'", do_action)   # 18 Nov 26 (round 6, D3): Linux's form, action upcased once before the dispatch
     usage = between(c, "\nshow.usage:\n", "\n   return\n")
     usage_words = []
     for m in re.finditer(r"modify\.account <account> ([^']*)'", usage):
@@ -101,13 +101,13 @@ def checks(src, msgs):
     ck("M3 the order of execution (the word list): the routes first, the suspension last",
        words[:4] == ["SSH", "API", "BOTH", "NONE"] and words and words[-2:] == ["SUSPENDED", "UNSUSPENDED"], "list %s" % words)
 
-    g = c.find("if (upcase(action) # 'ADD') and (upcase(action) # 'DELETE') then")
+    g = c.find("if (action # 'ADD') and (action # 'DELETE') then")      # 18 Nov 26 (round 6, D3): Linux's flow - action upcased once, the run ends in stop
     v = c.find("gosub validate.actions")
     r = c.find("gosub run.actions")
     t = c.find("goto add.delete.arm")
     ck("M4 the main flow: the guard (not ADD or DELETE), then validate, then run, then the end of the program, then the goto that skips do.action for ADD / DELETE",
        0 <= g < v < r < t and c.count("gosub validate.actions") == 1 and c.count("gosub run.actions") == 1
-       and "goto program.end" in c[r:t] and c.count("goto add.delete.arm") == 1 and c.count("\nadd.delete.arm:\n") == 1,
+       and "\n      stop\n" in c[r:t] and c.count("goto add.delete.arm") == 1 and c.count("\nadd.delete.arm:\n") == 1,
        "guard %s validate %s run %s goto %s" % (g, v, r, t))
 
     val = between(c, "\nvalidate.actions:\n", "\nrun.actions:\n")
@@ -126,7 +126,7 @@ def checks(src, msgs):
        val != "" and not re.search(r"\bgosub\b|\bwrite\b|\breadu\b|os\.execute|K\$AUDIT", re.sub(r"'[^']*'", "''", val)))
     ck("M5d ...the conflict test compares DIFFERENT words only (the same word twice is one action)", "if actions<i> # actions<j> then" in val)
 
-    run = between(c, "\nrun.actions:\n", "\naccount.user:\n")
+    run = between(c, "\nrun.actions:\n", "\nstart.set:\n")      # 18 Nov 26 (round 6, D3): start.set follows run.actions, as Linux's
     ck("M6 run.actions builds its list from word.arr (the fixed order), re-reads the account and clears the code before each action",
        "if want.at<p> then run.list<-1> = word.arr<p>" in run and 0 < run.find("read acc.rec from acc.f, acc.name else null")
        < run.find("@system.return.code = 0") < run.find("gosub do.action"))
@@ -137,10 +137,13 @@ def checks(src, msgs):
     ck("M6c ...the code after the run is 0 only when every action was carried out",
        re.search(r"if undone\.list = '' then\s+@system\.return\.code = 0\s+end else\s+@system\.return\.code = -ER\$FAILED\s+end\s+return\s*$", run.rstrip() + "\n") is not None)
 
-    ck("M7 do.action has no stop (a stop would end the run after the first word), and it ends in return; a word it does not know leaves route.done false "
-       "(validate.actions has already refused every such word with 12795)",
+    # 18 Nov 26 (round 6, D3, P-3385): Linux's net - a word do.action does not know is refused there with 12795 and the failure code (it printed nothing);
+    # every case ends in return
+    ck("M7 do.action has no stop (a stop would end the run after the first word), and it ends in return; a word it does not know is refused with 12795 "
+       "(validate.actions has already refused every such word with 12795, so this is a net)",
        do_action != "" and not re.search(r"\bstop\b", do_action)
-       and "case 1\n            route.done = @false\n      end case\n      return" in do_action
+       and "case 1\n         @system.return.code = -ER$ARGS\n         crt sysmsg(12795, downcase(action))\n   end case\n   return" in do_action
+       and do_action.count("\n      case ") == do_action.count("\n         return\n") + 1
        and do_action.rstrip().endswith("return"))
     add_arm = c[c.find("\nadd.delete.arm:\n"):]
     ck("M8 ADD and DELETE are as they were: a word after the user name is refused with 12719, and no other path reads extra.word",
@@ -212,15 +215,17 @@ def report(rows, quiet=False):
 MUTANTS = [
     ("a successful group ADD leaves the -ER$ARGS preset (RELEASE_1.1 306)", "                     @system.return.code = 0\n                     crt sysmsg(10018,", "                     crt sysmsg(10018,"),
     ("a failed group DELETE says 0 (RELEASE_1.1 306)", "                     @system.return.code = -ER$FAILED\n                     crt sysmsg(10022,user.name,group.name,stat)", "                     @system.return.code = 0\n                     crt sysmsg(10022,user.name,group.name,stat)"),
-    ("validate.actions is never called", "         gosub validate.actions\n", ""),
-    ("run.actions is called before validate.actions", "         gosub validate.actions\n         gosub run.actions\n", "         gosub run.actions\n         gosub validate.actions\n"),
+    # 18 Nov 26 (round 6, D3): the main flow is Linux's (3/6-space indent, action upcased once, case action = 'X', each case ending in return)
+    ("validate.actions is never called", "      gosub validate.actions\n", ""),
+    ("run.actions is called before validate.actions", "      gosub validate.actions\n      gosub run.actions\n", "      gosub run.actions\n      gosub validate.actions\n"),
     ("a word is missing from the word list", ",DICT-OFF,RECOVERY-ON,", ",RECOVERY-ON,"),   # 14 Nov 26: the RECOVERY words follow DICT-OFF now; the old text matched nothing
     ("the usage forgets a word", "voc-on | voc-off | bp-on | bp-off | dict-on | dict-off", "voc-on | voc-off | bp-on | dict-on | dict-off"),
     ("sh-on and os-on share a slot", "'R,R,R,R,SH,SH,OS,OS,", "'R,R,R,R,SH,SH,SH,SH,"),
     ("the suspension runs first", "PINS-OFF,SUSPENDED,UNSUSPENDED'", "PINS-OFF,UNSUSPENDED,SUSPENDED'"),
     ("the start and pins words run after the suspension (25 Oct 26, S.75)", "START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED'", "SUSPENDED,UNSUSPENDED,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF'"),
     ("the pins words share the start slot (25 Oct 26, S.75)", "AI,AI,ST,ST,ST,PN,PN,S,S')", "AI,AI,ST,ST,ST,ST,ST,S,S')"),   # 14 Nov 26: F, FW, FA and AI come before ST now
-    ("a case of do.action ends in stop", "            gosub os.set\n         case upcase(action) = 'SH-OFF'", "            gosub os.set\n            stop\n         case upcase(action) = 'SH-OFF'"),
+    ("a case of do.action ends in stop", "         gosub os.set\n         return\n      case action = 'SH-OFF'", "         gosub os.set\n         stop\n      case action = 'SH-OFF'"),
+    ("an unknown word reaching do.action is not refused (P-3385)", "         crt sysmsg(12795, downcase(action))", "         null"),
     ("the account is not read again before each action", "      read acc.rec from acc.f, acc.name else null\n", ""),
     ("the code is not cleared before each action", "      @system.return.code = 0\n      gosub do.action\n", "      gosub do.action\n"),
     ("the summary is printed for one action too", "   if n.run > 1 then\n", "   if @true then\n"),
@@ -231,9 +236,9 @@ MUTANTS = [
     ("add or delete among other words is accepted", "      if (w = 'ADD') or (w = 'DELETE') then", "      if @false then"),
     ("validate.actions does an action", "   n.words = dcount(actions, @fm)\n   pos.of = ''\n", "   n.words = dcount(actions, @fm)\n   gosub set.suspended\n   pos.of = ''\n"),
     ("the same word twice is a conflict", "         if actions<i> # actions<j> then", "         if @true then"),
-    ("DELETE is no longer kept for the old arm", "if (upcase(action) # 'ADD') and (upcase(action) # 'DELETE') then\n         actions = upcase(action)", "if (upcase(action) # 'ADD') then\n         actions = upcase(action)"),
-    ("the goto that skips do.action for ADD is gone", "      goto add.delete.arm\n", ""),
-    ("the 18 Oct refusal of a second word is back", "      typed.first = action\n", "      typed.first = action\n      call @parser(PARSER$GET.TOKEN, token.type, extra.word, keyword)\n      if token.type # PARSER$END then stop sysmsg(12719, extra.word)\n"),
+    ("DELETE is no longer kept for the old arm", "if (action # 'ADD') and (action # 'DELETE') then\n      actions = action", "if (action # 'ADD') then\n      actions = action"),
+    ("the goto that skips do.action for ADD is gone", "   goto add.delete.arm\n", ""),
+    ("the 18 Oct refusal of a second word is back", "   typed.first = action\n", "   typed.first = action\n   call @parser(PARSER$GET.TOKEN, token.type, extra.word, keyword)\n   if token.type # PARSER$END then stop sysmsg(12719, extra.word)\n"),
     ("the usage no longer says several actions may be given", "may be given together in one command", "may be given one at a time"),
 ]
 MSG_MUTANTS = [

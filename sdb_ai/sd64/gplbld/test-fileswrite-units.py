@@ -387,7 +387,8 @@ def run_checks(raw):
        "FILES-ON / FILES-OFF set files.grp = 'sdfiles' (the helper takes the group from it)",
        # 13 Nov 26 Windows port: modify.account dispatches on `case upcase(action) = 'X'` in its main loop, with no RETURN after the gosub; the list of words goes on
        # with Windows's own (shared-read-on ...), so the files words are held as their run; ai-on / ai-off and sdsys-on / sdsys-off are other rows' (not carried here)
-       all(re.search(r"case upcase\(action\) = '%s'\s*\n\s*files\.grp = '%s'\s*\n\s*files\.want = @%s\s*\n\s*gosub set\.files\s*\n" % (w, g_, b), mo)
+       # 18 Nov 26 (round 6, D3): Linux's do.action form, `case action = 'X'` ... gosub set.files, return
+       all(re.search(r"case action = '%s'\s*\n\s*files\.grp = '%s'\s*\n\s*files\.want = @%s\s*\n\s*gosub set\.files\s*\n\s*return\n" % (w, g_, b), mo)
            for w, g_, b in (("FILES-ON", "sdfiles", "true"), ("FILES-OFF", "sdfiles", "false"), ("FILES-WRITE-ON", "sdfileswrite", "true"), ("FILES-WRITE-OFF", "sdfileswrite", "false"),
                             ("FILES-ADMIN-ON", "sdfilesadmin", "true"), ("FILES-ADMIN-OFF", "sdfilesadmin", "false")))
        and "modify.account <account> files-on | files-off | files-write-on | files-write-off | files-admin-on | files-admin-off" in mo
@@ -415,12 +416,16 @@ def run_checks(raw):
        # 13 Nov 26 Windows port: the three groups are read through one routine, read.one.group, because Windows cannot tell "no such group" from "could not read" (both
        # status 1): a lookup that failed asks whether the group is there, a group that is not there has nobody in it (and fails only when it is the one to be joined), and a
        # group that is there and cannot be read stops the command (files.stat, the first such status).  Linux reads each group in line, three-valued.
-       and re.search(r"files\.stat = 0\s*\n\s*rg\.group = 'sdfiles'\s*\n\s*gosub read\.one\.group\s*\n\s*has\.files = rg\.is\s*\n"
-                     r"\s*rg\.group = 'sdfileswrite'\s*\n\s*gosub read\.one\.group\s*\n\s*has\.write = rg\.is\s*\n"
-                     r"\s*rg\.group = 'sdfilesadmin'\s*\n\s*gosub read\.one\.group\s*\n\s*has\.admin = rg\.is\s*\n", rfg) is not None
+       # 18 Nov 26 (round 6, D3): read.files.groups is Linux's (each group read only while the ones before answered, files.stat the first failure's status), with
+       # read.one.group as its is_grp_member call: Linux reads a group absent from /etc/group as "not a member", status 0, and Windows reports NERR_GroupNotFound as
+       # "could not tell", status 1 (win32group.c) - so read.one.group asks !is_group and reads only "no such group" (status 0) as not a member; FILES-ON on a machine
+       # without the group then reaches set.files' own is_group test and names it with 10024, as Linux.  A group that is there and cannot be read still fails.
+       and re.search(r"rg\.group = 'sdfiles'\s*\n\s*gosub read\.one\.group\s*\n\s*has\.files = rg\.is\s*\n\s*files\.stat = rg\.stat\s*\n"
+                     r"\s*has\.write = @false\s*\n\s*has\.admin = @false\s*\n\s*if files\.stat = 0 then\s*\n"
+                     r"\s*rg\.group = 'sdfileswrite'\s*\n\s*gosub read\.one\.group\s*\n\s*has\.write = rg\.is\s*\n\s*files\.stat = rg\.stat\s*\n\s*end\s*\n\s*if files\.stat = 0 then\s*\n"
+                     r"\s*rg\.group = 'sdfilesadmin'\s*\n\s*gosub read\.one\.group\s*\n\s*has\.admin = rg\.is\s*\n\s*files\.stat = rg\.stat\s*\n\s*end\s*\n", rfg) is not None
        and re.search(r"^read\.one\.group:\s*\n\s*rg\.is = is_grp_member\(files\.user, rg\.group\)\s*\n\s*rg\.stat = status\(\)\s*\n\s*if rg\.stat # 0 then\s*\n\s*rg\.is = @false\s*\n"
-                     r"\s*rg\.found = is_group\(rg\.group\)\s*\n\s*rg\.istat = status\(\)\s*\n\s*if rg\.istat = 0 and not\(rg\.found\) then\s*\n\s*rg\.stat = 0\s*\n"
-                     r"\s*if files\.want and rg\.group = files\.grp then rg\.stat = 1\s*\n\s*end\s*\n\s*end\s*\n\s*if rg\.stat # 0 and files\.stat = 0 then files\.stat = rg\.stat\s*\n\s*return\s*$", mo, re.M) is not None
+                     r"\s*rg\.found = is_group\(rg\.group\)\s*\n\s*if status\(\) = 0 and not\(rg\.found\) then rg\.stat = 0\s*\n\s*end\s*\n\s*return\s*$", mo, re.M) is not None
        and ordered(rfg, "case files.grp = 'sdfilesadmin'", "has.target = has.admin", "case files.grp = 'sdfileswrite'", "has.target = has.write", "case 1", "has.target = has.files")
        and ordered(sf, "admin.removed = @false", "write.removed = @false", "if (files.grp = 'sdfiles' or files.grp = 'sdfileswrite') and has.admin then", "cg.group = 'sdfilesadmin'", "cg.want = @false",
                    "gosub change.files.group", "if files.stat # 0 then", "sysmsg(10081, acc.name, files.stat)", "return", "now.admin = cg.now", "admin.removed = @true",
@@ -456,12 +461,14 @@ def run_checks(raw):
        # 17 Nov 26 (Linux 1557e270, S.62 LC3): five look-ups; the fifth is sdsshnokey (test-sshkey-units.py holds its rows)
        and ordered(ca2, "files.grp.name = 'sdfiles'", "gosub check.files.group", "if files.write.want then", "err = 12528:@vm:acc.name", "files.grp.name = 'sdfileswrite'", "gosub check.files.group",
                    "if files.admin.want then", "err = 12531:@vm:acc.name", "files.grp.name = 'sdfilesadmin'", "gosub check.files.group",
-                   "if not(create_user(acc.uname)) then", "if files.want then", 'stat = os_group("ADDMEM", "sdfiles", acc.uname)', "if files.write.want then", 'stat = os_group("ADDMEM", "sdfileswrite", acc.uname)',
-                   "if files.admin.want then", 'stat = os_group("ADDMEM", "sdfilesadmin", acc.uname)')
-       and ca2.count("gosub check.files.group") == 5 and all(ca2.count('os_group("ADDMEM", "%s", acc.uname)' % g_) == 1 for g_ in ("sdfiles", "sdfileswrite", "sdfilesadmin"))
-       and all(re.search(r'if %s then\s*\n\s*stat = os_group\("ADDMEM", "%s", acc\.uname\)\s*\n\s*if stat # 0 then\s*\n\s*@system\.return\.code = -ER\$FAILED\s*\n'
-                         r"\s*err = 10081:@vm:acc\.uname:@vm:stat ; return\s*\n\s*end\s*\n\s*end" % (re.escape(w_), g_), ca2) is not None
+                   "if not(create_user(acc.uname)) then", "if files.want then", "files.grp.name = 'sdfiles'", "gosub join.files.group", "if files.write.want then", "files.grp.name = 'sdfileswrite'", "gosub join.files.group",
+                   "if files.admin.want then", "files.grp.name = 'sdfilesadmin'", "gosub join.files.group")
+       # 18 Nov 26 (round 6, D3): the joins are Linux's join.files.group (os_group ADDMEM of files.grp.name, 10081 and its status on a failure), each followed by the stop
+       and ca2.count("gosub check.files.group") == 5
+       and all(re.search(r"if %s then\s*\n\s*files\.grp\.name = '%s'\s*\n\s*gosub join\.files\.group\s*\n\s*if route\.stat # 0 then goto exit\.create\s*\n\s*end" % (re.escape(w_), g_), ca2) is not None
                for w_, g_ in (("files.want", "sdfiles"), ("files.write.want", "sdfileswrite"), ("files.admin.want", "sdfilesadmin")))
+       and re.search(r'^join\.files\.group:\s*\n\s*route\.stat = os_group\("ADDMEM", files\.grp\.name, acc\.uname\)\s*\n\s*if route\.stat # 0 then\s*\n\s*@system\.return\.code = -ER\$FAILED\s*\n'
+                     r"\s*err = 10081:@vm:acc\.uname:@vm:route\.stat[^\n]*\n\s*end\s*\n\s*return\s*$", ca2, re.M) is not None
        and re.search(r"if files\.admin\.want then\s*\n\s*if not\(files\.want\) or not\(files\.write\.want\) then\s*\n\s*@system\.return\.code = -ER\$ARGS\s*\n\s*err = 12531:@vm:acc\.name[^\n]*\n\s*goto exit\.create\s*\n\s*end", ca2) is not None
        and re.search(r"^check\.files\.group:\s*\n\s*files\.bad = @false\s*\n\s*files\.found = is_group\(files\.grp\.name\)\s*\n\s*files\.stat = status\(\)\s*\n\s*if files\.stat # 0 then\s*\n"
                      r"\s*@system\.return\.code = -ER\$FAILED\s*\n\s*err = 10081:@vm:acc\.uname:@vm:files\.stat[^\n]*\n\s*files\.bad = @true\s*\n\s*end else\s*\n\s*if not\(files\.found\) then\s*\n"
@@ -470,9 +477,10 @@ def run_checks(raw):
        and re.search(r"case upcase\(token\) = 'FILES-ADMIN-ON'\s*\n\s*settings<CA\$FILESADMIN> = 1\s*\n", cr) is not None and len(re.findall(r"(?<!if )settings<CA\$FILESADMIN>\s*=", cr)) == 1
        # 13 Nov 26 Windows port: the state lines read the group into files.wnow / files.anow first (the same reading); ai.want joins the group / other refusal (RELEASE_1.1 246)
        and "files.admin.want = (settings<CA$FILESADMIN> = 1)" in ca2
-       and re.search(r"files\.anow = is_grp_member\(acc\.uname, 'sdfilesadmin'\)\s*\n\s*crt sysmsg\(12530, acc\.name, if files\.anow then 'yes' else 'no'\)", ca2) is not None
+       # 18 Nov 26 (round 6, D3): the state lines read the group inline, as Linux's
+       and "crt sysmsg(12530, acc.name, if is_grp_member(acc.uname, 'sdfilesadmin') then 'yes' else 'no')" in ca2
        and ca2.count("if files.want or files.write.want or files.admin.want or ai.want then") == 2
-       and re.search(r"files\.wnow = is_grp_member\(acc\.uname, 'sdfileswrite'\)\s*\n\s*crt sysmsg\(12527, acc\.name, if files\.wnow then 'yes' else 'no'\)", ca2) is not None, "")
+       and "crt sysmsg(12527, acc.name, if is_grp_member(acc.uname, 'sdfileswrite') then 'yes' else 'no')" in ca2, "")
     ck("F13 the manifest: route.files.write: 1|0 for a USER account from membership of sdfileswrite, right after route.files and before os.sh; RESTORE.ACCOUNT reads it (and clears it for each "
        "section), hands it on as CA$FILESWRITE only when route.files is 1 too, so a manifest without the key, or with the write group and no files route, restores as NOT in the group",
        # 13 Nov 26 Windows port: the membership is read first into fwrite / fadmin (0 unless the lookup answered yes, so a group an older install has not got is "not a member")
@@ -524,7 +532,7 @@ def run_checks(raw):
        "\n" not in m21 and "\n" not in m22 and "\n" not in m23 and "%1" in m21 and "files-write-on" in m21 and m22 == "Account %1 has files-write %2" and "files-on" in m23 and "%1" in m23 and "FILES" not in m21 + m22 + m23
        and len(m21.replace("%1", "41")) <= 100 and len(m21.replace("%1", "41")) > 40
        and len(re.findall(r"sysmsg\(12526, (?:action|41)\)", ap)) == 2 and ap.count("12526") == 2 and mo.count("sysmsg(12527, acc.name, if now.files then 'yes' else 'no')") == 1
-       and ca2.count("sysmsg(12527, acc.name, if files.wnow then 'yes' else 'no')") == 1 and mo.count("sysmsg(12528, acc.name)") == 1
+       and ca2.count("sysmsg(12527, acc.name, if is_grp_member(acc.uname, 'sdfileswrite') then 'yes' else 'no')") == 1 and mo.count("sysmsg(12528, acc.name)") == 1
        and ca2.count("err = 12528:@vm:acc.name") == 1 and mo.count("12527") == 2 and mo.count("sysmsg(12527, acc.name, if now.write then 'yes' else 'no')") == 1 and ca2.count("12527") == 1 and mo.count("12528") == 1 and ca2.count("12528") == 1
        and not any(re.search(r"\b1252[678]\b", c[n_]) for n_ in ("createa", "acc_os_info", "restorea", "apifilesok")) and not stray,
        repr((m21, m22, m23, stray)))
@@ -561,7 +569,7 @@ def run_checks(raw):
        and "FILES" not in m24 + m25 + m26 and 40 < len(m24.replace("%1", "70")) <= 100
        and ap.count("sysmsg(12529, action)") == 2 and ap.count("12529") == 2
        and mo.count("sysmsg(12530, acc.name, if now.files then 'yes' else 'no')") == 1 and mo.count("sysmsg(12530, acc.name, if now.admin then 'yes' else 'no')") == 1 and mo.count("12530") == 2
-       and ca2.count("sysmsg(12530, acc.name, if files.anow then 'yes' else 'no')") == 1 and ca2.count("12530") == 1
+       and ca2.count("sysmsg(12530, acc.name, if is_grp_member(acc.uname, 'sdfilesadmin') then 'yes' else 'no')") == 1 and ca2.count("12530") == 1
        and mo.count("sysmsg(12531, acc.name)") == 1 and mo.count("12531") == 1 and ca2.count("err = 12531:@vm:acc.name") == 1 and ca2.count("12531") == 1
        and not any(re.search(r"\b(?:12529|1253[01])\b", c[n_]) for n_ in ("createa", "acc_os_info", "restorea", "apifilesok")) and not stray2,
        repr((m24, m25, m26, stray2)))
@@ -662,28 +670,29 @@ def mutants(raw):
     m("the dictionary open uses the whole name", "apisrvr", "open 'DICT', trim(cmnd[6,9999]) to files(i)", "open 'DICT', cmnd to files(i)")
     m("the dictionary open is not a dictionary open", "apisrvr", "open 'DICT', trim(cmnd[6,9999]) to files(i)", "open trim(cmnd[6,9999]) to files(i)")
     # modifya
-    m("FILES-WRITE-ON sets the wrong group", "modifya", "            files.grp = 'sdfileswrite'\n            files.want = @true", "            files.grp = 'sdfiles'\n            files.want = @true")      # 13 Nov 26 Windows port: 12-space indent
-    m("FILES-WRITE-OFF is not a word", "modifya", "case upcase(action) = 'FILES-WRITE-OFF'", "case upcase(action) = 'FILES-WRITE-OFFX'")
+    m("FILES-WRITE-ON sets the wrong group", "modifya", "         files.grp = 'sdfileswrite'\n         files.want = @true", "         files.grp = 'sdfiles'\n         files.want = @true")      # 18 Nov 26 (round 6, D3): Linux's 9-space indent
+    m("FILES-WRITE-OFF is not a word", "modifya", "case action = 'FILES-WRITE-OFF'", "case action = 'FILES-WRITE-OFFX'")
     m("the person need not be in sdfiles", "modifya", "      if not(has.files) then\n         @system.return.code = -ER$FAILED\n         crt sysmsg(12528", "      if 0 then\n         @system.return.code = -ER$FAILED\n         crt sysmsg(12528")
     m("files-off leaves the write group", "modifya", "if files.grp = 'sdfiles' and has.write then\n      cg.group = 'sdfileswrite'", "if 0 then\n      cg.group = 'sdfileswrite'")
     m("files-on leaves a stray write membership (K4a: it became write access at the next files-on)", "modifya", "if files.grp = 'sdfiles' and has.write then\n      cg.group = 'sdfileswrite'",
       "if files.grp = 'sdfiles' and has.write and not(files.want) then\n      cg.group = 'sdfileswrite'")
     m("the orphan (write group, not sdfiles) is told nothing changed", "modifya", "nothing.to.do = not(has.files) and not(has.write)", "nothing.to.do = not(has.files)")
-    # 13 Nov 26 Windows port: the groups are read through read.one.group (F11), so these two aim there
-    m("the write group is not read for the pair", "modifya", "   rg.group = 'sdfileswrite'\n   gosub read.one.group\n   has.write = rg.is\n", "   has.write = @false\n")
+    # 13 Nov 26 Windows port: the groups are read through read.one.group (F11), so these two aim there (18 Nov 26, D3: inside Linux's "if files.stat = 0 then")
+    m("the write group is not read for the pair", "modifya", "      rg.group = 'sdfileswrite'\n      gosub read.one.group\n      has.write = rg.is\n", "      has.write = @false\n")
     m("the groups are not read three-valued", "modifya", "   rg.stat = status()\n", "   rg.stat = 0\n")
     m("a failed removal of the write group does not stop the command", "modifya",
       "      gosub change.files.group\n      if files.stat # 0 then\n         @system.return.code = -ER$FAILED\n         gosub report.removals  ;* sdfilesadmin may have gone before this step\n         crt sysmsg(10081, acc.name, files.stat)\n         return\n      end\n      now.write = cg.now",
       "      gosub change.files.group\n      now.write = cg.now")
     m("sdfiles is taken from a person who is not in it", "modifya", "if not(files.want) and not(has.target) then", "if 0 then")
     # S.73 item 3 (21 Oct 26): the administration words
-    m("FILES-ADMIN-ON sets the wrong group", "modifya", "            files.grp = 'sdfilesadmin'\n            files.want = @true", "            files.grp = 'sdfileswrite'\n            files.want = @true")
-    m("FILES-ADMIN-OFF is not a word", "modifya", "case upcase(action) = 'FILES-ADMIN-OFF'", "case upcase(action) = 'FILES-ADMIN-OFFX'")
+    m("FILES-ADMIN-ON sets the wrong group", "modifya", "         files.grp = 'sdfilesadmin'\n         files.want = @true", "         files.grp = 'sdfileswrite'\n         files.want = @true")
+    m("FILES-ADMIN-OFF is not a word", "modifya", "case action = 'FILES-ADMIN-OFF'", "case action = 'FILES-ADMIN-OFFX'")
     m("the person need not be in sdfileswrite to be given administration", "modifya", "      if not(has.files) or not(has.write) then", "      if not(has.files) then")
     m("files-write-off leaves the administration group (it would be left without the write it needs)", "modifya", "if (files.grp = 'sdfiles' or files.grp = 'sdfileswrite') and has.admin then", "if files.grp = 'sdfiles' and has.admin then")
     m("files-on and files-write-on leave a stray administration group", "modifya", "if (files.grp = 'sdfiles' or files.grp = 'sdfileswrite') and has.admin then", "if 0 then")
-    m("a group that cannot be read does not stop the command (13 Nov 26 Windows port: read.one.group)", "modifya", "   if rg.stat # 0 and files.stat = 0 then files.stat = rg.stat\n", "")
-    m("a group that is not there counts as a failure to read (13 Nov 26 Windows port: an older install has no sdfilesadmin)", "modifya", "         rg.stat = 0\n         if files.want", "         if files.want")
+    m("a group that cannot be read does not stop the command (18 Nov 26, D3: Linux's read.files.groups)", "modifya", "   has.files = rg.is\n   files.stat = rg.stat\n", "   has.files = rg.is\n   files.stat = 0\n")
+    m("a group that is not there counts as a failure to read (13 Nov 26 Windows port: an older install has no sdfilesadmin)", "modifya", "      if status() = 0 and not(rg.found) then rg.stat = 0\n", "")
+    m("a group whose existence could not be asked counts as not there (18 Nov 26, D3: only !is_group's status 0 means no such group)", "modifya", "      if status() = 0 and not(rg.found) then rg.stat = 0\n", "      if not(rg.found) then rg.stat = 0\n")
     m("the line for the administration group that went is not printed", "modifya", "if admin.removed then gosub admin.removed.line", "if 0 then gosub admin.removed.line")
     m("a failure after the administration group went writes no audit line for the removal", "modifya", "      void kernel(K$AUDIT, 'modify.account files-admin-off account=' : acc.name)\n", "")
     m("files-off has nothing to do for a person who is in the administration group only", "modifya", "nothing.to.do = not(has.files) and not(has.write) and not(has.admin)", "nothing.to.do = not(has.files) and not(has.write)")
@@ -703,15 +712,22 @@ def mutants(raw):
         write removal and the group change; the write removal and what follows it up to the failure block of the group change are swapped round the group change.)"""
         i = t.index("   if files.grp = 'sdfiles' and has.write then\n")
         j = t.index("\n* The group itself")
-        k = t.index("   if files.stat # 0 then\n      @system.return.code = -ER$FAILED\n      gosub report.removals\n", j)      # the failure block of the group change (13 Nov 26 Windows port: the "A group above HAS gone" comment sits on the earlier failure block here)
+        # the failure block of the group change (18 Nov 26, D3: as Linux's, the "A group above HAS gone" comment sits inside it, so it is found by its report.removals)
+        kk = t.index("      gosub report.removals\n      crt sysmsg(10081, acc.name, files.stat)\n", j)
+        k = t.rindex("   if files.stat # 0 then\n", j, kk)
         return t[:i] + t[j + 1:k] + t[i:j + 1] + t[k:]
     m("the write group is taken out AFTER sdfiles (the order that could leave the orphan)", "modifya", write_group_last, None)
     m("the write group's line is the other message", "modifya", "crt sysmsg(12527, acc.name, if now.files then 'yes' else 'no')", "crt sysmsg(12487, acc.name, if now.files then 'yes' else 'no')")
     # createa / create_account / restorea / acc_os_info
     m("FILES-WRITE-ON sets nothing", "createa", "'FILES-WRITE-ON'\n            settings<CA$FILESWRITE> = 1", "'FILES-WRITE-ON'\n            settings<CA$FILES> = 1")   # the parser's line: 19 Oct 26 the audit builder reads the same setting once more
-    m("the write group is joined as sdfiles", "create_account", 'stat = os_group("ADDMEM", "sdfileswrite", acc.uname)', 'stat = os_group("ADDMEM", "sdfiles", acc.uname)')      # 13 Nov 26 Windows port: the join is os_group
-    m("a failed join of the write group does not stop the verb (13 Nov 26 Windows port)", "create_account",
-      '      stat = os_group("ADDMEM", "sdfileswrite", acc.uname)\n      if stat # 0 then', '      stat = os_group("ADDMEM", "sdfileswrite", acc.uname)\n      if 0 then')
+    # 18 Nov 26 (round 6, D3): the join is Linux's join.files.group, called with files.grp.name
+    m("the write group is joined as sdfiles", "create_account", "         files.grp.name = 'sdfileswrite'\n         gosub join.files.group", "         files.grp.name = 'sdfiles'\n         gosub join.files.group")
+    m("a failed join of the write group does not stop the verb", "create_account",
+      "         files.grp.name = 'sdfileswrite'\n         gosub join.files.group\n         if route.stat # 0 then goto exit.create\n",
+      "         files.grp.name = 'sdfileswrite'\n         gosub join.files.group\n")
+    m("a failed join does not set the failure (join.files.group)", "create_account",
+      "   route.stat = os_group(\"ADDMEM\", files.grp.name, acc.uname)\n   if route.stat # 0 then\n      @system.return.code = -ER$FAILED\n",
+      "   route.stat = os_group(\"ADDMEM\", files.grp.name, acc.uname)\n   if 0 then\n      @system.return.code = -ER$FAILED\n")
     m("the write group needs no files-on", "create_account", "       if not(files.want) then\n         @system.return.code = -ER$ARGS\n         err = 12528",
       "       if 0 then\n         @system.return.code = -ER$ARGS\n         err = 12528")
     m("a group account is no longer refused the write group", "create_account", "     if files.want or files.write.want or files.admin.want or ai.want then      ;* 13 Nov 26 (Linux S.69 step 2): and no AI gate",
@@ -723,7 +739,7 @@ def mutants(raw):
     # S.73 item 3 (21 Oct 26): the administration group at creation, in the manifest and in the restore
     m("FILES-ADMIN-ON sets nothing", "createa", "'FILES-ADMIN-ON'\n            settings<CA$FILESADMIN> = 1", "'FILES-ADMIN-ON'\n            settings<CA$FILES> = 1")
     m("the administration group needs no files-write-on", "create_account", "       if not(files.want) or not(files.write.want) then", "       if not(files.want) then")
-    m("the administration group is joined as sdfiles", "create_account", 'stat = os_group("ADDMEM", "sdfilesadmin", acc.uname)', 'stat = os_group("ADDMEM", "sdfiles", acc.uname)')
+    m("the administration group is joined as sdfiles", "create_account", "         files.grp.name = 'sdfilesadmin'\n         gosub join.files.group", "         files.grp.name = 'sdfiles'\n         gosub join.files.group")      # 18 Nov 26 (D3): join.files.group
     m("a group account is given the administration group (the 10087 refusal forgets it)", "create_account", "     if files.want or files.write.want or files.admin.want or ai.want then      ;* 13 Nov 26 (Linux S.69 step 2): and no AI gate",
       "     if files.want or files.write.want or ai.want then      ;* 13 Nov 26 (Linux S.69 step 2): and no AI gate")
     m("the manifest has no administration key", "acc_os_info", "   info<-1> = 'route.files.admin: ' : fadmin\n", "")

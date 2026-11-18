@@ -394,7 +394,8 @@ def checks(srcs, messages_dir):
        and "# '0'" not in ca[ca.find("access.given"):ca.find("access.given") + 900])
     # 13 Nov 26 Windows port: Core's variables are os.sh and os.exec (Linux's os.sh.want and os.exec.want), assigned the comparison
     ck("B5 SH and OS.EXECUTE start off too: a switch is on only if its setting is exactly 1",
-       re.search(r"(?m)^\s*os\.sh\s*= settings<CA\$OS\.SH> = 1\s*$", ca) and re.search(r"(?m)^\s*os\.exec = settings<CA\$OS\.EXECUTE> = 1\s*$", ca))
+       # 18 Nov 26 (round 6, D3): Linux's names and form, os.sh.want / os.exec.want = (settings<...> = 1)
+       re.search(r"(?m)^\s*os\.sh\.want = \(settings<CA\$OS\.SH> = 1\)\s*$", ca) and re.search(r"(?m)^\s*os\.exec\.want = \(settings<CA\$OS\.EXECUTE> = 1\)\s*$", ca))
     att = at(ca, "if settings<CA$ATTACH> = 1 then")
     att_end = at(ca, "openpath @sdsys:@ds:'accounts' to acc.f", att)
     ck("B6 ATTACH (the installing user) turns NOTHING on: the install-only branch never sets a route or a switch, so the installing "
@@ -408,16 +409,18 @@ def checks(srcs, messages_dir):
     # 13 Nov 26 Windows port: Core's names are os.sh / os.exec; each branch is held on its own, so losing one refusal is seen
     grp = ca[at(ca, "case acc.type = 'GROUP'"):at(ca, "case acc.type = 'OTHER'")]
     oth = ca[at(ca, "case acc.type = 'OTHER'"):]
-    refusal = r"if os\.sh or os\.exec then\s*@system\.return\.code = -ER\$ARGS\s*err = 10105:@vm:acc\.name"
+    refusal = r"if os\.sh\.want or os\.exec\.want then\s*@system\.return\.code = -ER\$ARGS\s*err = 10105:@vm:acc\.name"   # 18 Nov 26 (D3): Linux's names
     ck("B7 a GROUP and an OTHER account given SH or OS are refused with 10105 (and a GROUP one given a route with 10087, first, as Linux)",
        re.search(refusal, grp) and re.search(refusal, oth[:1200])
-       and 0 < at(grp, "if access.given then") < at(grp, "if os.sh or os.exec then")
+       and 0 < at(grp, "if access.given then") < at(grp, "if os.sh.want or os.exec.want then")
        and re.search(r"if access\.given then\s*@system\.return\.code = -ER\$ARGS\s*err = 10087:@vm:acc\.name", grp))
     wr = at(ca, "write acc.rec to acc.f, acc.name")
-    usr = at(ca, 'if acc.type = "USER" then')
+    # 18 Nov 26 (round 6, D3): Linux's shape - the two fields are written in the register record's USER case (after its ACC$GROUP line), with Linux's names
+    usr = at(ca, 'acc.rec<ACC$GROUP> = "sdu_":downcase(acc.uname)')
+    grpcase = at(ca, 'case acc.type = "GROUP"', usr)
     ck("B8 the register record gets ACC$SH and ACC$OS.EXEC as yes/no for a USER account, before it is written",
-       0 < usr < at(ca, "acc.rec<ACC$SH> = if os.sh then 'yes' else 'no'", usr) < wr
-       and 0 < usr < at(ca, "acc.rec<ACC$OS.EXEC> = if os.exec then 'yes' else 'no'", usr) < wr, "user %s, write %s" % (usr, wr))
+       0 < usr < at(ca, "acc.rec<ACC$SH> = if os.sh.want then 'yes' else 'no'", usr) < grpcase < wr
+       and 0 < usr < at(ca, "acc.rec<ACC$OS.EXEC> = if os.exec.want then 'yes' else 'no'", usr) < grpcase < wr, "user %s, write %s" % (usr, wr))
 
     cr = c["createa"]
     # 17 Nov 26 Windows port (four-version audit round 1): createa's parse writes settings at once, as Linux's - Linux's B9
@@ -429,9 +432,9 @@ def checks(srcs, messages_dir):
     md = c["modifya"]
     for word, field, want in (("SH-ON", "ACC$SH", "@true"), ("SH-OFF", "ACC$SH", "@false"), ("OS-ON", "ACC$OS.EXEC", "@true"),
                               ("OS-OFF", "ACC$OS.EXEC", "@false")):
-        # 13 Nov 26 Windows port: Core dispatches on upcase(action), one statement a line
+        # 18 Nov 26 (round 6, D3): Linux's shape - "case action = 'X'" (upcased once), "os.field = ... ; os.want = ..." on one line, gosub os.set, return
         ck("B11 MODIFY.ACCOUNT %s sets os.field = %s, os.want = %s and calls os.set" % (word, field, want),
-           re.search(r"case upcase\(action\) = '%s'\s*os\.field = %s\s*os\.want\s*= %s\s*gosub os\.set" % (re.escape(word), re.escape(field), want), md))
+           re.search(r"case action = '%s'\s*os\.field = %s ; os\.want = %s\s*gosub os\.set\s*return\n" % (re.escape(word), re.escape(field), want), md))
     osset = md[at(md, "\nos.set:"):]
     nxt = re.search(r"\n[a-z][a-z0-9.$_]*:[ \t]*\n", osset[1:])      # 13 Nov 26 Windows port: os.set's body only, up to the next label
     osset = osset[:nxt.start() + 1] if nxt else osset
@@ -441,7 +444,7 @@ def checks(srcs, messages_dir):
     ck("B12 os.set writes the register under a lock (readu before write) and reports a failed write",
        0 < rd < wt and "sysmsg(10114, acc.name)" in osset[wt:])
     ck("B13 os.set reports both fields afterwards (10102), refuses a non-sdu_ account (10105) and says 'no change' (10080)",
-       "sysmsg(10102, acc.name, osu.sh, osu.ex)" in osset and "sysmsg(10105, acc.name)" in osset and "sysmsg(10080, acc.name)" in osset)
+       "sysmsg(10102, acc.name, os.sh.now, os.ex.now)" in osset and "sysmsg(10105, acc.name)" in osset and "sysmsg(10080, acc.name)" in osset)
 
     ed = c["edit"]
     cpm = ed[at(ed, "check.permitted:"):][:1400]
@@ -719,16 +722,17 @@ MUTANTS = [
     ("the SH verb gate comes after the command has run", swap("cproc", "   if not(kernel(K$ADMINISTRATOR, -1)) and not(kernel(K$SH, -1)) then\n      display sysmsg(10053, @logname) ;* %1 is not permitted to use the shell\n      return\n   end\n", "   os.execute os.command.text\n")),
     ("LOGIN grants everyone both", sub("login", "void kernel(K$SH,      upcase(trim(acc.rec<ACC$SH>)) = 'YES')", "void kernel(K$SH,      1)")),
     ("a new account is on both routes by default again", sub("create_account", "access.ssh = (settings<CA$ROUTE.SSH> = 1)", "access.ssh = settings<CA$ROUTE.SSH> # '0'")),
-    ("a new account gets the shell by default", sub("create_account", "os.sh   = settings<CA$OS.SH> = 1", "os.sh   = settings<CA$OS.SH> # '0'")),
-    ("ATTACH turns the four on again for the installing user", sub("create_account", "         return\n      end\n* 23 Oct 26 Windows port - from Linux abcda0c", "         return\n      end\n      access.ssh = @true\n      os.sh = @true\n* 23 Oct 26 Windows port - from Linux abcda0c")),
-    ("a GROUP account may be given a shell", sub("create_account", "     if os.sh or os.exec then\n       @system.return.code = -ER$ARGS\n       err = 10105:@vm:acc.name ;* %1 is a group account", "     if @false then\n       @system.return.code = -ER$ARGS\n       err = 10105:@vm:acc.name ;* %1 is a group account")),
+    # 18 Nov 26 (round 6, D3): the create_account and modifya mutants aim at Linux's names and shape (os.sh.want, case action = 'X', one-line os.field ; os.want)
+    ("a new account gets the shell by default", sub("create_account", "os.sh.want = (settings<CA$OS.SH> = 1)", "os.sh.want = (settings<CA$OS.SH> # '0')")),
+    ("ATTACH turns the four on again for the installing user", sub("create_account", "         return\n      end\n* 23 Oct 26 Windows port - from Linux abcda0c", "         return\n      end\n      access.ssh = @true\n      os.sh.want = @true\n* 23 Oct 26 Windows port - from Linux abcda0c")),
+    ("a GROUP account may be given a shell", sub("create_account", "     if os.sh.want or os.exec.want then\n       @system.return.code = -ER$ARGS\n       err = 10105:@vm:acc.name ;* %1 is a group account", "     if @false then\n       @system.return.code = -ER$ARGS\n       err = 10105:@vm:acc.name ;* %1 is a group account")),
     ("a GROUP account may be given a route", sub("create_account", "     if access.given then\n       @system.return.code = -ER$ARGS\n       err = 10087", "     if @false then\n       @system.return.code = -ER$ARGS\n       err = 10087")),
-    ("an OTHER account may be given a shell", sub("create_account", "     if os.sh or os.exec then\n       @system.return.code = -ER$ARGS\n       err = 10105", "     if @false then\n       @system.return.code = -ER$ARGS\n       err = 10105")),
-    ("the register is written without the gate fields", sub("create_account", "      acc.rec<ACC$SH> = if os.sh then 'yes' else 'no'\n", "")),
+    ("an OTHER account may be given a shell", sub("create_account", "     if os.sh.want or os.exec.want then\n       @system.return.code = -ER$ARGS\n       err = 10105:@vm:acc.name ;* %1 has no", "     if @false then\n       @system.return.code = -ER$ARGS\n       err = 10105:@vm:acc.name ;* %1 has no")),
+    ("the register is written without the gate fields", sub("create_account", "     acc.rec<ACC$SH> = if os.sh.want then 'yes' else 'no'\n", "")),
     ("CREATE.ACCOUNT OS-ON sets the wrong field", sub("createa", "         case upcase(token) = 'OS-ON'\n            settings<CA$OS.EXECUTE> = 1", "         case upcase(token) = 'OS-ON'\n            settings<CA$OS.SH> = 1")),
     ("CREATE.ACCOUNT never passes OS-ON on", sub("createa", "         case upcase(token) = 'OS-ON'\n            settings<CA$OS.EXECUTE> = 1", "         case upcase(token) = 'OS-ON'\n            null")),
-    ("MODIFY.ACCOUNT SH-OFF turns the shell on", sub("modifya", "case upcase(action) = 'SH-OFF'\n            os.field = ACC$SH\n            os.want  = @false", "case upcase(action) = 'SH-OFF'\n            os.field = ACC$SH\n            os.want  = @true")),
-    ("MODIFY.ACCOUNT OS-ON changes the shell field", sub("modifya", "case upcase(action) = 'OS-ON'\n            os.field = ACC$OS.EXEC", "case upcase(action) = 'OS-ON'\n            os.field = ACC$SH")),
+    ("MODIFY.ACCOUNT SH-OFF turns the shell on", sub("modifya", "case action = 'SH-OFF'\n         os.field = ACC$SH ; os.want = @false", "case action = 'SH-OFF'\n         os.field = ACC$SH ; os.want = @true")),
+    ("MODIFY.ACCOUNT OS-ON changes the shell field", sub("modifya", "case action = 'OS-ON'\n         os.field = ACC$OS.EXEC", "case action = 'OS-ON'\n         os.field = ACC$SH")),
     ("os.set writes without the lock", sub("modifya", "   readu acc.new from acc.f, acc.name else acc.new = acc.rec\n   if os.want", "   acc.new = acc.rec\n   if os.want")),
     ("micro needs no grant", sub("edit", "   if kernel(K$OS.EXEC, -1) then\n      permitted = @true\n      return\n   end\n", "   permitted = @true\n   return\n")),
     ("the manifest leaves out os.sh", sub("acc_os_info", "info<-1> = 'os.sh: '", "info<-1> = 'zz.sh: '")),

@@ -598,8 +598,8 @@ def checks(srcs):
        "{dict-on} {shared-read-off} {shared-write-on} {net-on} {files-on} {files-write-on} {files-admin-on} {ai-on} {start-menu | start-terminal} {pins-on} {recovery-on} {xfer-on} {no.query}" in cr
        and re.search(r"case upcase\(token\) = 'SHARED-READ-OFF'\s*\n\s*settings<CA\$SHARED\.READ\.OFF> = 1\s*\n\s*case upcase\(token\) = 'SHARED-WRITE-ON'\s*\n\s*settings<CA\$SHARED\.WRITE> = 1", cr) is not None
        and "SHARED-READ-ON" not in cr and "SHARED-WRITE-OFF" not in cr, "")
-    # Windows: each word is 'case upcase(action) = ...' with os.field and os.want on lines of their own, and no return after gosub os.set.
-    cases_ok = all(re.search(r"case upcase\(action\) = '%s'\s*\n\s*os\.field = %s\s*\n\s*os\.want\s*= @%s\s*\n\s*gosub os\.set" % (w, f, b), mo)
+    # 18 Nov 26 (round 6, D3): Linux's form - 'case action = ...', os.field and os.want on one line, gosub os.set, return.
+    cases_ok = all(re.search(r"case action = '%s'\s*\n\s*os\.field = %s ; os\.want = @%s\s*\n\s*gosub os\.set\s*\n\s*return\n" % (w, f, b), mo)
                    for w, f, b in (("SHARED-READ-ON", "ACC\\$SHARED\\.READ", "true"), ("SHARED-READ-OFF", "ACC\\$SHARED\\.READ", "false"),
                                    ("SHARED-WRITE-ON", "ACC\\$SHARED\\.WRITE", "true"), ("SHARED-WRITE-OFF", "ACC\\$SHARED\\.WRITE", "false")))
     ck("G8 modifya has the four words, each through os.set with its own field; the syntax line and the 'Action Must Be' list name them on lines of their own (net-on, net-off stays intact); and nothing "
@@ -862,14 +862,14 @@ MUTANTS = [
     ("restorea grants write to a manifest that has no key", "bp:restorea", "(if m.shared.write = '1' then 1 else '')", "(if m.shared.write = '0' then '' else 1)"),
     ("modifya: shared-read-off finds a blank record already off", "bp:modifya", "      os.was = (upcase(trim(acc.rec<os.field>)) # 'NO')", "      os.was = (upcase(trim(acc.rec<os.field>)) = 'YES')"),
     ("modifya: a group account cannot carry the shared words", "bp:modifya", " and os.field # ACC$SHARED.READ and os.field # ACC$SHARED.WRITE", ""),
-    ("modifya has no SHARED-READ-OFF", "bp:modifya", "         case upcase(action) = 'SHARED-READ-OFF'", "         case upcase(action) = 'SHARED-READ-OFFX'"),
+    ("modifya has no SHARED-READ-OFF", "bp:modifya", "      case action = 'SHARED-READ-OFF'", "      case action = 'SHARED-READ-OFFX'"),      # 18 Nov 26 (round 6, D3): Linux's form
     ("modifya refuses the account named shared", "bp:modifya", "os.set:\n", "os.set:\n   if acc.name = 'shared' then return\n"),
     ("modifya reports read as yes unless the field says yes", "bp:modifya", "if upcase(trim(acc.new<ACC$SHARED.READ>)) = 'NO' then sh.read.now = 'no'", "if upcase(trim(acc.new<ACC$SHARED.READ>)) # 'YES' then sh.read.now = 'no'"),
     ("create.account takes shared-read-on too", "bp:createa", "         case upcase(token) = 'SHARED-READ-OFF'", "         case upcase(token) = 'SHARED-READ-ON'\n            null\n         case upcase(token) = 'SHARED-READ-OFF'"),
     ("create.account's syntax drops the shared words", "bp:createa", "{dict-on} {shared-read-off} {shared-write-on} {net-on}", "{dict-on} {net-on}"),   # 17 Nov 26: Linux's syntax line
     ("create_account writes a USER's read as blank", "bp:create_account", "     acc.rec<ACC$SHARED.READ> = if shared.read.off then 'no' else 'yes'\n", ""),
     ("create_account asks the setting loosely", "bp:create_account", "shared.write.want = (settings<CA$SHARED.WRITE> = 1)", "shared.write.want = (settings<CA$SHARED.WRITE> # '')"),
-    ("create_account does not report the shared gates", "bp:create_account", "      crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3\n", ""),
+    ("create_account does not report the shared gates", "bp:create_account", "     crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3\n", ""),      # 18 Nov 26 (D3): Linux's 5-space indent
     ("the marker is not consumed", "bp:create_account", "         void ospath(shared.marker, OS$DELETE)\n", "         null\n"),
     ("the reserved name is open to a USER", "bp:create_account", "      if acc.type = 'GROUP' and kernel(K$INTERNAL, -1) and ospath(shared.marker, OS$EXISTS) then", "      if kernel(K$INTERNAL, -1) and ospath(shared.marker, OS$EXISTS) then"),
     ("the reserved name is open to a typed session", "bp:create_account", "acc.type = 'GROUP' and kernel(K$INTERNAL, -1) and ospath(shared.marker, OS$EXISTS)", "acc.type = 'GROUP' and ospath(shared.marker, OS$EXISTS)"),

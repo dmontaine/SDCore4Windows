@@ -3,6 +3,18 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+18 Nov 26  CREATE.ACCOUNT AND MODIFY.ACCOUNT FOLLOW SD CORE FOR LINUX'S PROGRAMS LINE FOR LINE.
+
+             What        - modify.account ... unsuspended on an account that is not suspended says "... is not suspended;
+                           nothing changed".  The ssh / api / both / none lines name the SD account.  A membership that
+                           Windows cannot read (sdusers, sdssh, sdapi) refuses the change instead of being taken as "not a
+                           member".  An account setting (sh-on, suspended and the like) no longer needs the account's
+                           Windows group to be found; the add / delete of a group member still does.  With no action word
+                           the usage is shown, in SD Core for Linux's order.
+                         - create.account prints the shared-files line after the network line, and a group account typed in
+                           capitals gets a lower-case directory.
+             Not         - What an account may do is unchanged; the order and form of the programs follow Linux's.
+
 18 Nov 26  SDSYS FROM YOUR OWN LOGIN: TWO LISTS OF WINDOWS USERS, BOTH EMPTY AS DELIVERED.
 
              What        - The administrator can list Windows users who may reach SDSYS from this computer without signing in to

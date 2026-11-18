@@ -1397,6 +1397,15 @@ Account %1 is now suspended
 
 cited by: `modifya`
 
+### msg:10194
+> kind=message tier=reference since=- src=sdsys/messages/10194:1#6d5507f4
+
+```
+%1 is not suspended; nothing changed
+```
+
+cited by: `modifya`
+
 ### msg:1020
 > kind=message tier=reference since=- src=sdsys/messages/1020:1#68046ac2
 

@@ -43,8 +43,11 @@ ALLOWED = {
     ('10024', '10024'): 'OS: a Windows group, not a Linux group',
     ('10003', '10051'): 'OS: two different refusals that sit on the same LOGIN line; ours names LOGTO (RELEASE_1.1 64)',
     ('10084', '10084'): 'OS: the Windows account, not a Linux user',
-    ('10114', '10087'): 'OS: modifya is the Windows program; different messages line up on a matching line (group account, no remote access)',
+    # 18 Nov 2026 (round 6, D3, P-3386): modifya takes Linux's shape, so start.set's 10114 no longer lines up with route.set's 10087 and the 10114 / 10087 row left.
     # 17 Nov 2026 (four-version audit round 1, P-3212): modifya's os.set says Linux's 10114 now, so the 10114 / 10104 row left.
+    # 18 Nov 2026 (round 6, D3): create_account and modifya now line up with Linux's line for line, which pairs 10038 and 10161 for the first time.
+    ('10038', '10038'): 'OS: a Windows account SD did not make, not a Linux user; SD accounts make their own operating-system account',
+    ('10161', '10161'): 'OS: the cure names "ssh.server install", the Windows-only verb that installs the OpenSSH server; otherwise Linux\'s sentence',
     ('10105', '10105'): 'OS: a Windows user, not a Linux user',
     ('10909', '10122'): 'OS: create_account sets a Windows password, then SD\'s credential; different failures on a matching line',
     ('10130', '10130'): 'OS: the Windows account and its removal, not a Linux user',

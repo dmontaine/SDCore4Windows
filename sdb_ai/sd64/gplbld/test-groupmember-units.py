@@ -98,11 +98,19 @@ READS_STATUS = {
         "could-not-tell is REPORTED with 10022 rather than skipped, because a skipped strip "
         "leaves a remote route in place without a word",
     # 09 Oct 26 - RELEASE_1.1 130: a reused SD user's route not asked for is removed on RESTORE.
-    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdssh')"):
-        "reused-user route removal: rm.told = status() on the next line; a could-not-tell stops "
-        "the verb with 10081 rather than leaving the old route in place without a word",
-    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdapi')"):
-        "reused-user route removal: same as sdssh",
+    # 18 Nov 26 - four-version audit round 6, D3 (P-7694): the seven typed-out removals (sdssh, sdapi, sdfiles, sdfilesadmin, sdfileswrite,
+    # sdaiusers, sdsshnokey) are Linux's one subroutine, leave.route.group, called for each group; its one site is declared here.
+    ("create_account", "leave.member = is_grp_member(acc.uname, files.grp.name)"):
+        "reused-user route removal (leave.route.group, every route group and sdsshnokey): leave.told = status() on the next line; a "
+        "could-not-tell stops the verb with 10081 rather than leaving the old route in place without a word",
+    # 18 Nov 26 - round 6, D3: MODIFY.ACCOUNT's route words are Linux's set.route; its three lookups are three-valued (account.user's
+    # sdusers test and route.apply's two, which read 'could not tell' as 'not a member', are gone with them).
+    ("modifya", "in.sdusers = is_grp_member(route.user, 'sdusers')"):
+        "ssh / api / both / none: route.stat = status() on the next line; could-not-tell refuses with 10081 and its status, as does a person not in sdusers (status 2)",
+    ("modifya", "has.ssh = is_grp_member(route.user, 'sdssh')"):
+        "the route change: route.stat = status() on the next line; could-not-tell changes nothing and says 10081 with the status",
+    ("modifya", "has.api = is_grp_member(route.user, 'sdapi')"):
+        "the route change, second group: route.stat = status() on the next line; same as has.ssh",
     # 25 Oct 26 - RELEASE_1.1 171 (Linux 96d8be8, S.65 slice 2c): the sdfiles route, the same shapes as sdssh and sdapi.
     ("acc_os_info", "m = is_grp_member(uname, 'sdfiles')"):
         "backup manifest route.files: 'status() = 0' on the same line; a group that is missing (an install from before the route) reads as "
@@ -121,16 +129,6 @@ READS_STATUS = {
         "the sdusers gate at SCRAM, before the sdsys door and the routes: api.sdusers.stat = status() on the next line; could-not-tell refuses (5009) with its own reason",
     ("apisrvr", "api.in.sdfiles = is_grp_member(scram.user, 'sdfiles')"):
         "the sdfiles gate at SCRAM: api.files.stat = status() on the next line; could-not-tell is refused with its own audit reason",
-    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdfiles')"):
-        "reused-user route removal for sdfiles: rm.told = status() on the next line; only a lookup that fails for a reason other than "
-        "'no such group' stops the verb with 10081",
-    # 18 Nov 26 - four-version audit round 2 (P-5470), as Linux S.62 (P-1284): the reused user leaves sdfilesadmin and sdfileswrite too.
-    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdfilesadmin')"):
-        "reused-user removal of files-admin not asked for: rm.told = status() on the next line; only a lookup that fails for a reason other than "
-        "'no such group' stops the verb with 10081",
-    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdfileswrite')"):
-        "reused-user removal of files-write not asked for: rm.told = status() on the next line; only a lookup that fails for a reason other than "
-        "'no such group' stops the verb with 10081",
     ("modifya", "in.sdusers = is_grp_member(files.user, 'sdusers')"):
         "files-on: files.stat = status() on the next line; could-not-tell refuses",
     # 25 Oct 26 - RELEASE_1.1 171 (Linux 3fbfc0d, S.65 write group): the same shapes for sdfileswrite, and set.files takes the group from files.grp.
@@ -155,31 +153,22 @@ READS_STATUS = {
     # 13 Nov 26 - RELEASE_1.1 246 (Linux S.69 step 2): the AI gate, sdaiusers, the same shapes as sdfilesadmin.
     ("acc_os_info", "m = is_grp_member(uname, 'sdaiusers')"):
         "backup manifest route.ai: 'status() = 0' on the next line; a group that is missing reads as not a member",
-    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdaiusers')"):
-        "reused-user removal of an AI gate not asked for: rm.told = status() on the next line; only a lookup that fails for a reason other than "
-        "'no such group' stops the verb with 10081",
-    ("modifya", "has.ai = is_grp_member(files.user, 'sdaiusers')"):
-        "ai-on / ai-off: files.stat = status() on the next line; a lookup that cannot tell is followed by is_group() (no such group: ai-off has "
-        "nothing to take away, ai-on is 10024), and a group that is there and cannot be read stops the command with 10081",
+    # 18 Nov 26 - round 6, D3: ai-on / ai-off and ssh-key-on / ssh-key-off read their group through read.one.group (declared above), as set.files does.
     # 17 Nov 26 - from Linux 1557e270 (S.62 LC3): sdsshnokey, the DENY group of key sign-in, the same shapes as sdaiusers.
     ("acc_os_info", "m = is_grp_member(uname, 'sdsshnokey')"):
         "backup manifest ssh.key: 'if status() then' on the next line; a group that is missing reads as 1 (nobody is denied a key), "
         "a group that is there and cannot be read is 12005",
-    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdsshnokey')"):
-        "a reused user given ssh-key-on leaves the group: rm.told = status() on the next line; only a lookup that answers is acted on",
-    ("modifya", "has.nokey = is_grp_member(files.user, 'sdsshnokey')"):
-        "ssh-key-on / ssh-key-off: files.stat = status() on the next line; a lookup that cannot tell is followed by is_group() (no such "
-        "group: ssh-key-on has nothing to take away, ssh-key-off is 10024), and a group that is there and cannot be read is 10081",
 }
 FAIL_CLOSED = {
     # 25 Oct 26 - the SCRAM sdapi gate moved to READS_STATUS with the sdfiles route (it reads status() now).
-    ("create_account", "files.now = is_grp_member(acc.uname, 'sdfiles')"):
+    # 18 Nov 26 - round 6, D3: the four state lines read the group inline, as Linux's (they were read into files.now / files.wnow / files.anow / ai.now first).
+    ("create_account", "crt sysmsg(12487, acc.name, if is_grp_member(acc.uname, 'sdfiles') then 'yes' else 'no')  ;* Account %1 has files %2"):
         "the state line printed after the account is made: display only; a could-not-tell prints 'no' and nothing is granted by it",
-    ("create_account", "files.wnow = is_grp_member(acc.uname, 'sdfileswrite')"):
+    ("create_account", "crt sysmsg(12527, acc.name, if is_grp_member(acc.uname, 'sdfileswrite') then 'yes' else 'no')  ;* Account %1 has files-write %2"):
         "the same state line for sdfileswrite: display only",
-    ("create_account", "files.anow = is_grp_member(acc.uname, 'sdfilesadmin')"):
+    ("create_account", "crt sysmsg(12530, acc.name, if is_grp_member(acc.uname, 'sdfilesadmin') then 'yes' else 'no')  ;* Account %1 has files-admin %2"):
         "the same state line for sdfilesadmin: display only",
-    ("create_account", "ai.now = is_grp_member(acc.uname, 'sdaiusers')"):
+    ("create_account", "crt sysmsg(12611, acc.name, if is_grp_member(acc.uname, 'sdaiusers') then 'yes' else 'no')  ;* Account %1 has ai %2"):
         "the same state line for sdaiusers (12611, RELEASE_1.1 246): display only",
     # 17 Nov 26 - from Linux 1557e270 (S.62 LC3): the three displays of the key sign-in gate.  sdsshnokey is a DENY group, so a could-not-tell
     # reads as "not a member" and shows key sign-in ON - which is what sshd itself does with a group it cannot read (a deny group fails open);
@@ -233,13 +222,6 @@ FAIL_CLOSED = {
     ("modifya", "if is_grp_member(user.name,group.name) THEN"):
         "group add/delete (two sites, same line): 'already a member' is "
         "skipped and os_group ADDMEM/DELMEM reports its own failure",
-    ("modifya", "user.ok = is_grp_member(acc.user,'sdusers')"):
-        "account.user: a could-not-tell refuses with 10020, fail closed",
-    ("modifya", "has.ssh = is_grp_member(acc.user, 'sdssh')"):
-        "route change: a could-not-tell reads as 'does not have it', so the "
-        "idempotent ADDMEM runs and reports its own failure",
-    ("modifya", "has.api = is_grp_member(acc.user, 'sdapi')"):
-        "route change: same as has.ssh",
     # 23 Oct 26 - RELEASE_1.1 170 (Linux abcda0c, S.63 second sitting).
     ("_voc_ref", "q.ok = is_grp_member(@logname, q.group)"):
         "a Q-pointer into a registered account is followed only if the user could LOGTO it: LOGTO's own test, so it fails "

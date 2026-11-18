@@ -139,13 +139,18 @@ def checks(s, dynamic=True):
     ck("K4 ...refuses it for a group account (10087) and an other account (10081) before anything is made",
        "if ssh.key.want then\n       @system.return.code = -ER$ARGS\n       err = 10087:@vm:acc.name" in grp
        and "if ssh.key.want then\n       @system.return.code = -ER$ARGS\n       err = 10081:@vm:acc.name:@vm:2" in oth)
-    acc = section(a, "\nset.access:", "\ncreate.group:")
-    join = "   if not(attach) then\n      if ssh.key.want then\n         if reuse.sd.user then"
+    # 18 Nov 26 (round 6, D3, P-7694): set.access is in the USER arm in Linux's shape: files.grp.name = 'sdsshnokey', then leave.route.group for a reused
+    # user given ssh-key-on, else join.files.group; each stops the account on a failure (route.stat), and both subroutines say 10081 with the status
+    acc = section(a, "   case acc.type = \"USER\"\n", "      gosub create.group\n")
+    join = ("      if not(attach) then\n         files.grp.name = 'sdsshnokey'\n         if ssh.key.want then\n            if reuse.sd.user then\n"
+            "               gosub leave.route.group\n               if route.stat # 0 then goto exit.create\n            end\n         end else\n"
+            "            gosub join.files.group\n            if route.stat # 0 then goto exit.create\n         end\n      end")
+    jfg = section(a, "\njoin.files.group:", "\n   return\n")
+    lrg = section(a, "\nleave.route.group:", "\n   return\n\n")
     ck("K5 ...joins a Windows user it made (not an attached one) to sdsshnokey unless ssh-key-on, and takes a reused one out with ssh-key-on",
-       join in acc and 'stat = os_group("ADDMEM", "sdsshnokey", acc.uname)' in acc and 'stat = os_group("DELMEM", "sdsshnokey", acc.uname)' in acc
-       and acc.find(join) < acc.find('os_group("ADDMEM", "sdsshnokey"'))
+       join in acc and 'route.stat = os_group("ADDMEM", files.grp.name, acc.uname)' in jfg and 'route.stat = os_group("DELMEM", files.grp.name, acc.uname)' in lrg)
     ck("K6 ...a failed join stops the account with 10081, as a route does",
-       re.search(r'os_group\("ADDMEM", "sdsshnokey", acc\.uname\)\n\s*if stat # 0 then\n\s*@system\.return\.code = -ER\$FAILED\n\s*err = 10081', acc) is not None)
+       re.search(r'route\.stat = os_group\("ADDMEM", files\.grp\.name, acc\.uname\)\n\s*if route\.stat # 0 then\n\s*@system\.return\.code = -ER\$FAILED\n\s*err = 10081', jfg) is not None)
     ck("K7 ...and NOT sdsshonly: the deny-logon group's join is still only ADDMEM sdsshonly, and ssh-key-on never touches it",
        a.count('"sdsshonly"') == 1 and "sdsshnokey" not in a[a.find('os_group("ADDMEM", "sdsshonly"') - 200:a.find('os_group("ADDMEM", "sdsshonly"') + 60])
     ck("K8 ...the state line 15171 is read off the group ('no' for a member) and not said for an attached user",
@@ -165,11 +170,12 @@ def checks(s, dynamic=True):
     ck("K11 modify.account knows SSH-KEY-ON and SSH-KEY-OFF in one slot of their own (KY), carried out right after AI-ON / AI-OFF",
        pair == ["KY", "KY"] and slots.count("KY") == 2 and "AI-OFF" in words and words.index("SSH-KEY-ON") == words.index("AI-OFF") + 1, "%s" % pair)
     ck("K12 ...each word reaches set.sshkey with the right want",
-       re.search(r"case upcase\(action\) = 'SSH-KEY-ON'\s*\n\s*key\.want = @true\s*\n\s*gosub set\.sshkey", m) is not None
-       and re.search(r"case upcase\(action\) = 'SSH-KEY-OFF'\s*\n\s*key\.want = @false\s*\n\s*gosub set\.sshkey", m) is not None)
+       # 18 Nov 26 (round 6, D3): Linux's do.action form, `case action = 'X'` ... gosub set.sshkey, return
+       re.search(r"case action = 'SSH-KEY-ON'\s*\n\s*key\.want = @true\s*\n\s*gosub set\.sshkey\s*\n\s*return\n", m) is not None
+       and re.search(r"case action = 'SSH-KEY-OFF'\s*\n\s*key\.want = @false\s*\n\s*gosub set\.sshkey\s*\n\s*return\n", m) is not None)
     ss = section(m, "\nset.sshkey:", "\n   return\n\n")
     ss_all = m[m.find("\nset.sshkey:"):]
-    ss_all = ss_all[:ss_all.find("\nroute.apply:")] if "\nroute.apply:" in ss_all else ss_all
+    ss_all = ss_all[:ss_all.find("\nset.ai:")] if "\nset.ai:" in ss_all else ss_all      # 18 Nov 26 (D3): set.ai follows set.sshkey, as Linux's
     made_at = ss_all.find("key.made = is_sd_user(files.user)")
     refuse_at = ss_all.find("crt sysmsg(15170, acc.name, files.user)")
     change_at = ss_all.find("gosub change.files.group")
@@ -277,8 +283,8 @@ def report(rows):
 MUTANTS = [
     ("create_account", "any non-blank value is a request", "ssh.key.want = (settings<CA$SSH.KEY> = 1)", "ssh.key.want = (settings<CA$SSH.KEY> # '')"),
     ("create_account", "the group is not looked for first", "     if not(attach) and not(ssh.key.want) then\n       files.grp.name = 'sdsshnokey'", "     if @false then\n       files.grp.name = 'sdsshnokey'"),
-    ("create_account", "an attached user is put in the group", "   if not(attach) then\n      if ssh.key.want then", "   if @true then\n      if ssh.key.want then"),
-    ("create_account", "a made user is not put in it", 'stat = os_group("ADDMEM", "sdsshnokey", acc.uname)', 'stat = 0'),
+    ("create_account", "an attached user is put in the group", "      if not(attach) then\n         files.grp.name = 'sdsshnokey'", "      if @true then\n         files.grp.name = 'sdsshnokey'"),      # 18 Nov 26 (D3): Linux's shape
+    ("create_account", "a made user is not put in it", "         end else\n            gosub join.files.group\n            if route.stat # 0 then goto exit.create\n         end\n      end", "         end else\n            null\n         end\n      end"),
     ("create_account", "a group account may ask for keys", "* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): nor key sign-in, which belongs to a Windows user, for the same reason.\n     if ssh.key.want then", "* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): nor key sign-in, which belongs to a Windows user, for the same reason.\n     if @false then"),
     ("create_account", "the state line reads the group the right way up", "then 'no' else 'yes')  ;* Account %1 may sign in over ssh with a key: %2", "then 'yes' else 'no')  ;* Account %1 may sign in over ssh with a key: %2"),
     ("createa", "the audit line forgets it", "if settings<CA$SSH.KEY> = 1 then gates<-1> = 'ssh-key-on'", "if @false then gates<-1> = 'ssh-key-on'"),

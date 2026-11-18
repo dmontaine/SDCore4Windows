@@ -88,8 +88,8 @@ RESERVED = {
     "10190": ("SD Core for Linux", "20 Sep 2026", "root is not SD's administrator"),
     "10191": ("SD Core for Linux", "20 Sep 2026", "SD administration needs a local session"),
     # 17 Nov 26 - four-version audit round 1 (P-3213): 10192 and 10193 are carried here with Linux's words (modifya's suspend and
-    # unsuspend), so they leave this table of Linux-only ids.
-    "10194": ("SD Core for Linux", "20 Sep 2026", "%1 is not suspended; nothing changed"),
+    # unsuspend), so they leave this table of Linux-only ids.  18 Nov 26 - round 6, D3 (P-3436): 10194 likewise, with Linux's words
+    # (modifya's set.unsuspended, "%1 is not suspended; nothing changed"), byte-identical to Linux's messages/10194.
     "10195": ("SD Core for Linux", "20 Sep 2026", "sdsys without an sdsys login"),
     # ***10922 - THE FIFTH COLLISION THIS PROJECT HAS HAD, AND THE ONLY ONE OF THE FOUR THE
     # LINUX AGENT REPORTED ON 20 Sep 2026 THAT WAS REAL.***  This port took it that afternoon for

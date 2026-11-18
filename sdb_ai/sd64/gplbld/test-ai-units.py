@@ -317,8 +317,11 @@ def check_b(t):
     cab = bas(ca2)
     row("!create_account: ai.want is exactly 1; the group sdaiusers is looked for BEFORE the Windows user is made and joined after it, a group or other account is refused as for FILES-ON, "
         "and the state line 12611 is read off the group",
-        "ai.want = (settings<CA$AI> = 1)" in cab and ordered(cab, "if ai.want then", "files.grp.name = 'sdaiusers'", "gosub check.files.group") and 'os_group("ADDMEM", "sdaiusers", acc.uname)' in cab
-        and cab.count("or ai.want then") == 2 and "ai.now = is_grp_member(acc.uname, 'sdaiusers')" in cab and "sysmsg(12611, acc.name, if ai.now then 'yes' else 'no')" in cab, "")
+        "ai.want = (settings<CA$AI> = 1)" in cab and ordered(cab, "if ai.want then", "files.grp.name = 'sdaiusers'", "gosub check.files.group")
+        # 18 Nov 26 (round 6, D3): the join is Linux's join.files.group (os_group ADDMEM of files.grp.name) and the state line reads the group inline, as Linux's
+        and ordered(cab, "gosub check.files.group", "if ai.want then", "files.grp.name = 'sdaiusers'", "gosub join.files.group")
+        and 'route.stat = os_group("ADDMEM", files.grp.name, acc.uname)' in cab
+        and cab.count("or ai.want then") == 2 and "sysmsg(12611, acc.name, if is_grp_member(acc.uname, 'sdaiusers') then 'yes' else 'no')" in cab, "")
     row("the manifest has route.ai from membership of sdaiusers, RESTORE.ACCOUNT reads it, clears it for each section and hands it on as CA$AI only when it is 1",
         ordered(ai, "is_grp_member(uname, 'sdaiusers')", "'route.files.admin: '", "info<-1> = 'route.ai: ' : aiuse") and re.search(r"= 'route\.ai'\s*; m\.route\.ai = kv", rs) is not None
         and "m.route.ai = ''" in rs and "if m.route.ai = '1' then settings<CA$AI> = 1" in rs and bas(rs).count("CA$AI") == 1, "")

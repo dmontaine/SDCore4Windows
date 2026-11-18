@@ -193,7 +193,7 @@ def checks(s):
        and [sl[w.index(x)] for x in ("START-MENU", "START-TERMINAL", "START-DEFAULT")] == ["ST", "ST", "ST"] and [sl[w.index(x)] for x in ("PINS-ON", "PINS-OFF")] == ["PN", "PN"])
     # 13 Nov 26 Windows: H14b and H24d read Core's dispatch, one CASE upcase(action) in the main loop with no RETURN.
     ck("H14b ...do.action has the three cases and start.set writes only field 16, says 12873, audits, and says 12874 when nothing changes",
-       all(re.search(r"case upcase\(action\) = '%s'\n\s+start\.want = %s\n\s+gosub start\.set\n" % (a, v), md) for a, v in (("START-MENU", "'menu'"), ("START-TERMINAL", "'terminal'"), ("START-DEFAULT", "''")))
+       all(re.search(r"case action = '%s'\n\s+start\.want = %s\n\s+gosub start\.set\n\s+return\n" % (a, v), md) for a, v in (("START-MENU", "'menu'"), ("START-TERMINAL", "'terminal'"), ("START-DEFAULT", "''")))      # 18 Nov 26 (round 6, D3): Linux's do.action form
        and "acc.new<ACC$START> = start.want" in md and "sysmsg(12873, acc.name" in md and "sysmsg(12874, acc.name)" in md and "K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name" in between(md, "\nstart.set:\n", "\nset.suspended:\n"))
     ck("H14c ...the usage and the list of actions name the three words", md.count("start-menu") >= 2 and "start-menu | start-terminal | start-default" in md)
 
@@ -293,8 +293,8 @@ def checks(s):
     ck("H24c ...it reads the record HOME only, cuts the list to 100, the label to 21, the glyph to 3 and the command to 200, makes every control character a blank, and writes nothing",
        "read rec from f, 'home' then" in hp and "if n > 100 then n = 100" in hp and "[1, 21]" in hp and "[1, 3]" in hp and "[1, 200]" in hp and hp.count("convert(ctl, blanks,") == 3 and "write " not in hp and "execute" not in hp)
     ck("H24d MODIFY.ACCOUNT: PINS-ON and PINS-OFF write ACC$PINS through os.set (any account type may have it, and it says 12890)",
-       all(re.search(r"case upcase\(action\) = '%s'\n\s+os\.field = ACC\$PINS\n\s+os\.want\s+= @%s\n\s+gosub os\.set\n" % (a, b), md) for a, b in (("PINS-ON", "true"), ("PINS-OFF", "false")))      # 13 Nov 26 Windows: Core's dispatch form
-       and "os.field # ACC$SHARED.WRITE and os.field # ACC$PINS then" in md and "sysmsg(12890, acc.name," in md and "pins-on | pins-off" in md)
+       all(re.search(r"case action = '%s'\n\s+os\.field = ACC\$PINS ; os\.want = @%s\n\s+gosub os\.set\n\s+return\n" % (a, b), md) for a, b in (("PINS-ON", "true"), ("PINS-OFF", "false")))      # 18 Nov 26 (round 6, D3): Linux's do.action form
+       and "os.field # ACC$NET and os.field # ACC$PINS then" in md and "sysmsg(12890, acc.name," in md and "pins-on | pins-off" in md)
     ck("H25 the home screen's own programs: asked for the account the session is in, shown only when the gate is on, as tiles whose action is the person's command - the ONE place a tile runs something a person typed",
        "call !home_pins(@who, pins.on, pins.items)" in th and "if pins.on then" in th and th.count("act = 'cmd:' : pins.items<pn, 3>") == 1
        and th.find("if pins.on then") < th.find("act = 'cmd:' : pins.items<pn, 3>") < th.find("gr<g> = 'Everyone'"))
@@ -551,7 +551,7 @@ MUTANTS = [
     # 14 Nov 26 (RELEASE_1.1 296): re-anchored on the words round START-DEFAULT; the list gained AI-ON,AI-OFF and UNSUSPENDED (3045d667) and the long anchor matched nothing
     ("modify.account loses a start word", "modifya", "START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON", "START-MENU,START-TERMINAL,PINS-ON"),
     ("modify.account loses a pins word", "modifya", "START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED", "START-DEFAULT,PINS-ON,SUSPENDED"),
-    ("pins-on writes another field", "modifya", "os.field = ACC$PINS\n            os.want  = @true", "os.field = ACC$NET\n            os.want  = @true"),      # 13 Nov 26 Windows: Core's two-line form
+    ("pins-on writes another field", "modifya", "os.field = ACC$PINS ; os.want = @true", "os.field = ACC$NET ; os.want = @true"),      # 18 Nov 26 (round 6, D3): Linux's one-line form
     ("home_pins does not ask the gate", "home_pins", "   if not(on) then return\n", ""),
     ("home_pins lets everyone have the gate", "home_pins", "on = (upcase(trim(arec<ACC$PINS>)) = 'YES')", "on = 1"),
     ("home_pins keeps control characters", "home_pins", "label = trim(convert(ctl, blanks, rec<i, 1>))[1, 21]", "label = trim(rec<i, 1>)[1, 21]"),
