@@ -495,7 +495,7 @@
 "part": "reference/basic-functions.md",
 "since": "-",
 "tier": "reference",
-"words": 74
+"words": 83
 },
 "basic:func:fcontrol.int": {
 "kind": "basic.internal",
@@ -1202,7 +1202,7 @@
 "part": "reference/basic-functions.md",
 "since": "-",
 "tier": "reference",
-"words": 63
+"words": 60
 },
 "basic:func:osrename": {
 "kind": "basic.internal",
@@ -2665,7 +2665,7 @@
 "part": "reference/basic-statements.md",
 "since": "-",
 "tier": "reference",
-"words": 26
+"words": 34
 },
 "basic:stmt:inputcsv": {
 "kind": "basic.statement",
@@ -2693,7 +2693,7 @@
 "part": "reference/basic-statements.md",
 "since": "-",
 "tier": "reference",
-"words": 26
+"words": 34
 },
 "basic:stmt:inputnull": {
 "kind": "basic.statement",
@@ -2938,14 +2938,14 @@
 "part": "reference/basic-statements.md",
 "since": "-",
 "tier": "reference",
-"words": 37
+"words": 47
 },
 "basic:stmt:openpath": {
 "kind": "basic.statement",
 "part": "reference/basic-statements.md",
 "since": "-",
 "tier": "reference",
-"words": 24
+"words": 35
 },
 "basic:stmt:openseq": {
 "kind": "basic.statement",
@@ -3911,7 +3911,7 @@
 "part": "core.md",
 "since": "-",
 "tier": "core",
-"words": 246
+"words": 249
 },
 "core:voc-types": {
 "kind": "core.digest",
@@ -5327,13 +5327,6 @@
 "tier": "reference",
 "words": 13
 },
-"msg:10104": {
-"kind": "message",
-"part": "reference/messages.md",
-"since": "-",
-"tier": "reference",
-"words": 18
-},
 "msg:10105": {
 "kind": "message",
 "part": "reference/messages.md",
@@ -5347,13 +5340,6 @@
 "since": "-",
 "tier": "reference",
 "words": 11
-},
-"msg:10109": {
-"kind": "message",
-"part": "reference/messages.md",
-"since": "-",
-"tier": "reference",
-"words": 7
 },
 "msg:1011": {
 "kind": "message",
@@ -14077,6 +14063,13 @@
 "tier": "reference",
 "words": 17
 },
+"msg:15172": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 12
+},
 "msg:15995": {
 "kind": "message",
 "part": "reference/messages.md",
@@ -19612,7 +19605,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 12
+"words": 15
 },
 "msg:6077": {
 "kind": "message",
@@ -26969,7 +26962,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 45
+"words": 48
 },
 "tcl:config": {
 "kind": "tcl.verb",
@@ -28138,7 +28131,7 @@
 "part": "reference/tcl-keywords.md",
 "since": "-",
 "tier": "reference",
-"words": 59
+"words": 37
 },
 "tcl:new.page": {
 "kind": "tcl.keyword",
@@ -29629,7 +29622,7 @@
 "part": "reference/voc.md",
 "since": "-",
 "tier": "reference",
-"words": 189
+"words": 190
 },
 "voc:type:PA": {
 "kind": "voc.type",

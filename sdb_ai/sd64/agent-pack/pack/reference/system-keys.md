@@ -277,14 +277,14 @@ Constants beginning `SD$` in `sdsys/syscom/err.h` (error codes: STATUS() after a
 - `SD$PyErr.PrivUnknown` = -12042 - the OS permission could not be determined
 
 ### sys:ikeys:ah$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:485#0398ee0f
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:486#0398ee0f
 
 Constants beginning `AH$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
 - `AH$AUTO.DELETE` = 0x0002 - Self-deleting common block
 
 ### sys:ikeys:cred$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:442#c92cfbe8
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:443#c92cfbe8
 
 Constants beginning `CRED$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -296,7 +296,7 @@ Constants beginning `CRED$` in `sdsys/gpl.bp/int$keys.h` (internal programs only
 - `CRED$SERVERKEY` = 6 - HMAC(SaltedPassword,"Server Key"), b64
 
 ### sys:ikeys:evt$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:345#9e4f33b2
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:346#9e4f33b2
 
 Constants beginning `EVT$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -313,7 +313,7 @@ Constants beginning `EVT$` in `sdsys/gpl.bp/int$keys.h` (internal programs only 
 - `EVT$MESSAGE` = 0x0400 - Send immediate message
 
 ### sys:ikeys:fci$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:526#7a0ef939
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:527#7a0ef939
 
 Constants beginning `FCI$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -330,7 +330,7 @@ Constants beginning `FCI$` in `sdsys/gpl.bp/int$keys.h` (internal programs only 
 - `FCI$NET.CREATE` = 11 - ... CREATE.FILE on a server, no file yet: "server<FM>words"; the file variable is any local file (the VOC the verb has open)
 
 ### sys:ikeys:fl$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:372#88f57ef4
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:373#88f57ef4
 
 Constants beginning `FL$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -363,7 +363,7 @@ Constants beginning `FL$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (
 - `FL$SETRDONLY` = 10005 - Make file read only (cannot reverse)
 
 ### sys:ikeys:in$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:60#7a2659c9
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:61#7a2659c9
 
 Constants beginning `IN$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -389,7 +389,7 @@ Constants beginning `IN$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (
 - `IN$RAW` = 0x00200000 - INPUT ... RAW: exactly `length` characters, no interpretation of newline or erase (openQM 548)
 
 ### sys:ikeys:k$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:82#4721cdd6
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:83#4721cdd6
 
 Constants beginning `K$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -503,18 +503,18 @@ Constants beginning `K$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`
 - `K$SHARED.ONCE` = 131 - a file name: 1 the first time this process is asked about it, 0 afterwards (the audit of a shared open) (18 Oct 26, S.66)
 - `K$PROFILER` = 116 - n > 0 start the application event profiler (the events in n), 0 stop, -1 ask, -2 the table (16 Oct 26)
 - `K$PROFILER.USER` = 117 - user * 4096 + 2048 + n start it in another process, user * 4096 alone stop it and have it write F<user> to $ipc; administrator only
-- `K$LOCK.TRACE` = 115 - 1 start lock tracing (administrator: makes the locktrace file), 0 stop, -1 ask; the state, -1 if refused (16 Oct 26; carried 13 Nov 26, RELEASE_1.1 182)
-- `K$WINSIZE` = 92 - The terminal's size from the tty
 - `K$SHOW.SAFE` = 151 - any text: the same text with every byte of the kernel's one rule (0-31, 127, 128-159, 248-255) as '?', the same length; for printing another session's text (10 Nov 26, Linux d35f5e31, S.88)
 - `K$AI.START` = 160 - system:@fm:maxtokens:@fm:prompt, answered 'OK' or 'ERR':@fm:why
 - `K$AI.POLL` = 161 - 'W' waiting, 'D':@fm:the helper's reply (JSON), or 'E':@fm:why
 - `K$AI.CANCEL` = 162 - give the request up ('OK')
 - `K$AI.STATUS` = 163 - the helper's status line, 'D':@fm:json, or 'E':@fm:why
+- `K$LOCK.TRACE` = 115 - 1 start lock tracing (administrator: makes the locktrace file), 0 stop, -1 ask; the state, -1 if refused (16 Oct 26; carried 13 Nov 26, RELEASE_1.1 182)
 - `K$JOB.MARK` = 172 - The scheduled job this session is, or ''
 - `K$XFER` = 173 - File transfer over the ssh login: the slot and the server (S.242)
 - `K$OS.SDSYS.USER` = 174 - Did this process sign in as SDSYS at a desktop?
 - `K$RUNIN.CHILD` = 84 - run.in's debugged child: account:@fm:store:@fm:groups, '' for any other process
 - `K$RUNIN.DEBUG` = 85 - the SDSYS session's end of a run: 'O', 'P' (relay) or 'C' (end)
+- `K$WINSIZE` = 92 - The terminal's size from the tty
 - `K$SH` = 93 - may use SH and "!"
 - `K$OS.EXEC` = 94 - may use OS.EXECUTE and reach OS paths outside its account
 - `K$PATH.OK` = 95 - 1 if this account may open the pathname
@@ -524,7 +524,7 @@ Constants beginning `K$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`
 - `K$EXIT.ABORT` = 3
 
 ### sys:ikeys:lgn$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:409#765ea182
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:410#765ea182
 
 Constants beginning `LGN$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -540,7 +540,7 @@ Constants beginning `LGN$` in `sdsys/gpl.bp/int$keys.h` (internal programs only 
 - `LGN$BANNED.ACCOUNTS` = 10 - Banned accounts
 
 ### sys:ikeys:mki$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:519#688308c0
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:520#688308c0
 
 Constants beginning `MKI$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -550,7 +550,7 @@ Constants beginning `MKI$` in `sdsys/gpl.bp/int$keys.h` (internal programs only 
 - `MKI$NO.CASE` = 8 - NO.CASE (for create mode)
 
 ### sys:ikeys:os$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:305#aad0ea3f
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:306#aad0ea3f
 
 Constants beginning `OS$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -573,7 +573,7 @@ Constants beginning `OS$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (
 - `OS$CHOWN` = 100 - Chown on file / directory
 
 ### sys:ikeys:p$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:359#9d1e6209
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:360#9d1e6209
 
 Constants beginning `P$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -584,7 +584,7 @@ Constants beginning `P$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`
 - `P$PICKREAD` = 32
 
 ### sys:ikeys:pt$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:293#cc748e70
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:294#cc748e70
 
 Constants beginning `PT$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -600,7 +600,7 @@ Constants beginning `PT$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (
 - `PT$CTRL.FILTER` = 11 - Discard control characters in INPUT and INPUT@?
 
 ### sys:ikeys:scram$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:452#9f6a931d
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:453#9f6a931d
 
 Constants beginning `SCRAM$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -611,7 +611,7 @@ Constants beginning `SCRAM$` in `sdsys/gpl.bp/int$keys.h` (internal programs onl
 - `SCRAM$MAX.ITER` = 10000000 - Ceiling on a server's i=
 
 ### sys:ikeys:usr$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:335#c59bfa25
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:336#c59bfa25
 
 Constants beginning `USR$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 
@@ -625,7 +625,7 @@ Constants beginning `USR$` in `sdsys/gpl.bp/int$keys.h` (internal programs only 
 - `USR$GROUPED` = 0x0800 - (K$USERS only) a phantom grouped with its parent: logged out when the parent ends
 
 ### sys:ikeys:v$
-> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:475#0ebace4f
+> kind=sys.keys tier=reference since=- src=sdsys/gpl.bp/int$keys.h:476#0ebace4f
 
 Constants beginning `V$` in `sdsys/gpl.bp/int$keys.h` (internal programs only (`$internal`)):
 

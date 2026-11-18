@@ -659,13 +659,6 @@ Account %1 has SH %2, OS.EXECUTE %3
 
 cited by: `create_account`, `modifya`
 
-### msg:10104
-> kind=message tier=reference since=- src=sdsys/messages/10104:1#3165e969
-
-```
-Unable to change operating-system access for %1; the register could not be updated,\nso nothing has changed.
-```
-
 ### msg:10105
 > kind=message tier=reference since=- src=sdsys/messages/10105:1#3ad02f63
 
@@ -683,13 +676,6 @@ Account %1 is suspended
 ```
 
 cited by: `cproc`, `login`, `xfersrv`
-
-### msg:10109
-> kind=message tier=reference since=- src=sdsys/messages/10109:1#3aae254a
-
-```
-Account %1 is now %2
-```
 
 ### msg:1011
 > kind=message tier=reference since=- src=sdsys/messages/1011:1#94014939
@@ -11437,6 +11423,15 @@ Account %1 may sign in over ssh with a key: %2
 
 cited by: `create_account`, `modifya`
 
+### msg:15172
+> kind=message tier=reference since=- src=sdsys/messages/15172:1#638f988a
+
+```
+Making the change (a few seconds)...
+```
+
+cited by: `tool_config`, `tool_remote`
+
 ### msg:15995
 > kind=message tier=reference since=- src=sdsys/messages/15995:1#32ac8f74
 
@@ -18107,10 +18102,10 @@ Passwords are set using Windows tools on this platform
 ```
 
 ### msg:6076
-> kind=message tier=reference since=- src=sdsys/messages/6076:1#545b83d9
+> kind=message tier=reference since=- src=sdsys/messages/6076:1#d0f9db9f
 
 ```
-Passwords are set using Windows administration tools on this platform
+Passwords are set using modify.password, not operating system administration tools, on this platform
 ```
 
 ### msg:6077
