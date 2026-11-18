@@ -2637,7 +2637,7 @@ Private bool ak_write(DH_FILE *dh_file, /* File descriptor */
   new_node2_num = get_ak_node(dh_file, subfile);   /* PRE_RELEASE 100: see above */
   if (new_node2_num == 0)
     goto exit_ak_write;
-  new_node2 =(DH_TERM_NODE *)k_alloc(50, DH_AK_NODE_SIZE);
+  new_node2 = (DH_TERM_NODE *)k_alloc(50, DH_AK_NODE_SIZE);
   memset((char *)new_node2, '\0', DH_AK_NODE_SIZE);
   new_node2->node_type = AK_TERM_NODE;
   new_node2->used_bytes = TERM_NODE_HEADER_SIZE;
@@ -2767,7 +2767,7 @@ Private bool ak_write(DH_FILE *dh_file, /* File descriptor */
     new_node3_num = get_ak_node(dh_file, subfile);   /* PRE_RELEASE 100: see above */
     if (new_node3_num == 0)
       goto exit_ak_write;
-    new_node3 =(DH_TERM_NODE *)k_alloc(50, DH_AK_NODE_SIZE);
+    new_node3 = (DH_TERM_NODE *)k_alloc(50, DH_AK_NODE_SIZE);
     memset((char *)new_node3, '\0', DH_AK_NODE_SIZE);
     new_node3->node_type = AK_TERM_NODE;
     new_node3->used_bytes = TERM_NODE_HEADER_SIZE;
@@ -3951,7 +3951,7 @@ Private bool update_internal_node(DH_FILE *dh_file,  /* DH file affected and... 
     new_node_num = get_ak_node(dh_file, subfile);   /* PRE_RELEASE 100: 0 is the AK header, not a node */
     if (new_node_num == 0)
       goto exit_update_internal_node;
-    new_node =(DH_INT_NODE *)k_alloc(55, DH_AK_NODE_SIZE);
+    new_node = (DH_INT_NODE *)k_alloc(55, DH_AK_NODE_SIZE);
     /* Modified by Composer AI - 2026/06/10.
        k_alloc() can return NULL; abort the split on allocation failure. */
     if (new_node == NULL)

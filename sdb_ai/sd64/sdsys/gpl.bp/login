@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 18 Nov 26 Windows port - four-version audit round 5 (Solo's P-8161, kept the same here): gate.ok is no longer set at the top;
+*           internal.gate sets it and it is read only after that gosub.  BCOMP's 2825 is for a variable assigned nowhere
+*           (bcomp:1797), so the reason recorded for the line (RELEASE_1.1 82) did not hold.
 * 17 Nov 26 Windows port - four-version audit round 4 (P-7388, P-7391, P-7696, P-7697): $release and $command.stack are read with a
 *           THEN branch, as Linux and Windows Solo (no release.found flag, no ELSE voc.rec = '').  No change in effect.
 * 17 Nov 26 Windows port - four-version audit round 3, the case fallbacks (the Linux audit session's D4): $release and
@@ -303,12 +306,6 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   that means "nothing to do", so a path added later that skips the test lets
 *   the login through rather than refusing it silently.
    cred.ok = @true
-
-* 20 Sep 26 Windows port - RELEASE_1.1 82 (D2').  gate.ok for the same reason: internal.gate
-*   assigns it and the call site READS it, and BCOMP sees the call site textually first.
-*   @true is the value that means "nothing to check", which is what every session that is
-*   not internal leaves it at.
-   gate.ok = @true
 
    is.phantom = kernel(K$IS.PHANTOM, 0)
 

@@ -94,11 +94,15 @@ def gate_problems(login_text):
         elif not re.search(r"gosub internal\.gate\s*\n\s*if not\(gate\.ok\) then goto terminate\.connection", branch):
             p.append("the call is not followed by 'if not(gate.ok) then goto terminate.connection'")
 
-    # gate.ok is initialised near the top, BEFORE it is read (BCOMP's 'is not assigned a value')
-    i_init = joined.find("gate.ok = @true")
+    # gate.ok: internal.gate sets it @false before anything else, and nothing reads it before that gosub.  18 Nov 26, audit round 5
+    # (P-8161): the assignment at the top of LOGIN is gone, as Linux Solo - BCOMP's 2825 is for a name assigned nowhere (bcomp:1797).
+    first = next((ln.strip() for ln in body.splitlines() if ln.strip()), "")
+    if first != "gate.ok = @false":
+        p.append("internal.gate does not set gate.ok @false before anything else")
     i_call = joined.find("gosub internal.gate")
-    if i_init < 0 or i_call < 0 or i_init > i_call:
-        p.append("gate.ok is not assigned before the call site reads it")
+    i_read = joined.find("gate.ok")
+    if i_call < 0 or i_read < 0 or i_read < i_call:
+        p.append("gate.ok is read before internal.gate assigns it")
 
     # the marker path and the expiry
     if not re.search(r"gate\.marker = @sdsys : @ds : '\$internal'", body):
@@ -221,6 +225,13 @@ row(any("never CREATEd" in x for x in gate_problems(mut6)),
     "MUTANT: the age scratch file opened with OPENSEQ and never created (the b202 defect) is caught")
 mut4 = login.replace("gate.expiry = 600", "gate.expiry = 0")
 row(any("expiry" in x for x in gate_problems(mut4)), "MUTANT: a changed expiry is caught (the writers' docs and the witness assume 600)")
+# 18 Nov 26 (P-8161): gate.ok's own assignment is internal.gate's first statement, and nothing reads it before the call
+mut7 = login.replace("internal.gate:\n   gate.ok = @false\n", "internal.gate:\n", 1)
+row(mut7 != login and any("@false before" in x for x in gate_problems(mut7)),
+    "MUTANT: an internal.gate that no longer sets gate.ok @false first is caught")
+mut8 = login.replace("\n   is.phantom = kernel(K$IS.PHANTOM, 0)\n", "\n   is.phantom = kernel(K$IS.PHANTOM, 0)\n   if gate.ok then null\n", 1)
+row(mut8 != login and any("read before" in x for x in gate_problems(mut8)),
+    "MUTANT: gate.ok read before internal.gate assigns it is caught")
 
 # ---------------------------------------------------------------------------
 # 2. the writers: every internal session has one

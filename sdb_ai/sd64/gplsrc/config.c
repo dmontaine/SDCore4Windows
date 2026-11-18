@@ -178,9 +178,9 @@ struct CONFIG* read_config(char* errmsg) {
   pcfg.must_lock = FALSE;         /* MUSTLOCK: Enforce locking rules */
   pcfg.objects = 0;               /* OBJECTS:  Max loaded objects */
   pcfg.objmem = 0;                /* OBJMEM:   Max loaded object size */
-  pcfg.netdirs[0] = '\0';         /* NETDIRS:  none - a session held to its account reaches nothing outside it (17 Nov 26, per session) */
   pcfg.netwait = 5;            /* NETWAIT:  Seconds to wait for a connection to a remote SDNet server (19 Oct 26, K8d; the plan's 5) */
   pcfg.netreply = 30;             /* NETREPLY: Seconds to wait for each reply of a remote SDNet server (the plan's 30) */
+  pcfg.netdirs[0] = '\0';         /* NETDIRS:  none - a session held to its account reaches nothing outside it (17 Nov 26, per session) */
   pcfg.pwdelay = 3;               /* PWDELAY:  Seconds after a failed network login.  SD's own 3 (openQM's is 5) */
   pcfg.sdclient_mode = 0;         /* SDCLIENT: Client capabilities */
   pcfg.reccache = 0;              /* RECCACHE: Record cache size */
