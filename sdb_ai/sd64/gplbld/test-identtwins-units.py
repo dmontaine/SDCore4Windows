@@ -5,6 +5,7 @@
 #   python test-identtwins-units.py [--selftest]
 #
 # START-HISTORY:
+# 18 Nov 26 "analyses" -> "analyzes" joins the list: test-usspelling-units.py's UK list gained it (from Linux 48161ccf, S.62 P-6046).
 # 9 Nov 26 New.  The US spelling sweep of 9 Nov renamed `catalogued = []` to `cataloged` in verify-carry-try.py but left `catalogued.append(nm)`
 #                (the word sat next to a dot, which test-usspelling-units.py treats as a name).  py_compile cannot see it: the suite ran its 21
 #                rows and then died on a NameError, on the owner's machine.  This guard looks for the shape of the fault, in every gplbld script.
@@ -30,7 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 US = {
     "catalogues": "catalogs", "catalogued": "cataloged", "cataloguing": "cataloging", "catalogue": "catalog",
     "colours": "colors", "coloured": "colored", "colouring": "coloring", "colour": "color",
-    "analysed": "analyzed", "analysing": "analyzing", "analyse": "analyze",
+    "analysed": "analyzed", "analysing": "analyzing", "analyses": "analyzes", "analyse": "analyze",
     "behaviours": "behaviors", "behaviour": "behavior",
     "centres": "centers", "centred": "centered", "centring": "centering", "centre": "center",
     "licences": "licenses", "licence": "license",

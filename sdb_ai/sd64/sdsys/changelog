@@ -3,6 +3,27 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+18 Nov 26  RUN.IN'S TWO REFUSALS IN SD CORE FOR LINUX'S WORDS, AND ONE MORE FILE ASKED; SET.FILE NAMES A NEW POINTER IN LOWER CASE.
+
+             What        - run.in, the administrator's account-scoped run, refuses a command whose files lie outside
+                           the account or have a trigger in the words SD Core for Linux uses: "run.in: <file> in
+                           account <account> names a path outside the account; nothing was run" and "run.in: <file>
+                           in account <account> has a trigger; nothing was run", audited as run.in refused
+                           account=<account> file=<file> reason=<reason>.  It now also asks the object file a local
+                           catalog entry names, which decatalog deletes, and finds the private catalog of catalog and
+                           delete.catalog as those commands do (a $PRIVATE.CATALOG record as well).  A trigger on the
+                           account's VOC is refused before anything reads that VOC.  A path written in full, or with
+                           an @ token, is accepted when it lies inside the account.  A new Q-pointer made by SET.FILE
+                           is written under a lower-case VOC id again, the default qfile and a name you type; an
+                           existing pointer is found whatever its case and keeps its id.  The SD bootstrap says
+                           voc_template, as the directory is named.
+             Why         - The four-version parity audit, cycle 3: SD Core for Linux now makes these checks too, and
+                           its list of the files asked is the one both follow.  The object file a local catalog entry
+                           names is held by its full path, which the old test refused as text whatever it named.
+             Does NOT    - Change what run.in runs in an account whose files are its own, or rename a pointer that is
+                           already in the VOC.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 18 Nov 26  A RECORD ID IS FOUND AS TYPED; A GROUP THAT CANNOT BE READ STOPS A BACKUP OR A RESTORE; AN OLD SYSTEM KEEPS THE PROMPT.
 
              What        - A query (LIST, SELECT and the rest) finds a record by its id as typed: in a file of your own,

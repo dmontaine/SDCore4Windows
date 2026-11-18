@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Nov 26 Windows port - from Linux 48161ccf (S.62, P-6633): a NEW pointer's VOC id is lower case again - the default QFILE and a typed name
+*           (RELEASE_1.1 5's rule, which the 17 Nov one-read change had dropped); an existing pointer is found and kept as before.
 * 17 Nov 26 Windows port - four-version audit round 3, the case fallbacks (D4): the pointer name is read once and the default
 *           QFILE as Linux reads it; the account name is folded lower (P-7039), so message 2201 names it in lower case.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
@@ -148,7 +150,10 @@ $include int$keys.h
          read voc.rec from @voc, pointer else
             read voc.rec from @voc, downcase(pointer) then
                pointer = downcase(pointer)
-            end else exit
+            end else
+               pointer = downcase(pointer)   ;* 18 Nov 26, from Linux 48161ccf (S.62, P-6633): a new id is lower case
+               exit
+            end
          end
          if voc.rec[1,1] = 'Q' then exit
          display sysmsg(6875) ;* QFILE is already in the VOC but not as a Q-pointer
@@ -165,7 +170,12 @@ $include int$keys.h
 *     (owner, 14 Sep 2026: "treat it as the same id"); no hit writes downcase().
 * 17 Nov 26 Windows port - four-version audit round 3 (P-3472, P-3473, P-7040; the case fallbacks, the Linux audit
 *     session's D4): ONE READ, as Linux and Windows Solo.  The VOC is NOCASE, so the read finds an existing pointer in any case.
-      read voc.rec from @voc, pointer else exit
+* 18 Nov 26 Windows port - from Linux 48161ccf (S.62, P-6633): a pointer name that is not in the VOC is a NEW record, and its id is lower case (an existing
+*     one is found as before and keeps its id).  The 17 Nov one-read change had dropped RELEASE_1.1 5's downcase() with the fallbacks.
+      read voc.rec from @voc, pointer else
+         pointer = downcase(pointer)
+         exit
+      end
 
       display sysmsg(6876) ;* Pointer name is already in VOC
 

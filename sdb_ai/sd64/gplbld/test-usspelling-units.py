@@ -5,6 +5,7 @@
 #   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-usspelling-units.py [--selftest]
 #
 # START-HISTORY:
+# 18 Nov 26 Windows port - from Linux 48161ccf (S.62, P-6046): reads sdsys/config.table too, and knows "analyses".
 # 9 Nov 26 Windows port - from Linux ad4a2cf6 (S.186), the spelling half only (RELEASE_1.1 205).  tool_tktest is skipped until the TUI carries; no other change.
 # 9 Nov 26 dm  New (S.186).  The US spelling sweep of 9 Nov changed SD's messages, help, program texts, C strings and the guide; this check keeps a
 #              British form from coming back in a new text.  The owner asked for a check that catches "simple failures like spelling" before suites run.
@@ -29,7 +30,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SD64 = os.path.dirname(HERE)
 SDSYS = os.path.join(SD64, "sdsys")
 
-UK = ["catalogues", "catalogued", "cataloguing", "catalogue", "colours", "coloured", "colouring", "colour", "analysed", "analysing", "analyse",
+UK = ["catalogues", "catalogued", "cataloguing", "catalogue", "colours", "coloured", "colouring", "colour", "analysed", "analysing", "analyses", "analyse",
       "behaviours", "behaviour", "centres", "centred", "centring", "centre", "licences", "licence", "unrecognised", "unrecognisable", "recognises",
       "recognised", "recognising", "recognise", "initialisation", "initialises", "initialised", "initialising", "initialise", "cancelled", "cancelling",
       "honours", "honoured", "honouring", "honour", "labelled", "labelling", "modelled", "travelling", "dialogues", "dialogue", "synchronises",
@@ -172,6 +173,9 @@ def read_tree():
             p = os.path.join(d, nm)
             if os.path.isfile(p) and nm not in SKIP_FILES:
                 add(p, kind, "%s/%s" % (sub, nm))
+    ct = os.path.join(SDSYS, "config.table")          # 18 Nov 26, from Linux 48161ccf (S.62, P-6046): the parameter texts the configuration page shows
+    if os.path.isfile(ct):
+        add(ct, "text", "config.table")
     g = os.path.join(SD64, "gplsrc")
     for nm in sorted(os.listdir(g)):
         if nm.endswith(".c"):

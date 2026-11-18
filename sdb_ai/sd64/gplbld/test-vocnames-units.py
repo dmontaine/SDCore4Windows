@@ -9,6 +9,9 @@ the owner's standard is that nothing SD ships spells a name two ways.  Two kinds
   2. a $include line in an SD BASIC program (sdsys/gpl.bp): it was `$include KEYS.H`; it is `keys.h`, the
      name of the file on disk.  On ext4 the other spelling is only found through the program's own fold.
 
+  3. (18 Nov 26, from Linux 48161ccf, S.62 P-6633) the id SET.FILE gives a NEW Q-pointer in the VOC: the default QFILE and a typed name are
+     written lower case.
+
 It reads files; no SD, no install, no sudo.  The control is a copy of a record with a capital planted, which
 this check must refuse.  Exit 0 all rows passed, 1 a row failed, 2 it could not run.
 
@@ -77,7 +80,30 @@ def bad_includes():
     return bad
 
 
+def setfile_new_ids(src):
+    """18 Nov 26, from Linux 48161ccf (S.62, P-6633): SET.FILE writes a NEW pointer under a lower-case VOC id - the default QFILE and a typed name.
+    Every branch of the pointer loop that finds no record sets pointer = downcase(pointer) before it leaves the loop.  The problems found, [] when none."""
+    code = "\n".join(ln.strip() for ln in src.split("\n") if ln.strip() and not ln.strip().startswith("*"))
+    code = re.sub(r"\s*;\*.*", "", code)
+    out = []
+    if code.count("end else\npointer = downcase(pointer)\nexit\nend") != 1:
+        out.append("the default QFILE, found in neither spelling, does not leave with pointer = downcase(pointer)")
+    if code.count("read voc.rec from @voc, pointer else\npointer = downcase(pointer)\nexit\nend") != 1:
+        out.append("a typed pointer name that is not in the VOC does not leave with pointer = downcase(pointer)")
+    if "end else exit" in code or "read voc.rec from @voc, pointer else exit" in code:
+        out.append("a branch leaves the loop for a new record with the id as typed")
+    return out
+
+
 def main():
+    sf = os.path.join(GPLBP, "setfile")
+    if os.path.isfile(sf):
+        good = setfile_new_ids(text(sf))
+        old = text(sf).replace("            end else\n               pointer = downcase(pointer)   ;* 18 Nov 26, from Linux 48161ccf (S.62, P-6633): a new id is lower case\n"
+                               "               exit\n            end\n", "            end else exit\n")
+        row("CONTROL: the setfile detector refuses the old text (the default QFILE left the loop as typed) and the text was there to change",
+            old != text(sf) and len(setfile_new_ids(old)) >= 1, "%r" % setfile_new_ids(old))
+        row("setfile: a NEW pointer's VOC id is lower case (the default QFILE and a typed name; P-6633)", not good, "; ".join(good))
     for d in LAYERS + [GPLBP]:
         if not os.path.isdir(d):
             print("test-vocnames-units: CANNOT RUN - %s is missing" % d)

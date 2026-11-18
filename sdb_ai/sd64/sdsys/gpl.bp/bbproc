@@ -25,6 +25,8 @@
 *
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - from Linux 48161ccf (S.62, P-3248): the bootstrap names the directory voc_template as it is on disk (it printed
+*           VOC_TEMPLATE, twice in its refusal), as Linux's now does.
 * 17 Nov 26 Windows port - four-version audit round 1: the bootstrap's own text says VOC and VOC_TEMPLATE as Linux's does, the
 *           compile list is lower case as Linux's (valid_os_name stays: this port's is_grp_member calls it), and the third column of
 *           FILES_LIST names the dictionary as Linux's.
@@ -194,10 +196,10 @@ crt 'populate VOC'
 *
 * move items in voc_template to voc
 *
-crt 'populating VOC from VOC_TEMPLATE'
+crt 'populating VOC from voc_template'
 openpath @sdsys:@ds:'voc_template' to voc_t.f else
-  crt 'Cannot open VOC_TEMPLATE directory! ABORT'
-  if logging then writeseq 'Cannot open VOC_TEMPLATE directory! ABORT' to log.f else null
+  crt 'Cannot open voc_template directory! ABORT'
+  if logging then writeseq 'Cannot open voc_template directory! ABORT' to log.f else null
   goto abort.bbproc
 end
 *

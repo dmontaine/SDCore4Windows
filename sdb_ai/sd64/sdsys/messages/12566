@@ -1,1 +1,1 @@
-%1 in account %2 has a trigger function; run.in did not run the command
+run.in: %1 in account %2 has a trigger; nothing was run

@@ -363,9 +363,10 @@ if ($sections -contains 'runin201') {
         Set-WitVerdict '201' 'the fixture program compiled and set up zzcust and zzri' $r.Text '(?s)Compiled 1 program\(s\) with no errors.*zzfix setup: done' @('with errors in', 'zzfix: cannot')
         $r = Invoke-WitSd -Commands @('run.in zzrunin compile.dict zzcust total') -Label 'run.in compile.dict (no trigger)'
         # 13 Nov 26: COMPILE.DICT (cd) prints only "Compiling <name>" when it succeeds; a failure follows that line with 2811, 2974, 2975 or 2976.
-        Set-WitVerdict '201' 'run.in zzrunin compile.dict compiles an I-type' $r.Text '(?m)^\W*Compiling total\s*$' @('Compilation error in', 'has no expression', 'is not an I-type', 'Source record', 'has a trigger function', 'is not a command run.in runs', 'with errors', 'not SD''s own entry', 'is not in your VOC')
+        Set-WitVerdict '201' 'run.in zzrunin compile.dict compiles an I-type' $r.Text '(?m)^\W*Compiling total\s*$' @('Compilation error in', 'has no expression', 'is not an I-type', 'Source record', 'has a trigger; nothing was run', 'is not a command run.in runs', 'with errors', 'not SD''s own entry', 'is not in your VOC')
         $r = Invoke-WitSd -Commands @('set.trigger zzcust.w zztrig', 'run.in zzrunin compile.dict zzcust total', 'set.trigger zzcust.w ""') -Label 'run.in compile.dict with a trigger on the file (SET.TRIGGER verb)'
-        Set-WitVerdict '201' 'with a trigger on the file run.in refuses (12566) and runs nothing' $r.Text 'has a trigger function; run\.in did not run the command' @('zzfix: cannot', 'is not cataloged', 'File not found', 'Illegal trigger function name')
+        # 18 Nov 26: 12566 has Linux's words since 48161ccf ("run.in: %1 in account %2 has a trigger; nothing was run").
+        Set-WitVerdict '201' 'with a trigger on the file run.in refuses (12566) and runs nothing' $r.Text 'in account zzrunin has a trigger; nothing was run' @('zzfix: cannot', 'is not cataloged', 'File not found', 'Illegal trigger function name')
         $r = Invoke-WitSd -Commands @('run bp zzfix nocat', 'run.in zzrunin basic bp zzri no.query') -Label 'run.in basic with no.catalog removed from the account''s VOC'
         Set-WitVerdict '201' 'an account lacking SD''s no.catalog is refused (15070)' $r.Text 'no\.catalog is not SD''s own entry in the VOC of account' @('Compiled 1 program\(s\) with no errors')
         $r = Invoke-WitSd -Commands @('run bp zzfix recat', 'run.in zzrunin basic bp zzri no.query') -Label 'and with it put back'

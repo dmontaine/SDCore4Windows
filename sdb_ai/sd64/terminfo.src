@@ -11,9 +11,9 @@
 # Installation of a new release of SD will overwrite this file and recompile
 # all terminal definitions included in it.  It is therefore recommended that
 # any new or modified definitions are stored in a separate file so that they
-# can easily be recompiled after an upgrade. The install process will look for
-# a file named terminfo.mods in the SDSYS account directory and, if found, will
-# compile it after the contents of this file.
+# can easily be recompiled after an upgrade. The install process puts in place
+# the definitions compiled from this file only: compile a file of your own with
+# sdtic after an upgrade.
 
 # If a terminal definition is modified, it must be compiled using the sdtic
 # utility.
