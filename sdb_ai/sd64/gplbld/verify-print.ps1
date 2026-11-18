@@ -183,10 +183,18 @@ try {
     $prevMode = (Get-ItemProperty -Path $DefaultKey -ErrorAction SilentlyContinue).LegacyDefaultPrinterMode
     Write-Host ("  LegacyDefaultPrinterMode before: " + $(if ($null -ne $prevMode) { $prevMode } else { '(absent)' }))
     Set-ItemProperty -Path $DefaultKey -Name LegacyDefaultPrinterMode -Value 1 -Type DWord; $setMode = $true
+    # 18 Nov 26: b342 and b345 refused here with the mode already 1 (b341 passed): a printer added a moment
+    # earlier is not always ready to be the default.  So try up to 10 times, half a second apart, printing each
+    # attempt; the refusal below still fires if none takes.
     $net = New-Object -ComObject WScript.Network
-    $net.SetDefaultPrinter($PrnD)
-    $nowDefault = (Get-CimInstance Win32_Printer | Where-Object { $_.Default } | Select-Object -First 1).Name
-    Write-Host "  default printer now: $nowDefault"
+    $nowDefault = $null
+    for ($try = 1; $try -le 10; $try++) {
+        try { $net.SetDefaultPrinter($PrnD) } catch { Write-Host "  attempt ${try}: SetDefaultPrinter said: $($_.Exception.Message)" }
+        $nowDefault = (Get-CimInstance Win32_Printer | Where-Object { $_.Default } | Select-Object -First 1).Name
+        Write-Host "  attempt ${try}: default printer now: $nowDefault"
+        if ($nowDefault -eq $PrnD) { break }
+        Start-Sleep -Milliseconds 500
+    }
     if ($nowDefault -ne $PrnD) {
         # Not a product finding: the default leg cannot be measured against a
         # default this run does not control, so stop here rather than score it.
