@@ -90,7 +90,7 @@ The 30 verbs the User pages 19-24 and the tutorial use most (counted in their ex
 - **`basic`** {*file*} *record* {*record* …}
 - **`build.index`** *file* *field* … | **`all`**
 - **`catalog`** {*file* {*call.name*}} {*program*} {**`local`** | **`global`** | **`pcode`**} {**`no.xref`**}
-- **`compile.dict`** *file* {*i-type* …} {**`no.query`**} {**`no.page`**}  ·  **`compile.dict data`** *file* {*i-type* …}  ·  **`compile.dict local`**  ·  **`compile.dict all`**
+- **`compile.dict`** {**`data`**} *file* {*i-type* …} {**`no.query`**} {**`no.page`**}  ·  **`compile.dict local`**  ·  **`compile.dict all`**
 - **`copy from`** {**`dict`**} *src* {**`to`** {**`dict`**} *tgt*} {*id* …} {**`(options`**}
 - **`count`** {**`dict`**} *file* {*selection*}
 - **`create.file`** {**`dict`**} *voc.name* {**`directory`**} {*parameters*} {**`server`** *server* {**`as`** *remote.name*}}

@@ -493,7 +493,7 @@ clause of `execute` — run at the current command level ***(clause word)***
 `loop` … `do` … `repeat`
 
 - a statement of SD BASIC
-- docs: `User/markdown/37a-sd-basic-python-integration.md` line 223
+- docs: `User/markdown/37a-sd-basic-python-integration.md` line 234
 
 ### basic:stmt:dparse
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:483#c137eb53 src2=docs:tools/syntax-shapes.txt:69#4e9120fd

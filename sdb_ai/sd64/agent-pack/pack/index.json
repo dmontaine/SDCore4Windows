@@ -3911,7 +3911,7 @@
 "part": "core.md",
 "since": "-",
 "tier": "core",
-"words": 264
+"words": 259
 },
 "core:voc-types": {
 "kind": "core.digest",
@@ -26962,7 +26962,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 48
+"words": 43
 },
 "tcl:config": {
 "kind": "tcl.verb",
