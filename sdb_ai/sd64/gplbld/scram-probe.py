@@ -117,8 +117,8 @@ REQ_GETERROR = 2
 REQ_ACCOUNT = 3
 REQ_OPEN = 4
 REQ_WRITE = 16
-REQ_OPEN_SDNET = 29                 # 3 Nov 26 (S.73 item 1): --open-sdnet; carried 17 Nov 26 (audit P-3075)
 REQ_EXECUTE = 21
+REQ_OPEN_SDNET = 29                 # 3 Nov 26 (S.73 item 1): --open-sdnet
 REQ_LOGIN = 24
 REQ_SCRAM_FIRST = 47
 REQ_SCRAM_FINAL = 48
@@ -155,8 +155,6 @@ class Tls:
     def __init__(self, sock):
         # Every plaintext byte handed to SSL_write, for the wire line.
         self.sent = bytearray()
-        # 17 Nov 26 (audit P-3065, P-3074), as Linux's: set before a load that
-        # may fail, so a close() after a failed start finds them.
         self.ssl = None
         self.ctx = None
         self.sock = sock

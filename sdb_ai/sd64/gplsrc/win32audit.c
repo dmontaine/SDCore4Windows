@@ -13,6 +13,8 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 18 Nov 26 Windows port - four-version audit round 2 (P-0288): win32_audit_event(), the second copy of each audit record
+ *           to the Application event log (source sd-audit), as Linux copies each to the system journal.
  * 13 Nov 26 Windows port - RELEASE_1.1 247: win32_audit_rotate() is called by the service as it writes (sdsvc/sdaudit.c,
  *           which builds this file natively too) as well as at "sd -start".  It refuses a rotation whose DACL it cannot
  *           read, recreates with OPEN_ALWAYS so a racing append is kept, and undoes the rename when the new trail
@@ -157,6 +159,48 @@ int win32_audit_rotate(const char* path, const char* rotated) {
     LocalFree(sd);
 
   return status;
+}
+
+/* ======================================================================
+   win32_audit_event()  -  the second copy of an audit record, to the
+   Application event log (18 Nov 26, P-0288; win32audit.h has the why).
+
+   The source handle is opened once per process and kept: RegisterEventSource
+   on every record would cost a round trip to the event log service each time.
+   A source the installer did not register still logs (Windows files it under
+   the Application log with no message text of its own), so nothing here
+   depends on the registration having worked.                              */
+
+void win32_audit_event(const char* text) {
+  static HANDLE src = NULL;
+  static int tried = 0;
+  HANDLE tok = NULL;
+  union {
+    TOKEN_USER t;
+    BYTE b[SECURITY_MAX_SID_SIZE + sizeof(TOKEN_USER)];
+  } tu;
+  DWORD len = 0;
+  PSID sid = NULL;
+  LPCSTR strs[1];
+
+  if ((text == NULL) || (*text == '\0'))
+    return;
+
+  if (!tried) {
+    tried = 1;
+    src = RegisterEventSourceA(NULL, "sd-audit");
+  }
+  if (src == NULL)
+    return;
+
+  if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok)) {
+    if (GetTokenInformation(tok, TokenUser, &tu, sizeof(tu), &len))
+      sid = tu.t.User.Sid;
+    CloseHandle(tok);
+  }
+
+  strs[0] = text;
+  (void)ReportEventA(src, EVENTLOG_INFORMATION_TYPE, 0, 1, sid, 1, 0, strs, NULL);
 }
 
 /* END-CODE */

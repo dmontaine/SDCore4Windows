@@ -6,6 +6,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - four-version audit round 2 (P-1290, P-5497, P-5498): the answer's paragraph loop is Linux's form (n.para, pa, para).
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3474, P-3475): entry.cursor stands before on.key, as Linux's; no change in effect.
 * 15 Nov 26 Windows port - RELEASE_1.1 326 (the owner: follow set.ai limit max-tokens): a request asks for 100000 tokens, the kernel's ceiling, so
 *               the administrator's max-tokens decides; say is cut at 65536 (the helper's bytes-reply bounds it), not 6000.
@@ -759,18 +760,22 @@ run.ask:
    gosub read.proposal
 
    * the popup: what the AI said, the proposal if there is one, and Accept / Reject
+   *   15 Nov 26 (RELEASE_1.1 325): each paragraph wrapped on its own; a blank line stays a blank line.  18 Nov 26 (audit round 2, P-1290,
+   *   P-5497, P-5498): Linux's form of the loop, line for line.
    body = ''
-   for sp = 1 to dcount(say, nl)                          ;* 15 Nov 26 (RELEASE_1.1 325): each paragraph wrapped on its own; a blank line stays a blank line
-      sline = field(say, nl, sp)
-      if trim(sline) = '' then
+   n.para = dcount(say, char(10))
+   for pa = 1 to n.para
+      para = field(say, char(10), pa)
+      if trim(para) = '' then para = ''
+      if para = '' then
          body<-1> = ''
       end else
-         call $tk_wrap(sline, wrapw, pieces)
+         call $tk_wrap(para, wrapw, pieces)
          for p = 1 to dcount(pieces, @fm)
             body<-1> = pieces<p>
          next p
       end
-   next sp
+   next pa
    if body = '' then body<-1> = ' '
    if note.p # '' then
       body<-1> = ''

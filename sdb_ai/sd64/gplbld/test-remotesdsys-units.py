@@ -185,7 +185,8 @@ def checks(raw):
 
     gate = lg[lg.find("   if initial.account = 'sdradmin' then"):]
     m = re.search(r"\n         void kernel\(K\$ADMINISTRATOR, 0\)\n(?:[^\n]*\n){0,12}?   end case\n\s*\n   if initial\.account = 'sdradmin' then\n", lg)
-    after = lg.find("\n   audit.account = initial.account\n", m.end()) if m else -1
+    # 18 Nov 26 (audit round 2, P-4428): login keeps no audit.account; the gate ends with the block that marks the session radmin.login
+    after = lg.find("\n      radmin.login = @true\n   end\n", m.end()) if m else -1
     ok = m is not None and after > m.end() and "goto terminate.connection" in lg[m.end():after]
     pos = [m.start() if m else -1, after]
     ck("L1", "LOGIN's gate for sdradmin is AFTER the case statement (every arm meets it) and before the account is recorded: the Windows account SDRADMIN, not started elevated, over ssh, "

@@ -3,6 +3,7 @@
 #
 #   powershell -ExecutionPolicy Bypass -File sync-route-groups.ps1            create and seed
 #   powershell -ExecutionPolicy Bypass -File sync-route-groups.ps1 -Check     print what it would do
+#   powershell -ExecutionPolicy Bypass -File sync-route-groups.ps1 -FirstInstall   create; a new sdssh stays empty (the installer, first install)
 #
 # Exit 0 success, 1 failure.  Prints what it did either way.
 #
@@ -41,7 +42,13 @@
 # every account that may use the API may rewrite $cred.  An empty group is the
 # safe starting point and one MODIFY.ACCOUNT ... API undoes it per account.
 
-param([switch]$Check)
+# 18 Nov 26 - four-version audit round 2 (Linux's mail 2026-11-18T0220, item 1): -FirstInstall, which sd.iss passes when
+# there was no data tree before this run, makes a NEW sdssh stay EMPTY.  On a first install the [Run] step has just put the
+# installing user in sdusers, so seeding from it delivered that user with ssh ON, unasked - Linux Core creates sdssh empty
+# and its ATTACH turns nothing on (the owner's rule: delivered closed, the administrator opens it; the wizard's "open every
+# access gate" box is how the person asks for ssh).  The seed stays for an upgrade from before the route split, which keeps
+# the ssh the system already had.
+param([switch]$Check, [switch]$FirstInstall)
 
 $ErrorActionPreference = 'Stop'
 
@@ -136,6 +143,8 @@ try {
 
     if (-not $sshIsNew) {
         Say "$SshGroup already existed - not seeding, its membership is whatever an administrator left"
+    } elseif ($FirstInstall) {
+        Say "$SshGroup made empty - a first install gives nobody ssh; an administrator gives it with modify.account <account> ssh (or both)"
     } else {
         $members = Get-Members $SeedFrom
         if ($null -eq $members) {

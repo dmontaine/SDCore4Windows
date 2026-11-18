@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Nov 26 Windows port - four-version audit round 2 (P-5451): the shell SH starts is marked SD_SESSION with setenv(), as Linux.
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62): os_path_ok_for_account() asks NETDIRS (path_in_netdirs()) LAST, after the account's own
  *           directory and the SD.ACCOUNTS gate, as Linux's does; it was asked before SD.ACCOUNTS, inside account_path_permitted().
  * 13 Nov 26 Windows (RELEASE_1.1 254, as Linux): shared_root_get() and shared_ref_ok() refuse a path that is not absolute
@@ -1151,10 +1152,7 @@ Private void sh_execute(char *command) {
 
        Set in the CHILD, after the fork, so SD's own environment is untouched
        and the phantom and client paths - which fork elsewhere - never see it. */
-    {
-      static char sd_session_env[] = "SD_SESSION=1";
-      putenv(sd_session_env);
-    }
+    setenv("SD_SESSION", "1", 1);   /* 18 Nov 26 (audit round 2, P-5451): setenv(), as Linux; it was putenv() of a static string */
 
     if (command[0] == '\0') /* Interactive shell */
     {

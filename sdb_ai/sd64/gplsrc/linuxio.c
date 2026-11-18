@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Nov 26 Windows port - four-version audit round 2 (P-3082, P-3083, P-5448, P-5449): the TCP peer's address is read in Linux's
+ *            code form (refusal first; a failed inet_ntop() is "?" without ER_BADADDR, as Linux), and its syslog line is Linux's one line.
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 P-4606): the TLS-directory refusal says what api_tls_dir() does ("cannot derive the
  *            TLS directory beside %s"), Linux's words; it said "no usable data directory in %s".
  * 17 Nov 26 Windows port - four-version audit round 1 (P-3082 to P-3085): a TCP peer whose family is not AF_INET reads as "?", and the
@@ -324,26 +326,20 @@ bool start_connection(int unused) {
       case PF_INET: {
           struct sockaddr_storage pa;
           socklen_t palen = sizeof(pa);
+          struct sockaddr_in* s = (struct sockaddr_in*)&pa;
 
           /* The PEER address, not our own - getsockname() above answered the
-             family, and what is worth logging is who connected.
-             17 Nov 26 Windows port - as Linux: a peer whose family is not
-             AF_INET is "?" too, never read as a sockaddr_in. */
-          if ((getpeername(0, (struct sockaddr *)&pa, &palen) == 0) && (pa.ss_family == AF_INET)) {
-            struct sockaddr_in* s = (struct sockaddr_in*)&pa;
-            port_no = ntohs(s->sin_port);
-            /* MAX_SOCKET_ADDR_STR_LEN, not the MAX_IP_ADDR_STR_LEN the dead
-               code above names - that constant is defined nowhere in the
-               tree, so the commented-out original could never have compiled
-               even if it had been enabled. */
-            if (inet_ntop(AF_INET, &s->sin_addr, ip_addr,
-                          MAX_SOCKET_ADDR_STR_LEN) == NULL) {
-              process.status = ER_BADADDR;
-              strcpy(ip_addr, "?");
-            }
+             family, and what is worth logging is who connected.  A peer whose
+             family is not AF_INET is "?", never read as a sockaddr_in.
+             18 Nov 26 Windows port - four-version audit round 2 (P-3082, P-3083,
+             P-5448, P-5449): Linux's code form, line for line. */
+          if ((getpeername(0, (struct sockaddr *)&pa, &palen) != 0) || (pa.ss_family != AF_INET)) {
+            strncpy(ip_addr, "?", MAX_SOCKET_ADDR_STR_LEN - 1);
+            port_no = 0;
           } else {
-            strcpy(ip_addr, "?");
-            port_no = 0;    /* 12 Nov 26 (RELEASE_1.1 252, P-23): as Linux e79f6499, no port for a peer that cannot be read */
+            port_no = ntohs(s->sin_port);
+            if (inet_ntop(AF_INET, &s->sin_addr, ip_addr, MAX_SOCKET_ADDR_STR_LEN) == NULL)
+              strncpy(ip_addr, "?", MAX_SOCKET_ADDR_STR_LEN - 1);
           }
           /* 12 Nov 26 Windows port - from Linux e79f6499 (RELEASE_1.1 252, audit P-23): TCP is for the API server ONLY.  The API
              listener starts "sd -N -Q" (is_sdApiSrvr), and a pre-authenticated session arrives on a pipe, not here; a plain
@@ -352,8 +348,7 @@ bool start_connection(int unused) {
             syslog(LOG_INFO, "Refusing PF_INET connection (not API server) from %s", ip_addr);
             return FALSE; /* Error */
           }
-          syslog(LOG_INFO, "API connection over TCP from %s port %d (SD login required)", ip_addr,
-                 (int)port_no);
+          syslog(LOG_INFO, "API connection over TCP from %s port %d (SD login required)", ip_addr, port_no);
         }
         break;
 

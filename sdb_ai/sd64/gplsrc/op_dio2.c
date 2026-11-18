@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Nov 26 Windows port - four-version audit round 2 (P-6131): a NETDIRS entry that is the root of a network share (//server/share,
+ *              \\server\share) is refused as a whole volume (os_root_share()), as Solo's netdir_whole_volume() refuses it.
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62, NETDIRS made stricter): path_in_netdirs() is asked last (account_path_permitted() is
  *           account_path_own() then NETDIRS); entries are resolved once per process and ignored (named in the error log at start,
  *           netdirs_report()) when not absolute, not an existing directory, a drive root or "/", at most 16, or overlapping the system
@@ -2196,6 +2198,25 @@ Private bool os_root_whole_machine(const char* root) {   /* ROOT has been throug
   return (n == 2) && (w[1] == ':');
 }
 
+/* 18 Nov 26 (four-version audit round 2, P-6131; as Solo's netdir_whole_volume()): the root of a network share - //server/share or
+   \\server\share, with nothing below the share - holds a whole volume, as a drive root does.  ROOT has been through net_normalise(). */
+
+Private bool os_root_share(const char* root) {
+  char w[MAX_PATHNAME_LEN + 1];
+  const char* p;
+  size_t n;
+
+  if (cygwin_conv_path(CCP_POSIX_TO_WIN_A, root, w, sizeof(w)) != 0)
+    return TRUE;   /* cannot say what it is: refuse, as os_root_whole_machine() does */
+  n = strlen(w);
+  while ((n > 2) && ((w[n - 1] == '\\') || (w[n - 1] == '/')))
+    w[--n] = '\0';
+  if (!(((w[0] == '\\') || (w[0] == '/')) && ((w[1] == '\\') || (w[1] == '/'))))
+    return FALSE;
+  p = strpbrk(w + 2, "\\/");                        /* the separator after the server */
+  return (p == NULL) || (strpbrk(p + 1, "\\/") == NULL);
+}
+
 bool os_path_inside(const char* rootdir, const char* name) {
   char rr[MAX_PATHNAME_LEN + 1];
   char cc[MAX_PATHNAME_LEN + 1];
@@ -2593,6 +2614,8 @@ Private void netdirs_load(bool report) {
         strcpy(why, "it is not an existing directory");
       else if (os_root_whole_machine(root))
         strcpy(why, "it is the root of a drive, which holds the whole machine");
+      else if (os_root_share(root))
+        strcpy(why, "it is the root of a network share, which holds the whole volume");
       else if (!have_sys || netdir_overlap(root, sysdir))
         strcpy(why, "it holds, or lies inside, the SD system directory");
       else if (!have_conf || netdir_overlap(root, confdir))

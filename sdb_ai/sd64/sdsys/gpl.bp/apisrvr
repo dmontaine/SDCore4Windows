@@ -19,6 +19,11 @@
 *
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - four-version audit round 2 (P-1274, P-5463, P-5465 to P-5467), as Linux S.62: SrvrAccount clears acc.rec
+*           before the register read, looks up no name with a separator ('/', or '\' here) and refuses it as having no record, sets
+*           abort.message on that refusal (an ON ERROR reply carried no text), and clears the NET gate after the shared ones, as Linux.
+*           From Linux 10767826: a failed account-group lookup's line names its status (group.lookup.failed status=N); request 70's
+*           operation 1 is analyze.file in the list, so its audit line names the verb that runs.
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3239, P-3232): an API login whose sdfileswrite or sdfilesadmin group cannot be
 *           read is refused with 10073, as Linux apisrvr:1744-1760 (it went through with write/admin off); the version audit reason
 *           reads "not version 2", Linux's words.  Laid out as Linux's too (P-3230, P-3233 to P-3247): the four deffuns above the
@@ -881,7 +886,7 @@ end else
 end
 
 if ent.told # 0 then
-   void kernel(K$AUDIT, 'account refused branch=4 group.lookup.failed user=' : kernel(K$USERNAME, 0) : ' group=' : ent.group : ' account=' : ent.name)
+   void kernel(K$AUDIT, 'account refused branch=4 group.lookup.failed status=' : ent.told : ' user=' : kernel(K$USERNAME, 0) : ' group=' : ent.group : ' account=' : ent.name)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    abort.message = error.msg
@@ -984,6 +989,7 @@ end
 *   gone with the tier fields; the suspension test reads ACC$SUSPENDED inside
 *   the same block, for the reason the acc.group note above gives.
 account.path = ''
+acc.rec = ''            ;* 18 Nov 26 (audit round 2, P-5466; Linux S.62): never judge entry on a record an earlier call read
 * 14 Nov 26 Windows - RELEASE_1.1 286: acc.group is gone (assigned, never read; the compiler said so).
 acc.suspended = @false     ;* 17 Nov 26 (audit round 1): a truth value made where the field is read, as Linux apisrvr:699/719
 * 23 Oct 26 Windows port - from Linux abcda0c (13 Oct 26, S.63 second sitting: "api should read switches").  The account's SH and
@@ -994,10 +1000,10 @@ acc.suspended = @false     ;* 17 Nov 26 (audit round 1): a truth value made wher
 api.sh.grant = @false
 api.os.grant = @false
 api.sd.grant = @false      ;* 23 Oct 26, Linux 7ceb50d: the SD.ACCOUNTS gate
-api.net.grant = @false     ;* 25 Oct 26, Linux 9d6f407 (S.65 slice 1): the NET gate (SDNet remote files); account-scoped, so loaded at every entry
 api.shared.read.grant = @false    ;* 18 Oct 26, S.66: the shared-account gates; account-scoped, so loaded at every entry.  FAIL CLOSED: a name given as a path
 api.shared.write.grant = @false   ;*   or an unreadable register leaves both off (read is ON only when a record exists and does not say 'no')
-api.voc.grant = @false     ;* 23 Oct 26, Linux d7cda81 (S.64): the edit gates; loaded at the FIRST entry only (below)
+api.net.grant = @false     ;* 25 Oct 26, Linux 9d6f407 (S.65 slice 1): the NET gate (SDNet remote files); account-scoped, so loaded at every entry
+api.voc.grant = @false    ;* 23 Oct 26, Linux d7cda81 (S.64): the edit gates; loaded at the FIRST entry only (below)
 api.bp.grant = @false
 api.dict.grant = @false
 * 17 Sep 26 Windows port - RELEASE_1.1 55.  ***EVERY REFUSAL HERE NAMES ITS
@@ -1011,27 +1017,33 @@ api.dict.grant = @false
 *   five fired.  The trail is not the wire: it is readable by an
 *   administrator and by nobody else, so naming the branch there costs the
 *   attacker nothing and costs the operator nothing to have.
-openpath @sdsys:@ds:'accounts' to acc.f then
-   read acc.rec from acc.f, downcase(new.account) then
-      account.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
-      acc.suspended = (upcase(trim(acc.rec<ACC$SUSPENDED>)) = 'SUSPENDED')
-      api.sh.grant = (upcase(trim(acc.rec<ACC$SH>)) = 'YES')
-      api.os.grant = (upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES')
-      api.sd.grant = (upcase(trim(acc.rec<ACC$SD.ACCOUNTS>)) = 'YES')
-      api.net.grant = (upcase(trim(acc.rec<ACC$NET>)) = 'YES')
-      api.shared.read.grant = (upcase(trim(acc.rec<ACC$SHARED.READ>)) # 'NO')     ;* 18 Oct 26, S.66: blank = ON
-      api.shared.write.grant = (upcase(trim(acc.rec<ACC$SHARED.WRITE>)) = 'YES')
-      api.voc.grant = (upcase(trim(acc.rec<ACC$VOC.EDIT>)) = 'YES')
-      api.bp.grant = (upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES')
-      api.dict.grant = (upcase(trim(acc.rec<ACC$DICT.EDIT>)) = 'YES')
+* 18 Nov 26 Windows port - four-version audit round 2 (P-1274, P-5465), as Linux S.62: a name with a separator ('/', or on Windows
+*   '\') is not looked up at all (it names no register record and is refused below), and the refusal sets abort.message as every
+*   other refusal here does, so an ON ERROR reply carries 10003's text.
+if index(new.account, @ds, 1) = 0 and index(new.account, '\', 1) = 0 then
+   openpath @sdsys:@ds:'accounts' to acc.f then
+      read acc.rec from acc.f, downcase(new.account) then
+         account.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
+         acc.suspended = (upcase(trim(acc.rec<ACC$SUSPENDED>)) = 'SUSPENDED')
+         api.sh.grant = (upcase(trim(acc.rec<ACC$SH>)) = 'YES')
+         api.os.grant = (upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES')
+         api.sd.grant = (upcase(trim(acc.rec<ACC$SD.ACCOUNTS>)) = 'YES')
+         api.net.grant = (upcase(trim(acc.rec<ACC$NET>)) = 'YES')
+         api.shared.read.grant = (upcase(trim(acc.rec<ACC$SHARED.READ>)) # 'NO')     ;* 18 Oct 26, S.66: blank = ON
+         api.shared.write.grant = (upcase(trim(acc.rec<ACC$SHARED.WRITE>)) = 'YES')
+         api.voc.grant = (upcase(trim(acc.rec<ACC$VOC.EDIT>)) = 'YES')
+         api.bp.grant = (upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES')
+         api.dict.grant = (upcase(trim(acc.rec<ACC$DICT.EDIT>)) = 'YES')
+      end
+      close acc.f
    end
-   close acc.f
 end
 
 if account.path = '' then
    void kernel(K$AUDIT, 'account refused branch=1 no.path.in.register account=' : new.account)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
+   abort.message = error.msg
    goto revert.to.old.account
 end
 
@@ -3651,7 +3663,7 @@ return
 * In:  operation (short integer), file number (short integer; 0 for the operation that names no open file), the verb's words (text)
 * Out: what the verb printed (captured); an ON ERROR reply with its own text for a refusal
 *
-* THE VERB IS CHOSEN BY THE OPERATION NUMBER AND NEVER FROM THE TEXT: 1 analyse.file, 2 configure.file, 3 create.index, 4 build.index, 5 delete.index, 6 disable.index,
+* THE VERB IS CHOSEN BY THE OPERATION NUMBER AND NEVER FROM THE TEXT: 1 analyze.file, 2 configure.file, 3 create.index, 4 build.index, 5 delete.index, 6 disable.index,
 * 8 create.file, 9 delete.file (7 is free: there is no enable.index, build.index switches an index on again).  The file an operation works on is NAMED BY THE OPEN FILE
 * (the name it was opened under, kept in file.names), so the caller cannot name a file it did not open; operation 8 names a NEW file, in the first word of the text.
 * The words are checked by fa.check.words before anything runs: letters, digits and . _ - only, single blanks, at most 200 characters, never PATHNAME, LPTR, FORCE or
@@ -3673,7 +3685,7 @@ if config("SDCLIENT") # 0 or kernel(K$SDNET, -1) then
 end
 fa.verb = ''
 if fa.op >= 1 and fa.op <= 9 then
-   fa.verb = field('analyse.file,configure.file,create.index,build.index,delete.index,disable.index,,create.file,delete.file', ',', fa.op)
+   fa.verb = field('analyze.file,configure.file,create.index,build.index,delete.index,disable.index,,create.file,delete.file', ',', fa.op)
 end
 if fa.verb = '' then
    abort.message = sysmsg(12536, fa.op) ;* %1 is not a remote file administration operation
@@ -3704,8 +3716,7 @@ if fa.bad # '' then
 end
 if fa.names.file then fa.shown = fa.name else fa.shown = field(fa.text, ' ', 1)
 void kernel(K$AUDIT, 'api admin request=70 op=' : fa.verb : ' file=' : fa.shown : ' user=' : @logname)  ;* @logname, not logname: a plain variable does not survive an abort
-fa.cmd = fa.verb
-if fa.op = 1 then fa.cmd = 'analyze.file'     ;* 27 Oct 26 (S.87): the VOC no longer has the British spelling; the audit line above keeps the operation's name
+fa.cmd = fa.verb     ;* 18 Nov 26 (Linux 10767826, S.62 P-1896, P-1898): operation 1 is named analyze.file in the list, so the audit line names the verb that runs
 if fa.names.file then fa.cmd := ' ' : fa.name
 if fa.text # '' then fa.cmd := ' ' : fa.text
 if fa.op = 8 or fa.op = 9 then fa.cmd := ' no.query'

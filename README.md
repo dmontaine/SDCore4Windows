@@ -1,13 +1,14 @@
 # SD Core for Windows
 
-A native Windows port of SD, the multivalue String Database, for multi-user
-servers and workstations.
+SD, the multivalue String Database, for Windows — one of four SD Core versions
+(Linux and Windows, each multi-user and single-user) that behave the same.
 
 SD is a multivalue database in the Pr1me Information tradition, descended from
-OpenQM and ScarletDME through [sdb64](https://codeberg.org/stringdatabase/sdb64),
-which runs on Linux only. SD Core for Windows is SD rebuilt for Windows: a
-Windows service, a Windows installer, and Windows security in place of the
-Linux users, groups and permissions it relied on.
+OpenQM and ScarletDME through [sdb64](https://codeberg.org/stringdatabase/sdb64).
+SD Core for Windows follows [SD Core for Linux](https://github.com/dmontaine/SDCore4Linux),
+the version the other three follow, and differs from it only where the
+operating system requires it — a Windows service, a Windows installer, and
+Windows security in place of the Linux users, groups and permissions.
 
 **Current release: W1.1-3** (10 Oct 2026), distributed as a zip on SourceForge,
 paired with SD Core for Linux L1.1-3. The next release of all four SD Core
@@ -60,10 +61,12 @@ This repository contains no binaries; everything is built from source.
 
 ## Related repositories
 
-- [SDCore4WindowsSolo](https://github.com/dmontaine/SDCore4WindowsSolo) — a
-  single-user edition that installs under one Windows user's home directory.
 - [SDCore4Linux](https://github.com/dmontaine/SDCore4Linux) — SD Core for
-  Linux.
+  Linux, the version the other three follow.
+- [SDCore4LinuxSolo](https://github.com/dmontaine/SDCore4LinuxSolo) — SD Core
+  Solo for Linux, a single-user Linux edition.
+- [SDCore4WindowsSolo](https://github.com/dmontaine/SDCore4WindowsSolo) — a
+  single-user Windows edition.
 
 ## Licence
 

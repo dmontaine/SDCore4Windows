@@ -124,6 +124,13 @@ READS_STATUS = {
     ("create_account", "rm.member = is_grp_member(acc.uname, 'sdfiles')"):
         "reused-user route removal for sdfiles: rm.told = status() on the next line; only a lookup that fails for a reason other than "
         "'no such group' stops the verb with 10081",
+    # 18 Nov 26 - four-version audit round 2 (P-5470), as Linux S.62 (P-1284): the reused user leaves sdfilesadmin and sdfileswrite too.
+    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdfilesadmin')"):
+        "reused-user removal of files-admin not asked for: rm.told = status() on the next line; only a lookup that fails for a reason other than "
+        "'no such group' stops the verb with 10081",
+    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdfileswrite')"):
+        "reused-user removal of files-write not asked for: rm.told = status() on the next line; only a lookup that fails for a reason other than "
+        "'no such group' stops the verb with 10081",
     ("modifya", "in.sdusers = is_grp_member(files.user, 'sdusers')"):
         "files-on: files.stat = status() on the next line; could-not-tell refuses",
     # 25 Oct 26 - RELEASE_1.1 171 (Linux 3fbfc0d, S.65 write group): the same shapes for sdfileswrite, and set.files takes the group from files.grp.

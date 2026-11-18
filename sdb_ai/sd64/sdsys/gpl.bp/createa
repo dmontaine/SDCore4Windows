@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Nov 26 Windows port - four-version audit round 2 (P-5472, P-5474): ADMINISTRATOR and PROGRAMMER are no longer matched; case 1 refuses them
+*           with 2018 as every unknown token, as Linux's; the verb ends with RETURN, as Linux's.
 * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): SSH-KEY-ON, a Windows user SD makes for the account keeps key sign-in over ssh (off unless typed: the
 *           user is put in sdsshnokey); CA$SSH.KEY in createacc.h; !create_account refuses it for a group or other account; the audit gates= list names it; the
 *           usage says it.
@@ -737,7 +739,7 @@ $include createacc.h
    next ex.i
 
    @system.return.code = 0
-   stop
+   return      ;* 18 Nov 26 (audit round 2, P-5472): return, as Linux's; the same end of the verb
 
 * ======================================================================
    * Check for further command arguments
@@ -749,6 +751,9 @@ more.args:
          case keyword = KW$NO.QUERY
             settings<CA$NO.QUERY> = 1
 
+* 18 Nov 26 Windows port - four-version audit round 2 (P-5474): ADMINISTRATOR and PROGRAMMER (refused with 2018 since RELEASE_1.1 64,
+*   18 Sep 26) are no longer matched: they reach case 1 below, which refuses every token it does not know with the same 2018, as Linux's
+*   does.  The tier words are gone from the code; the notes below are kept as history.
 * 14 Aug 26 Windows port - ADMINISTRATOR makes the account an SD administrator,
 *   which since PROJECT_STATUS.md 5.6.1 means a Windows administrator.  Without
 *   it the account is a standard local user, which is the safe default and the
@@ -759,7 +764,6 @@ more.args:
 *   shared by every verb, and adding one to it to serve a single verb is a
 *   larger and riskier change than this is worth.  The cost is that it cannot
 *   be abbreviated, unlike NO.QUERY.
-         case upcase(token) = 'ADMINISTRATOR'
 * 17 Aug 26 Windows port - AND AN ADMINISTRATOR GETS THE WHOLE VOC.  Before
 *   section 8 this line was the ONLY thing ADMINISTRATOR did, and it touched
 *   Windows group membership alone - every account got a byte-identical NEWVOC
@@ -800,7 +804,6 @@ more.args:
 *   IT REUSES 2018, THE UNRECOGNISED-TOKEN MESSAGE, and that is not laziness:
 *   the keyword now IS unrecognised.  A fresh number would have to be
 *   registered in sdsys/messages and read by nothing else.
-            stop sysmsg(2018, token)
 
 * 17 Aug 26 Windows port - PROGRAMMER, section 8.  A programmer works at the
 *   prompt and builds things: compiler, cataloguer, editors, and the shell
@@ -822,14 +825,12 @@ more.args:
 *   ADMINISTRATOR would otherwise take the administration verbs away again -
 *   silently, because the account would still be a Windows administrator and
 *   would still look right everywhere except its VOC.
-         case upcase(token) = 'PROGRAMMER'
 *          18 Sep 26 Windows port - RELEASE_1.1 64.  REFUSED WITH THE OTHER TIER
 *          KEYWORDS.  There is nothing left for it to ask for: PROGRAMMER is
 *          the default at :356 and the only level a non-SDSYS account holds,
 *          so the keyword is redundant rather than wrong - and a redundant
 *          keyword that is still accepted is a tier vocabulary the product no
 *          longer has.  2018 is the unrecognised-token message.
-            stop sysmsg(2018, token)
 
 * 21 Aug 26 Windows port - RDPACCOUNT WAS A CASE HERE AND IS GONE.  Owner's
 *   decision, 21 Aug 2026 - see the sdsshonly branch above for why.  A caller

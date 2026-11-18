@@ -23,7 +23,7 @@ SDSYS = os.path.join(SD64, "sdsys")
 GPL = os.path.join(SDSYS, "gpl.bp")
 # 14 Nov 26 Windows port (RELEASE_1.1 247): the Windows guide, as test-toolaccounts-units.py finds it; its chapter is 20, not Linux's 21.
 DOCROOT = os.environ.get("SD_DOCS_CHECKOUT") or os.path.normpath(os.path.join(SD64, "..", "..", "..", "SDCore4WindowsDocs"))
-DOCS = os.path.join(DOCROOT, "Administrator", "markdown", "20-the-audit-trail.md")
+DOCS = os.path.join(DOCROOT, "Administrator", "markdown", "21-the-audit-trail.md")   # 18 Nov 26: Linux's page name
 FILES = {
     "page": os.path.join(GPL, "tool_audit"),
     "rd": os.path.join(GPL, "audit_read"),
@@ -151,7 +151,7 @@ def checks(raw):
        and all(("case nm = '%s'" % k) in pg for k in ("f", "c", "d", "o", "l", "x", "f5", "ctrl-q")) and "case nm = 'f1' or nm = '?'" in pg, " ".join(acts))
     ck("AU16", "the page has a [?] and F1, ? and a click show tool.audit.page, whose record exists with a title, the audit trail page of the administrator guide (which exists) and a body",
        pg.count("'tool.audit.page'") == 2 and "call $tk_help('mark', top.x + top.w - 5, top.y + 1, 0, 0)" in pg and "call $tk_help('hit', mev, top.x + top.w - 5, top.y + 1, hit.m)" in pg
-       and raw["help"].split("\n")[0].strip() != "" and raw["help"].split("\n")[1].strip() == "administrator-20-the-audit-trail" and raw["help"].split("\n")[2].strip() != "" and raw["docs"].startswith("Title: The Audit Trail"), "")
+       and raw["help"].split("\n")[0].strip() != "" and raw["help"].split("\n")[1].strip() == "administrator-21-the-audit-trail" and raw["help"].split("\n")[2].strip() != "" and raw["docs"].startswith("Title: The Audit Trail"), "")
     dl = block(pg, "draw.all")
     dsl = block(pg, "draw.list")
     dd = block(pg, "draw.detail")
@@ -233,7 +233,7 @@ MUTANTS = [
     ("a key is added to the table", "AU15", sub("page", "   call $tk_keys('add', keys, 'x', 'save', 'export', '', 1)\n", "   call $tk_keys('add', keys, 'x', 'save', 'export', '', 1)\n   call $tk_keys('add', keys, 'k', 'kill', 'kill', '', 1)\n")),
     # 14 Nov 26: re-anchored on the case after F1's help (S.179 put ctrl-t there; the f5 anchor no longer matched and the mutant tested nothing - found by Windows; Linux 4b082133)
     ("the help key names a record that does not exist", "AU16", sub("page", "call $tk_help('box', 'tool.audit.page', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'ctrl-t'", "call $tk_help('box', 'tool.audit.nopage', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'ctrl-t'")),
-    ("the help record names no page", "AU16", sub("help", "20-the-audit-trail", "")),
+    ("the help record names no page", "AU16", sub("help", "21-the-audit-trail", "")),
     ("the lines box overruns the detail", "AU17", sub("page", "ld<2> = 'lines' : @vm : 2 : @vm : 1 : @vm : 20", "ld<2> = 'lines' : @vm : 2 : @vm : 1 : @vm : 21")),
     ("the first filter line runs under the [?]", "AU17", sub("page", "attr 'bold' width ttw - 6", "attr 'bold' width ttw")),
     ("a time with letters is allowed", "AU18", sub("page", "index('0123456789- :', v[si, 1], 1) = 0", "index('0123456789- :abc', v[si, 1], 1) = 0")),

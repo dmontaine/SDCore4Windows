@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Nov 26 Windows port - four-version audit round 2 (P-5452): the one-SD-per-session guard says "type exit", lower case, as Linux sd.c:333-336.
  * 17 Nov 26 Windows port - from Linux c359f30b (S.62, four-version audit round 1): -TERM's value is bounded (32), refused by name when longer.
  * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): main() calls xfer_detect() first; an sftp request sshd sent here
  *           is the file transfer server (sd_sftp.c), and it never opens SD's own window.
@@ -362,9 +363,7 @@ Private bool comlin(int argc, char *argv[]) {
    for a user rather than an administrator: the way back is the shell they are
    standing in.                                                             */
   if (getenv("SD_SESSION") != NULL) {
-    fprintf(stderr,
-            "SD is already running in this session - type EXIT to return to "
-            "it.\n");
+    fprintf(stderr, "SD is already running in this session - type exit to return to it.\n");  /* 18 Nov 26: lower case, as Linux */
     exit(1);
   }
 

@@ -37,9 +37,12 @@ FILES_LIST = ''
 *
 *  list of files to "create" (add ~0 and ~1)
 *
-* 17 Nov 26 Windows port - four-version audit round 1 (P-3053), from Linux (plan M3 D1): the second column is the directory read,
-*   spelled as it is on disk, and it is also the FILES_DICTS id prefix written below - so it must match BBPROC's FILES_LIST (its third
-*   column since P-3254).  It was a Y/N flag that added '.dic'; the names read are the same.
+* 13 Sep 26 dm - plan M3 D1: the second column is now the directory read,
+*   spelled as it is on disk, and it is also the FILES_DICTS id prefix written
+*   below - so it must match BBPROC's FILES_LIST.
+* 17 Nov 26 dm - S.62 P-1210/P-1211: $hold and $hold.dic in lower case, as
+*   sdsys/$hold is on disk, the FILES_DICTS ids are ($hold.dic^...) and BBPROC's
+*   FILES_LIST has them; the include is int$keys.h, its name on disk.
 *
 *                  file      dictionary directory read
 FILES_LIST<-1> = "accounts"  :@VM:'accounts.dic'

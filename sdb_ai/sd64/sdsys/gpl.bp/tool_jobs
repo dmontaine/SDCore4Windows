@@ -13,7 +13,7 @@
 *              ad4a2cf6 and c1aca2a8 (S.186), carry area 14.  The code is Linux's; the words are Windows': a job is a Task Scheduler task registered by the
 *              job helper (sd-jobs.ps1, through SET.JOB) and run as the Windows account SDSYS, an account's command is run by a task of its own Windows
 *              account, and a damaged file is removed by an administrator from C:\ProgramData\SD\sd-jobs.  Messages 14045 and 11821 are 15045 and 12826.
-*              The help record points at the Administrator page 17-scheduled-jobs.
+*              The help record points at the Administrator page 23-scheduled-jobs (Linux's name since 18 Nov 26; it was 17).
 * 2 Nov 26 dm  S.102 stage 5 (the docs review): a damaged file whose name is not a job name is said to be removed by root by hand (rm /etc/sdcore/jobs.d/<file>);
 *              the page used to advise set.job delete, which refuses such a name.  The help record now points at the Administrator page 23-scheduled-jobs.
 * 2 Nov 26 dm  New (S.102 stage 1, account jobs only: the batch gate's list; the schedules themselves are a later stage).  Made from tool_viewers.

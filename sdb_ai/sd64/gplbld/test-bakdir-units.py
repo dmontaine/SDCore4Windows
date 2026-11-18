@@ -64,8 +64,8 @@ def code_only(t):
 def config_problems(t):
     if not re.search(r'strncmp\(rec,\s*"BACKUPDIR=",\s*10\)\s*==\s*0', t):
         return ["config.c does not accept BACKUPDIR= - SD would not start on a file carrying it"]
-    if "BACKUPDIR value is longer than" not in t:
-        return ["config.c does not bound the BACKUPDIR value"]
+    # 18 Nov 26 (audit round 2, P-1222): the length test is gone, as Linux has none - fgets() leaves at most 189 characters after
+    # BACKUPDIR=, below MAX_PATHNAME_LEN, so it could never refuse; the branch accepts the line and ignores it, as Linux's does.
     return []
 
 
@@ -151,7 +151,7 @@ check("the scripts exist", os.path.isfile(os.path.join(TREE, "gplbld", "sd-backu
 p = stage_problems(stage)
 check("stage.py ships sd-backupdir.ps1", p == [], "; ".join(p))
 p = config_problems(cfg)
-check("config.c accepts and bounds BACKUPDIR", p == [], "; ".join(p))
+check("config.c accepts BACKUPDIR", p == [], "; ".join(p))
 for layer in VOC_LAYERS:
     t = read(os.path.join(SDSYS, layer, "set.backup.directory"))
     # 7 Oct 26 - the VOC record's catalogue name is lower case now (the standard, and what the

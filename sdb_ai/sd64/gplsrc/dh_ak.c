@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY):
+ * 18 Nov 26 Windows port - four-version audit round 2 (P-3076): op_akenable() too asks net_refuse() first, in Linux's order.
  * 17 Nov 26 Windows port - four-version audit round 1 (P-3076): op_akclear() asks net_refuse() before the shared-account refusal, in Linux's order.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): a failed truncate in an index clear is an error.
  * 12 Nov 26 Windows port - from Linux 413312f3 (RELEASE_1.1 251): get_ak_node() checks the chsize64() that makes room for a new node.
@@ -575,11 +576,12 @@ void op_akenable() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
+  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */
+    net_refuse(fvar, "AKENABLE");
+
   /* 18 Oct 26 S.66: enabling or disabling an index of a file in the shared account is a structure change, SDSYS's alone ($internal is not exempt) */
   if (shared_structure_refusal(fvar) != EDIT_NONE)
     k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));
-  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */
-    net_refuse(fvar, "AKENABLE");
 
   if (fvar->type == DYNAMIC_FILE && akno < MAX_INDICES) {
     dh_file = fvar->access.dh.dh_file;

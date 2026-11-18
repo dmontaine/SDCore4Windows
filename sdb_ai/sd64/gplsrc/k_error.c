@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Nov 26 Windows port - four-version audit round 2 (P-0288), as Linux W.11 F4 option B: audit_message() copies each record to the
+ *           Application event log (win32_audit_event(), source sd-audit, registered by the installer), whether the service or this
+ *           process wrote the trail, outside ERRLOG_SEM, and never failing the trail's own write.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the error log's truncate and write results are tested.
  * 13 Nov 26 Windows port - RELEASE_1.1 247 (Linux W.11 F4, option C1): audit_message() hands the record to the SD service over
  *           SD_AUDIT_PIPE (win32_audit_pipe()), which stamps the user and pid from the kernel; it appends the record itself only
@@ -966,6 +969,7 @@ void audit_message(char* msg) {
   char path[MAX_PATHNAME_LEN + 1];
   char buff[AUDIT_BUFF_SIZE];
   char pmsg[AUDIT_BUFF_SIZE];
+  char ebuff[AUDIT_BUFF_SIZE + 192];   /* the record plus its time, user, uid and pid: never cut (18 Nov 26, P-0288) */
   char who[16];
   char* p;
 
@@ -993,11 +997,27 @@ void audit_message(char* msg) {
     snprintf(who, sizeof(who), "%d", (int)(my_uptr->uid));
   else
     strcpy(who, "?");
-  if (win32_audit_pipe(sd_sysdir(), who, pmsg) == 0)
-    return;
-
   timenow = time(NULL);
   ltime = localtime(&timenow);
+
+  /* 18 Nov 26 Windows port - four-version audit round 2 (P-0288), as Linux W.11 F4 option B (the journal copy, "sd-audit").  The
+     same record, in the trail's own words, goes to the Application event log as well (win32_audit_event(), source sd-audit): the
+     event log stamps the event with this process's user SID and its own time, which a member of sdusers cannot choose, so a line in
+     the trail with no matching event is suspect.  Made whether the service took the record or this process wrote it, and outside
+     ERRLOG_SEM, as Linux's syslog() is outside every semaphore: an event log that stalls must not hold the one every session's
+     logging waits on.  It never fails the audit write: an event log that cannot be reached is skipped in silence. */
+  if (my_uptr != NULL)
+    snprintf(ebuff, sizeof(ebuff), "%04d-%02d-%02d %02d:%02d:%02d user=%s uid=%d pid=%d %s",
+             ltime->tm_year + 1900, ltime->tm_mon + 1, ltime->tm_mday, ltime->tm_hour, ltime->tm_min, ltime->tm_sec,
+             my_uptr->username, my_uptr->uid, my_uptr->pid, pmsg);
+  else
+    snprintf(ebuff, sizeof(ebuff), "%04d-%02d-%02d %02d:%02d:%02d user=? uid=? pid=? %s",
+             ltime->tm_year + 1900, ltime->tm_mon + 1, ltime->tm_mday, ltime->tm_hour, ltime->tm_min, ltime->tm_sec, pmsg);
+
+  if (win32_audit_pipe(sd_sysdir(), who, pmsg) == 0) {
+    win32_audit_event(ebuff);
+    return;
+  }
 
   StartExclusive(ERRLOG_SEM, 67);
 
@@ -1035,6 +1055,8 @@ void audit_message(char* msg) {
   }
 
   EndExclusive(ERRLOG_SEM);
+
+  win32_audit_event(ebuff);   /* 18 Nov 26 (P-0288): the second copy, above; made whether or not the file could be written */
 }
 
 /* ======================================================================

@@ -5,6 +5,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - four-version audit round 2 (P-5492 to P-5496): the client's status is key.stat, tested "# 0", and a failed client is
+*              refused with "the key was not set", Linux's names and words.
 * 17 Nov 26 Windows port - four-version audit round 1: SET.AI KEY reads the client's exit code (os.error(), "; exit $LASTEXITCODE" on the command); a
 *              client that read no key (sdai_ctl.c exits 2) is refused with 12613 and nothing is audited - a key stored earlier read as "set" before.
 * 13 Nov 26 Windows port - the client is the native helper itself, <program folder>\lib\sd-ai\sd-ai.exe (K$WINPATH of /lib/sd-ai/sd-ai.exe), the
@@ -159,11 +161,13 @@ $include err.h
 *        What happened is read back from the helper, as for the typed key; the client's own words are not trusted for it.
          out = ''
          os.execute "& '" : ctl : "' 'key' '" : prov : "' '--handover' '" : hand.f : "'; exit $LASTEXITCODE" capturing out
-         ctl.rc = os.error()                                                              ;* 17 Nov 26: see the typed-key case below
+         key.stat = os.error()
          gosub drop.handover
-         if ctl.rc then
+*        17 Nov 26 (Linux S.62): a client that FAILED set nothing, and a key stored earlier would make the listing below say 'key: set'; its exit status decides first.
+*        18 Nov 26 (audit round 2, P-5492 to P-5496): Linux's names and words.
+         if key.stat # 0 then
             @system.return.code = -ER$FAILED
-            stop sysmsg(12613, 'nokey', 'no key was read; the key was not changed')        ;* The AI helper refused: %1 (%2)
+            stop sysmsg(12613, 'nokey', 'the key was not set')                             ;* The AI helper refused: %1 (%2)
          end
          out = convert(char(13), '', out)                                                ;* PowerShell's line ends (see run.ctl)
          qargs = "'show'"
@@ -195,9 +199,10 @@ $include err.h
          os.execute "& '" : ctl : "' 'key' '" : prov : "'; exit $LASTEXITCODE"
 *        17 Nov 26 Windows port - audit round 1 (Linux: "a client that reads nothing must never return to SD silently"): the client exits non-zero when
 *        it read no key (sdai_ctl.c), and then nothing was changed - a key stored EARLIER would otherwise read as "set" below.  Refused, and not audited.
-         if os.error() then
+         key.stat = os.error()
+         if key.stat # 0 then
             @system.return.code = -ER$FAILED
-            stop sysmsg(12613, 'nokey', 'no key was read; the key was not changed')        ;* The AI helper refused: %1 (%2)
+            stop sysmsg(12613, 'nokey', 'the key was not set')                             ;* The AI helper refused: %1 (%2)
          end
          qargs = "'show'"
          gosub run.ctl

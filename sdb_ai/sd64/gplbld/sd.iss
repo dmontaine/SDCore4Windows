@@ -2612,15 +2612,20 @@ end;
 function SyncRouteGroups: String;
 var
   Code: Integer;
-  Ps, Script: String;
+  Ps, Script, Args: String;
 begin
   Result := '';
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Script := ExpandConstant('{app}\sync-route-groups.ps1');
+  { 18 Nov 26 - four-version audit round 2 (Linux's mail 2026-11-18T0220, item 1): ON A FIRST INSTALL sdssh IS MADE EMPTY.
+    [Run] has just put the installing user in sdusers, so the seed would have delivered that user with ssh on, unasked;
+    Linux Core makes sdssh empty.  DataTreeWasAbsent (sampled in InitializeSetup, before any file was written) is the
+    marker that predates this run.  An upgrade from before the route split still seeds, and keeps the ssh it had. }
+  Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + Script + '"';
+  if DataTreeWasAbsent then
+    Args := Args + ' -FirstInstall';
 
-  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
-                  Script + '"',
-              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  if not Exec(Ps, Args, '', SW_HIDE, ewWaitUntilTerminated, Code) then
     Code := -1;
 
   if Code = 0 then
@@ -6792,3 +6797,18 @@ end;
 Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; \
     ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}\usr\bin"; \
     Tasks: addtopath; Check: NotOnPath('{app}\usr\bin') and not TrueUpgrade
+
+; 18 Nov 26 - four-version audit round 2 (P-0288), as Linux copies each audit
+; record to the system journal ("sd-audit"): the event log source sd-audit, to
+; which every session copies each audit record (k_error.c audit_message(),
+; win32audit.c win32_audit_event()).  The message file is the .NET Framework's
+; EventLogMessages.dll, whose every id is "%1" - what New-EventLog registers,
+; and what install-aihelper.ps1's sd-ai source already uses.  Written on an
+; upgrade as well: it opens nothing and closes nothing an administrator chose.
+; A machine where the key cannot be written still audits: the copy is best effort.
+Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Services\EventLog\Application\sd-audit"; \
+    ValueType: expandsz; ValueName: "EventMessageFile"; \
+    ValueData: "%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\EventLogMessages.dll"; \
+    Flags: uninsdeletekey
+Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Services\EventLog\Application\sd-audit"; \
+    ValueType: dword; ValueName: "TypesSupported"; ValueData: "7"

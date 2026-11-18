@@ -1,5 +1,5 @@
 The audit trail
-administrator-20-the-audit-trail
+administrator-21-the-audit-trail
 The top box says which audit file is shown, how big it is, how many lines are loaded, whether older lines remain in the file, the filters in force and whether the page is following the file. The list is the audit trail itself, the oldest loaded line at the top and the newest at the bottom, one line of the file to a row: the time, the user, the event words and the key=value pairs. The box under it shows the whole line under the cursor and its parts.
 The page reads the file from its end, in blocks, so a large trail is never read whole: it opens on the newest 200 lines that pass the filter and loads 200 more when the cursor goes above the first. F (or /, the find key of every page) filters by time (from, to), event words, account, user or a text, one question after another; Esc leaves the filters as they were. C clears them. D goes to the first line at or after a time. O shows the next audit file, the rotated ones after the current one. L follows the file: new lines appear as they are written. F5 reads again.
 X saves the lines shown to a record of the $HOLD file of your account and writes an audit line saying how many. The page changes nothing else: it runs no command, and the lines name accounts, users and addresses, so it is the administrator's alone.

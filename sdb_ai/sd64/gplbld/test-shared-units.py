@@ -399,7 +399,7 @@ def checks(srcs):
     akc, ake = func_body(dk, "void op_akclear()"), func_body(dk, "void op_akenable()")
     # 17 Nov 26 (four-version audit P-3076): op_akclear asks it just AFTER the NET_FILE refusal, in Linux's order.
     ck("K11b op_akclear asks it before the type test and ak_clear; op_akenable before its first change",
-       ordered(akc, "net_refuse(fvar", SREF, "fvar->type != DYNAMIC_FILE", "ak_clear(") and ordered(ake, SREF, "net_refuse(fvar", "fvar->type == DYNAMIC_FILE && akno < MAX_INDICES"), "")
+       ordered(akc, "net_refuse(fvar", SREF, "fvar->type != DYNAMIC_FILE", "ak_clear(") and ordered(ake, "net_refuse(fvar", SREF, "fvar->type == DYNAMIC_FILE && akno < MAX_INDICES"), "")   # 18 Nov 26 (round 2, P-3076): op_akenable too, in Linux's order
     cra, dka = func_body(dk, "void op_createak()"), func_body(dk, "void op_deleteak()")
     ck("K11c op_createak and op_deleteak are given PATHNAMES, so they ask path_resolved_in_shared (the data path and the index path; the file's path) before create_ak / delete_ak; the administrator passes",
        ordered(cra, "MY_ADMIN()", "path_resolved_in_shared(data_path)", "path_resolved_in_shared(ak_path)", "edit_refused_message(EDIT_SHARED_STRUCT)", "create_ak(")

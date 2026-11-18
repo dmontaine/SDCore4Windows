@@ -6,6 +6,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - from Linux 10767826 (S.62 P-4630, the owner's Q9): before SET.CONFIG runs, the status line says 15172 (Linux 14172,
+*              "Making the change (a few seconds)...").
 * 17 Nov 26 Windows port - four-version audit round 1, Linux 1557e270: the status line before !settings_os is 15150 (Linux's 14150, "Reading the
 *               settings (a few seconds)..."), the message Linux gave its own copy of this line.
 * 14 Nov 26 Windows port - RELEASE_1.1 243: the status line says 12950 before the report's !settings_os (PowerShell, a few seconds).
@@ -838,6 +840,8 @@ change.param:
       msg = cmsg
       return
    end
+   msg = sysmsg(15172)                                          ;* Making the change (a few seconds)...  18 Nov 26 (Linux 10767826, S.62 P-4630, the owner's Q9)
+   call $tk_frame(ctx, keys, panes<view>, msg)
    call $tk_run(allow, sent, out, stat, err)
    gosub read.all
    gosub draw.all

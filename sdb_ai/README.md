@@ -1,14 +1,16 @@
 # SD Core for Windows — source tree
 
-The source of SD Core for Windows, a native Windows port of SD, the multivalue
-String Database. The repository's top-level `README.md` describes the product.
+The source of SD Core for Windows, the multivalue String Database. It follows SD
+Core for Linux, the version the other SD Core versions follow. The repository's
+top-level `README.md` describes the product and how to build and install it.
 
 SD is a multivalue database in the Pr1me Information tradition. It contains open
 source code from OpenQM and ScarletDME, code written by the SD developers after
 their fork from ScarletDME ([sdb64](https://codeberg.org/stringdatabase/sdb64)),
-and the Windows port made in this project.
+and the changes made in this project.
 
-The tree contains no binaries. Everything is built from source.
+The tree contains no binaries. Everything is built from source; `cycle.ps1`
+builds it and makes the installer.
 
 | | |
 |---|---|

@@ -3,6 +3,33 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+18 Nov 26  EVERY AUDIT RECORD ALSO GOES TO THE WINDOWS EVENT LOG; A NETWORK SHARE'S ROOT IS NOT A NETDIRS ENTRY; A RESTORE'S USER
+           KEEPS NO FILE RIGHTS IT WAS NOT GIVEN.
+
+             What        - Each line SD writes to its audit trail is also written to the Windows Application event log,
+                           source sd-audit (Information, event 1), with the Windows user of the session that wrote it;
+                           the installer registers the source (an upgrade too), and an event log that cannot be
+                           reached never stops or delays the trail.  A NETDIRS entry that is the root of a network
+                           share (//server/share, \\server\share) is ignored, and named in the error log when SD
+                           starts, as a drive root is.  create.account reusing a Windows user SD made (a restore) also
+                           takes it out of sdfileswrite and sdfilesadmin when they were not asked for.  After a failed
+                           read, a query asks the file system about an id only when it names an entry of the
+                           directory itself.  Over the API, an account name holding / or \ is refused as having no
+                           register record without a look-up, and the refusal's text reaches an ON ERROR reply; the
+                           audit line of a failed account-group look-up names its status; request 70's operation 1
+                           is recorded as analyze.file.  tool.remote and tool.config say "Making the change (a few
+                           seconds)..." while a change runs.  modify.password states the password rule first;
+                           "SD is already running in this session - type exit to return to it." is in lower case;
+                           set.ai key's failure says "the key was not set"; tool.ai no longer names an M key;
+                           create.account's usage refuses ADMINISTRATOR and PROGRAMMER as any unknown word (2018);
+                           the GRPSIZE text has no date; the contributors list matches SD Core for Linux's.
+             Why         - The four-version parity audit, round 2: SD Core for Linux copies each audit record to the
+                           system journal, refuses these API names and query look-ups, and leaves the files groups on
+                           a reused user (Linux 10767826 and S.62).
+             Does NOT    - Make the event log a protected copy: any program running as a user can write events under
+                           a registered source.  The event shows who ran the program that wrote it.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 17 Nov 26  SSH KEY SIGN-IN IS OFF FOR THE ACCOUNTS SD MAKES; NETDIRS IS STRICTER; A FAILED PHANTOM SAYS WHY.
 
              What        - A Windows user that create.account makes (or that restore.account takes over) can sign

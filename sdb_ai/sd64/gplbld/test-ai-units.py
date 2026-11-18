@@ -29,7 +29,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 17 Nov 26 (as Linux 0edeb757): the administrator's AI helper page 21 was split to the docs' page-length rule; the providers box
 # is described on the first part and the account's gate, with set.ai and the key, on the second (21a).
-AI_HELP_PAGE = {"h_prov": "administrator-21-the-ai-helper", "h_acc": "administrator-21a-the-ai-helper-set-ai-and-the-key"}
+AI_HELP_PAGE = {"h_prov": "administrator-20-the-ai-helper", "h_acc": "administrator-20a-the-ai-helper-set-ai-and-the-key"}   # 18 Nov 26: Linux's page names
 SD64 = os.path.dirname(HERE)
 BP = os.path.join(SD64, "sdsys", "gpl.bp")
 AIDIR = os.path.join(SD64, "gplsrc", "sdai")
@@ -330,7 +330,7 @@ def check_b(t):
         "file is removed after the client ran and on a refused provider, and the key is read back, not assumed; SD never reads the file itself",
         ordered(hb, "hand.f = @sdsys : @ds : '$aikey' : @ds : 'key'", "gosub drop.handover", "stop sysmsg(12615",
                 "os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"' '--handover' '\" : hand.f : \"'; exit $LASTEXITCODE\" capturing out",
-                "ctl.rc = os.error()", "gosub drop.handover", "if ctl.rc then", "stop sysmsg(12613, 'nokey'", "gosub check.key", "if not(key.found) then")   # 17 Nov 26: a client that read no key is refused
+                "key.stat = os.error()", "gosub drop.handover", "if key.stat # 0 then", "stop sysmsg(12613, 'nokey'", "gosub check.key", "if not(key.found) then")   # 17 Nov 26: a client that read no key is refused (18 Nov 26: Linux's key.stat)
         and "drop.handover: os.execute \"Remove-Item -LiteralPath '\" : hand.f : \"' -Force -ErrorAction SilentlyContinue\" return" in re.sub(r"\s+", " ", sa)
         and not re.search(r"\b(openseq|readseq|readblk|osread)\b", sa), "")
     safe = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:/@+,-")
@@ -339,7 +339,7 @@ def check_b(t):
         and "qargs = \"'provider' '\"" in sa and 'os.execute "& \'" : ctl' in sa, "")
     row("set.ai key: the console is handed to the client (os.execute, no capturing, nothing redirected), the key is never in a variable of SD's, and the result is read back, not assumed",
         ordered(sa, "case sub = 'key' and n.words = 3", "os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"'; exit $LASTEXITCODE\"\n",
-                "if os.error() then", "stop sysmsg(12613, 'nokey'", "qargs = \"'show'\"", "gosub run.ctl", "gosub check.key", "if not(key.found) then")   # 17 Nov 26: exit code read
+                "key.stat = os.error()", "if key.stat # 0 then", "stop sysmsg(12613, 'nokey'", "qargs = \"'show'\"", "gosub run.ctl", "gosub check.key", "if not(key.found) then")   # 17 Nov 26: exit code read (18 Nov 26: Linux's key.stat)
         and not re.search(r"\binput\b|readline", sa) and "2>&1" not in sa, "")
     rc = between(sa, "run.ctl:", "need.ok:")
     row("(Windows) run.ctl: the client is run with its words quoted and NOTHING redirected, its carriage returns are taken out, and only then is an unreachable helper judged; no Python is "
@@ -735,7 +735,7 @@ GROUP_D_MUTANTS = [
     ("voc_tool_ai", "tool.ai is another program", "$tool_ai", "$tool_audit"),
     ("tk_gate_info", "the ai gate is on as delivered", "|ai-on|ai-off|group||sdaiusers||at the next request|off|AI|", "|ai-on|ai-off|group||sdaiusers||at the next request|on|AI|"),
     ("tk_gate_info", "the ai gate is another group", "|group||sdaiusers||at the next request|off|AI|", "|group||sdusers||at the next request|off|AI|"),
-    ("h_acc", "the help record points at another page", "21a-the-ai-helper-set-ai-and-the-key", "01-accounts-and-security"),
+    ("h_acc", "the help record points at another page", "20a-the-ai-helper-set-ai-and-the-key", "01-accounts-and-security"),
     ("h_prov", "the help says nothing of SDSYS reading the key", " On Windows SDSYS is an elevated Administrator and can read the key", " The key is safe"),
 ]
 M_E = M_D + len(GROUP_D_MUTANTS)

@@ -7,7 +7,7 @@ invariants read off the source.  Free: no install, no elevation, no sd.
 
 10 Nov 26 Windows port - from Linux d049d8bb (S.102 stage 4), carry area 14.  The checks are Linux's; the helper is gplbld/sd-jobs.ps1 (Task Scheduler) in place of
 sd-elevate (systemd), set.job reaches it through !ps_script_out (no os.execute at all: V1, V15), its shell lines are the words after the helper's path (hargs: V3), its
-success lines start "sd-jobs: " (V6), the messages are Linux's + 1005, and the help record names the Administrator page 17-scheduled-jobs.  sandbox-tool-jobs.py is not
+success lines start "sd-jobs: " (V6), the messages are Linux's + 1005, and the help record names the Administrator page 23-scheduled-jobs (Linux's name, since 18 Nov 26).  sandbox-tool-jobs.py is not
 carried: nothing here runs set.job against the helper's dry run (test-jobs-helper-units.ps1 runs the helper alone).
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the BASIC as text, with comments and (where it says so) quoted strings removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT A JOB IS
@@ -146,7 +146,7 @@ def checks(raw):
     ai = re.findall(r"\$tk_keys\('ai', keys, '([a-z]+)'", page)
     ck("P12 the AI line is offered only the pane switch, the output pane and refresh: no job action", sorted(ai) == ["output", "pane", "refresh"], ai)
     hm = raw["help"].split("\n")
-    ck("P13 the page asks for tool.jobs.jobs in the Jobs view and the help record has a title and the page 17-scheduled-jobs (the Administrator page; Linux's is 23)", "hkey = 'tool.jobs.jobs'" in page and len(hm) >= 3 and hm[0].strip() and hm[1] == "administrator-17-scheduled-jobs", hm[:2])
+    ck("P13 the page asks for tool.jobs.jobs in the Jobs view and the help record has a title and the page 23-scheduled-jobs (the Administrator page, Linux's name)", "hkey = 'tool.jobs.jobs'" in page and len(hm) >= 3 and hm[0].strip() and hm[1] == "administrator-23-scheduled-jobs", hm[:2])
     nk = block(page, "name.ok")
     ck("P14 the page's name rule is the helper's: 1 to 32, a letter first, a-z 0-9 and the dash, no dash at the end",
        all(s in nk for s in ("len(jname) < 1 or len(jname) > 32", "index('abcdefghijklmnopqrstuvwxyz', jname[1, 1], 1) = 0", "jname[len(jname), 1] = '-'", "convert('abcdefghijklmnopqrstuvwxyz0123456789-', '', jname)"))

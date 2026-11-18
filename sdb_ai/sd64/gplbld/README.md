@@ -28,11 +28,15 @@ Binary Free Install process.
     gen_includes.py (found in gplbld) - Python script to regenerate the BASIC
       include records that are derived from C headers:
         gplsrc/revstamp.h -> sdsys/gpl.bp/revstamp.h
-        gplsrc/err.h      -> sdsys/SYSCOM/ERR.H and sdsys/gpl.bp/errtext.h
+        gplsrc/err.h      -> sdsys/syscom/err.h and sdsys/gpl.bp/errtext.h
         gplsrc/opcodes.h  -> sdsys/gpl.bp/opcodes.h
-      Run it from sd64 after editing any of those C headers; "--check" reports
-      what is out of date without writing.  This replaces gpl.bp/revstamp,
-      gpl.bp/errgen and GPL.BP/OPGEN, which did the same translations from
+      Run it from sd64 after editing any of those C headers:
+        python gplbld/gen_includes.py
+      "--check" reports what is out of date without writing anything; the
+      Makefile runs it that way (target check-includes) before a plain "make",
+      so a C header changed without regenerating its include stops the build.
+      Never edit the four generated records by hand.  This replaces gpl.bp/revstamp,
+      gpl.bp/errgen and gpl.bp/opgen, which did the same translations from
       inside SD and so needed the C source in the installed database - which
       the Windows install layout does not provide, so this script is the only
       way to regenerate any of them on this port.  The $execute directives

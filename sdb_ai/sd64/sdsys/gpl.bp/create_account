@@ -18,6 +18,9 @@
 *
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - four-version audit round 2 (P-5470), as Linux S.62 (P-1284): a Windows user SD made that a restore takes over again
+*              (CA$REUSE.SD.USER) also leaves sdfilesadmin and sdfileswrite when the request does not name them, as it already left sdssh, sdapi, sdfiles and
+*              sdaiusers: it kept the files-write and files-admin rights of its earlier account.
 * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3; the owner's decision of 17 Nov 2026: key sign-in is off as delivered for the accounts SD makes): a Windows
 *              user this routine MAKES (or that a restore takes over, which is SD-made by the reuse rule) joins the Windows group sdsshnokey, so sshd offers it no key
 *              sign-in, unless CA$SSH.KEY is exactly 1; a reused user given CA$SSH.KEY leaves the group.  An ATTACHed user (the installing user) is never put in it.
@@ -1799,6 +1802,28 @@ set.access:
          rm.told = status()
          stat = rm.told
          if stat = 0 and rm.member then stat = os_group("DELMEM", "sdapi", acc.uname)
+         if stat # 0 then
+            @system.return.code = -ER$FAILED
+            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+         end
+      end
+*     18 Nov 26 Windows port - four-version audit round 2 (P-5470), as Linux S.62 (P-1284): and sdfilesadmin, then sdfileswrite, the
+*     widest first, the same way as sdfiles below: a reused user kept the files-write and files-admin of its earlier account.
+      if not(files.admin.want) then
+         rm.member = is_grp_member(acc.uname, 'sdfilesadmin')
+         rm.told = status()
+         stat = 0
+         if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdfilesadmin", acc.uname)
+         if stat # 0 then
+            @system.return.code = -ER$FAILED
+            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+         end
+      end
+      if not(files.write.want) then
+         rm.member = is_grp_member(acc.uname, 'sdfileswrite')
+         rm.told = status()
+         stat = 0
+         if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdfileswrite", acc.uname)
          if stat # 0 then
             @system.return.code = -ER$FAILED
             err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1

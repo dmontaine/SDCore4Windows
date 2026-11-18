@@ -78,6 +78,16 @@ int win32_audit_append(const char* path, const char* data, int len);
 
 int win32_audit_rotate(const char* path, const char* rotated);
 
+/* 18 Nov 26 - four-version audit round 2 (P-0288), as Linux W.11 F4 option B (the
+   record copied to the system journal, "sd-audit").  The same audit record goes to
+   the Windows Application event log under the source sd-audit, which the installer
+   registers (sd.iss).  The event carries the SID of this process's own token, which
+   the Event Log shows as the event's user beside the user= the line names.  Best
+   effort and silent: an event log that cannot be reached never stops or delays the
+   audit file's own write, and no reason is returned.                          */
+
+void win32_audit_event(const char* text);
+
 #endif
 
 /* END-CODE */

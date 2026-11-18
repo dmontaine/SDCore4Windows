@@ -30,6 +30,7 @@
  * sentence is already true of SDEXT - see the SCRAM note in keys.h.
  *
  * START-HISTORY:
+ * 18 Nov 26 Windows port - four-version audit round 2 (P-3091 to P-3093): getarg() and freeArg() are Linux's (malloc / free).
  * 12 Sep 26 Windows port - written for the helper process, 5.27.  The file it
  *           replaces loaded Python into sd.exe and was removed at 489b18e.
  * END-HISTORY
@@ -237,39 +238,64 @@ void op_sdpyobj() {
   Arg3 = freeArg(Arg3);
 }
 
-/* Lift one string argument off the stack into a buffer this file owns.
- * Patterned on op_sdext.c's handling of the same problem. */
-Private char* getarg(void) {
+/* 18 Nov 26 Windows port - four-version audit round 2 (P-3091 to P-3093): getarg() and freeArg() are Linux's, line for line
+   (malloc / free, as Linux op_sdpyobj.c:340-393); the k_alloc / k_free rewrite was this port's and nothing Windows needs. */
+Private char* getarg(){
+/* get args from stack  */
   DESCRIPTOR* descr;
   STRING_CHUNK* str;
   int32_t myval_len;
-  char* buf;
+  int32_t mybuf_sz;
+  char* arg;
 
+  arg = NULL;
+
+  /* Get val string */
   descr = e_stack - 1;
   k_get_string(descr);
   str = descr->data.str.saddr;
-  myval_len = (str == NULL) ? 0 : str->string_len;
 
-  buf = (char*)k_alloc(108, myval_len + 1);
-  if (buf == NULL)
-    k_error(sysmsg(10005));            /* Insufficient memory - never returns */
+  /* is there something there? */
+  if (str == NULL){
+    myval_len = 0;
+    mybuf_sz = 1;              /* room for string terminator */
+  }else{
+    myval_len =  str->string_len;
+    mybuf_sz  =  myval_len+1; /* room for string terminator */
+  }
 
-  if (myval_len == 0)
-    buf[0] = '\0';
-  else
-    (void)k_get_c_string(descr, buf, myval_len);
+  /* allocate space for arg val string */
+  arg = malloc(mybuf_sz * sizeof(char));
+  if (arg == NULL){
+    /* so here is a question, what to do if we cannot allocate memory?
+     We will end execution of program and attempt to report error  */
+    k_error(sysmsg(10005));   /* Insufficient memory for buffer allocation */
+    /* We never come back from k_error */
+  }
 
-  /* dismiss, not pop: a string may be a linked list of chunks and pop would
-     leak them.  After this e_stack points at the descriptor that will receive
-     the return value. */
-  k_dismiss();
-  return buf;
+  /* move the passed argument string to our buffer */
+  if (myval_len == 0){
+    arg[0] = '\0';
+  } else {
+   /* rem string length returned by k_get_c_string excludes terminator in count!*/
+    myval_len = k_get_c_string(descr, arg, myval_len);
+  }
+
+  k_dismiss();   /* done with passed arg  descriptor */
+                 /* Things to note                   */
+                 /* we use dismiss() instead of pop() because this is a string */
+                 /* which may be made up of a linked list of string blocks     */
+                 /* Using pop would not free the sting blocks                  */
+                 /* After dismiss() e_stack  points to next descr on stack,    */
+                 /* either the descr for next Arg or the one to receive RTNVAL */
+  return arg;
 }
 
-Private char* freeArg(char* Arg) {
-  if (Arg != NULL)
-    k_free(Arg);
-  return NULL;
-}
+Private char* freeArg(char* Arg){
+    if (Arg != NULL){
+        free(Arg);
+    }
+    return NULL;
+  }
 
 /* END-CODE */

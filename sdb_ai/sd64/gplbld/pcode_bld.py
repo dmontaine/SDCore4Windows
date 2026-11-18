@@ -26,7 +26,8 @@ SDSYS = sys.argv[1] if len(sys.argv) > 1 else '/usr/local/sdsys'
 
 DEBUG_DIFF = False
 
-pcode_fs = ["_AK",
+# 18 Nov 26 Windows port - four-version audit round 2 (P-6129): "_ak", lower case, as Linux (the file on disk is _ak).
+pcode_fs = ["_ak",
 "_bindkey"    ,
 "_break"      ,
 "_cconv"      ,

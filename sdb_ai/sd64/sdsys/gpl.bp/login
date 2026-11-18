@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 18 Nov 26 Windows port - four-version audit round 2 (P-3368, P-4428): audit.account is gone; every refusal's line names initial.account,
+*   Linux's terminate.connection line, and the unelevated SDSYS refusal sets initial.account to sdsys first.  The run.in child line names
+*   initial.account too (as found by then, not as it stood before the account was looked up).
 * 17 Nov 26 Windows port - four-version audit round 1, owner's answer 1: run.in's debugged child enters a suspended account, as the
 *   plain run.in always did (the administrator's maintenance tool); every other session is still refused 10107.  (P-3360, P-3371)
 *   UPDATE.ACCOUNTS ALL's refusal outside SDSYS (10172) is asked before the walk, as Linux's; same condition, same message.
@@ -281,8 +284,7 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   REFUSAL ADDED LATER AND NOT GIVEN A REASON STILL PRODUCES A RECORD - a
 *   vague line in the trail is recoverable, a missing one is not.
    audit.reason = 'unspecified'
-   audit.account = ''
-   initial.account = ''      ;* 17 Nov 26: assigned here, as Linux login:156, so terminate.connection may fall back to it
+   initial.account = ''      ;* 17 Nov 26: assigned here, as Linux login:156; terminate.connection names it (18 Nov 26: no audit.account beside it, P-4428)
 
 * 22 Aug 26 Windows port - PROJECT_STATUS.md 7 step 9.  ASSIGNED HERE, not at
 *   the gate, for the reason the block below gives: it is read by the audit
@@ -695,7 +697,6 @@ deffun radmin_open(arg) calling '!radmin_open'
          initial.account = downcase(runin.info<1>)
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register
-            audit.account = initial.account
             audit.reason = 'not in the register'
             goto terminate.connection
          end
@@ -703,7 +704,6 @@ deffun radmin_open(arg) calling '!radmin_open'
          runin.group = downcase(trim(acc.rec<ACC$GROUP>))
          if runin.group = '' or not(index(runin.groups, ',' : runin.group : ',', 1)) or not(index(runin.groups, ',sdusers,', 1)) then
             display sysmsg(10051) ;* You can only log in to your own account
-            audit.account = initial.account
             audit.reason = 'the run.in child token does not hold the group of the account'
             goto terminate.connection
          end
@@ -714,7 +714,6 @@ deffun radmin_open(arg) calling '!radmin_open'
 
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register
-            audit.account = initial.account
             audit.reason = 'not in the register'
             goto terminate.connection
          end
@@ -921,7 +920,6 @@ deffun radmin_open(arg) calling '!radmin_open'
 
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register
-            audit.account = initial.account
             audit.reason = 'SDSYS is not in the register'
             goto terminate.connection
          end
@@ -931,7 +929,6 @@ deffun radmin_open(arg) calling '!radmin_open'
          if job.name = '' then
             if elevate('START', '') # 0 then
                display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-               audit.account = initial.account
                audit.reason = 'elevation refused or unavailable'
                goto terminate.connection
             end
@@ -959,7 +956,7 @@ deffun radmin_open(arg) calling '!radmin_open'
 *        is most specific about is not the one to leave to a second line.)
          if upcase(@logname) = 'SDSYS' and not(kernel(K$ADMINISTRATOR, -1)) then
             display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-            audit.account = 'sdsys'
+            initial.account = 'sdsys'     ;* 18 Nov 26 (audit round 2, P-3368): terminate.connection names initial.account, as Linux
             audit.reason = 'SDSYS requires an elevated session'
             goto terminate.connection
          end
@@ -996,7 +993,6 @@ deffun radmin_open(arg) calling '!radmin_open'
 
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register
-            audit.account = initial.account
             audit.reason = 'not in the register'
             goto terminate.connection
          end
@@ -1029,14 +1025,11 @@ deffun radmin_open(arg) calling '!radmin_open'
       void kernel(K$ADMINISTRATOR, 0)
       if radmin.why # '' then
          display sysmsg(12600) ;* SDRADMIN signs in only over ssh, and only while remote administration is open
-         audit.account = initial.account
          audit.reason = radmin.why
          goto terminate.connection
       end
       radmin.login = @true
    end
-
-   audit.account = initial.account
 
 * 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS NOT ENTERED.  Owner, 27 Aug
 *   2026: "an account can be temporarily denied access".  MODIFY.ACCOUNT
@@ -1476,7 +1469,7 @@ deffun radmin_open(arg) calling '!radmin_open'
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3367): the success record is mode 0 only, as Linux login:674-678 (the update
 *   modes reach here too and are not sign-ons), and names initial.account as Linux does.
    if runin.info # '' then
-      void kernel(K$AUDIT, 'run.in child account=' : audit.account : ' command=' : batch.command)   ;* 13 Nov 26 (RELEASE_1.1 253(b))
+      void kernel(K$AUDIT, 'run.in child account=' : initial.account : ' command=' : batch.command)   ;* 13 Nov 26 (RELEASE_1.1 253(b))
    end else if mode = 0 then
       if batch.command = '' then
          void kernel(K$AUDIT, 'login account=' : initial.account)
@@ -1503,9 +1496,9 @@ terminate.connection:
 *   leaves through here, so one record covers all of them and a refusal added
 *   later is recorded whether or not whoever adds it thinks about the trail.
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3368): a refusal that set no audit.account names initial.account, as Linux
-*   login:691 does, rather than account= empty.
-   if audit.account = '' then audit.account = initial.account
-   void kernel(K$AUDIT, 'login refused account=' : audit.account : ' reason=' : audit.reason)
+*   login:691 does, rather than account= empty.  18 Nov 26 (round 2): Linux's line itself; every refusal that set audit.account set it
+*   to initial.account, and the unelevated SDSYS refusal sets initial.account too.
+   void kernel(K$AUDIT, 'login refused account=' : initial.account : ' reason=' : audit.reason)
 
    display sysmsg(5024) ;* Connection terminated
    sleep 2
@@ -1647,7 +1640,6 @@ internal.gate:
       audit.reason = 'no internal marker'
    end
 
-   audit.account = initial.account
    if gate.ok then
       void kernel(K$AUDIT, 'internal session admitted account=' : initial.account : ' writer=' : gate.writer : ' age=' : gate.age)
 *     AND SAID ON THE SCREEN, so it lands in every transcript and installer log that captures this

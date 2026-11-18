@@ -394,7 +394,8 @@ def body(text, head):
 def text_rows(t):
     rows = []
     ke = body(t["k_error.c"], "void audit_message(char* msg) {")
-    p = ke.find("  if (win32_audit_pipe(sd_sysdir(), who, pmsg) == 0)\n    return;")
+    # 18 Nov 26 (audit round 2, P-0288): the event log copy is made before the return, so the anchor ends there
+    p = ke.find("  if (win32_audit_pipe(sd_sysdir(), who, pmsg) == 0) {\n    win32_audit_event(ebuff);\n    return;")
     s = ke.find("StartExclusive(ERRLOG_SEM, 67)")
     a = ke.find("win32_audit_append(path, buff, bytes)")
     rows.append(("W1", "audit_message() asks the service first, OUTSIDE ERRLOG_SEM, returns when it took the record, and appends itself only after",

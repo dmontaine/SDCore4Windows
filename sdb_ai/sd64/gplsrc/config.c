@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Nov 26 Windows port - four-version audit round 2 (P-1222, P-5444 to P-5447): BACKUPDIR= is accepted and ignored with no length test
+ *           (fgets() leaves at most 189 characters, so the test could never refuse), and the NETDIRS / SH / SH1 refusals are laid out as Linux's.
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 NETDIRS): a value over MAX_NETDIRS_LEN (191), or a NETDIRS line too long for the
  *           199-character line buffer, is refused by name and never cut (a longer line was cut at 191 and the rest read as a line).
  * 15 Nov 26 Windows port - RELEASE_1.1 317: APILOCAL=1 (the API listener binds the loopback address only).
@@ -281,14 +283,12 @@ struct CONFIG* read_config(char* errmsg) {
          file carrying the line would not start without this branch.  It is
          accepted and NOT stored: SD BASIC reads the file itself, through
          !acc_os_bakdir, each time it needs the value, so a change takes
-         effect without restarting SD.  Bounded like SH= above, so an overlong
-         value is refused by name rather than silently kept.                  */
+         effect without restarting SD.  18 Nov 26 (audit round 2, P-1222): its
+         length test is gone, as Linux has none - fgets() into rec leaves at most
+         189 characters after BACKUPDIR=, below MAX_PATHNAME_LEN, so it could
+         never refuse anything.                                                 */
       else if (strncmp(rec, "BACKUPDIR=", 10) == 0) {
-        if (strlen(rec + 10) > MAX_PATHNAME_LEN) {
-          sprintf(errmsg, "BACKUPDIR value is longer than %d characters.",
-                  MAX_PATHNAME_LEN);
-          goto exit_read_config;
-        }
+        /* ignored */
       }
       else if (sscanf(rec, "DEADLOCK=%d", &n) == 1)
         cfg->deadlock = n; /* 0, 1 or 2: rangecheck below (openQM item 500) */
@@ -345,8 +345,7 @@ struct CONFIG* read_config(char* errmsg) {
    match MORE than the administrator asked for, not less.                   */
       else if (strncmp(rec, "NETDIRS=", 8) == 0) {
         if (!line_whole || (strlen(rec + 8) > MAX_NETDIRS_LEN)) {   /* 17 Nov 26 (Linux 1557e270): a line too long for rec is refused, not cut */
-          sprintf(errmsg, "NETDIRS value is longer than %d characters.",
-                  MAX_NETDIRS_LEN);
+          sprintf(errmsg, "NETDIRS value is longer than %d characters.", MAX_NETDIRS_LEN);
           goto exit_read_config;
         }
         strcpy(cfg->netdirs, rec + 8);
@@ -406,15 +405,14 @@ struct CONFIG* read_config(char* errmsg) {
          the error named an unrelated parameter.  Refuse the value instead. */
       else if (strncmp(rec, "SH=", 3) == 0) {
         if (strlen(rec + 3) > MAX_SH_CMD_LEN) {
-          sprintf(errmsg, "SH value is longer than %d characters.",
-                  MAX_SH_CMD_LEN);
+          sprintf(errmsg, "SH value is longer than %d characters.", MAX_SH_CMD_LEN);
           goto exit_read_config;
         }
         strcpy(pcfg.sh, rec + 3);
-      } else if (strncmp(rec, "SH1=", 4) == 0) {
+      }
+      else if (strncmp(rec, "SH1=", 4) == 0) {
         if (strlen(rec + 4) > MAX_SH_CMD_LEN) {
-          sprintf(errmsg, "SH1 value is longer than %d characters.",
-                  MAX_SH_CMD_LEN);
+          sprintf(errmsg, "SH1 value is longer than %d characters.", MAX_SH_CMD_LEN);
           goto exit_read_config;
         }
         strcpy(pcfg.sh1, rec + 4);

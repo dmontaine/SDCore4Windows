@@ -96,7 +96,7 @@ def checks(raw):
     ck("RM3", "the routine runs remote.api, remote.ssh, delete.server and remote.sdsys (one allow list) and nothing else: $tk_run directly after the confirm box guarded by res = 'run', and in run.report for the three reports; "
        "the one other way a verb is run is the terminal hand-over (`execute sent` once, after the box and after $tk_close); no $tk_runx, os.execute, perform or chain",
        re.findall(r"\ballow = '([^']*)'", pg) == ["remote.api remote.ssh delete.server remote.sdsys"] and pg.count("call $tk_run(allow,") == 2 and "$tk_runx" not in pg
-       and re.search(r"call \$tk_confirm\(sent, el, typed, res, cmsg\)\s*\n\s*if res = 'run' then\s*\n\s*call \$tk_run\(allow, sent, out, stat, err\)", cr) is not None
+       and re.search(r"call \$tk_confirm\(sent, el, typed, res, cmsg\)\s*\n\s*if res = 'run' then\s*\n\s*msg = sysmsg\(15172\)\s*\n\s*call \$tk_frame\(ctx, keys, panes<view>, msg\)\s*\n\s*call \$tk_run\(allow, sent, out, stat, err\)", cr) is not None   # 18 Nov 26 (Linux 10767826): the status line says 15172 first
        and len(re.findall(r"\bexecute\b", pg)) == 1 and re.search(r"call \$tk_confirm\(sent, el, typed, res, cmsg\)\s*\n\s*if res # 'run' then\s*\n\s*msg = cmsg\s*\n\s*return\s*\n\s*end\s*\n\s*call \$tk_close\(ctx\)\s*\n\s*execute sent", ch) is not None
        and not re.search(r"\b(os\.execute|perform|chain)\b", pg), "")
     ck("RM4", "THE PAGE WRITES NOTHING ITSELF: no write, delete, writeseq, openseq, matwrite; the servers file is read only through !netdefs READ (no other operation of it), and the register only to list names",

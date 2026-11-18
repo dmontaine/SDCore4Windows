@@ -16,6 +16,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - four-version audit round 2 (P-5488): $include in lower case, as Linux's.
 * 19 Aug 26 Windows port - $INCLUDE gpl.bp, the VOC id having moved.  5.12 (b).
 * END-HISTORY
 *
@@ -23,7 +24,7 @@ subroutine prog_info(obj_dir_path,obj_name,prog_name,prog_obj_sz,prog_comp_time,
 $catalog !prog_info
 *
 *
-$INCLUDE gpl.bp header.h
+$include gpl.bp header.h
 *
 * Header field offsets (from 1)
 * hdr.magic             =     1

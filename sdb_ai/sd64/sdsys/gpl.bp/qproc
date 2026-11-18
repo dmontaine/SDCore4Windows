@@ -18,6 +18,8 @@
 * 
 *  
 * START-HISTORY:
+* 18 Nov 26 Windows port - four-version audit round 2 (P-5489), as Linux S.62 (P-1258): after a failed read the file system is asked
+*           about the id only when it names an entry of the directory itself (not empty, no '/' or '\', not . or ..).
 * 17 Nov 26 Windows port - four-version audit round 1: "'id' invalid name" is message 15140, Linux c359f30b's 14140 + 1000 (Linux took
 *           this port's behaviour of 2 Sep 26 under its own number); it was 10164, which Linux does not have.
 * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused sorted.sample.done and json.count are gone.
@@ -7715,11 +7717,13 @@ record.not.found:
 *  test is exact rather than a guess about '%': ask the file system whether a
 *  file of exactly this id is sitting in the directory.  It runs only on the
 *  failure path, so it costs nothing on a normal read.
+*  18 Nov 26 (four-version audit round 2, P-5489, as Linux S.62 P-1258): only
+*  for an id that names an entry of the directory itself (no separator - '/'
+*  or, on Windows, '\' - not . or ..), so the question can never reach a file
+*  outside it.
    inv.name = @false
-   if is.dir then
-      if ospath(fileinfo(data.f, FL$PATH) : @ds : id, OS$EXISTS) then
-         inv.name = @true
-      end
+   if is.dir and id # '' and index(id, @ds, 1) = 0 and index(id, '\', 1) = 0 and id # '.' and id # '..' then
+      if ospath(fileinfo(data.f, FL$PATH) : @ds : id, OS$EXISTS) then inv.name = @true
    end
 
    if inv.name then

@@ -1,1 +1,1 @@
-Passwords are set using Windows administration tools on this platform
+Passwords are set using modify.password, not operating system administration tools, on this platform

@@ -1614,10 +1614,8 @@ def include_dir(name):
     """The sdsys directory a three-token $include names, as spelled on disk.
     13 Sep 26 dm - plan M3 D1 and D2: every sdsys directory an $include can
     name (syscom, gpl.bp) is lower case, so the name is lowered whatever case
-    the source typed.  17 Nov 26 Windows port - four-version audit round 1
-    (P-3044 to P-3047), from Linux: NTFS ignores case, so the upper-cased names
-    this port used found the files anyway; the caller lowers the RECORD name
-    too, as Linux's does (plan M: include record names are lower case on disk)."""
+    the source typed.  The RECORD name is still upper-cased by the caller:
+    record ids inside the directories did not change."""
     return name.lower()
 
 

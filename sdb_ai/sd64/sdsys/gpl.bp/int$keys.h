@@ -18,6 +18,7 @@
   	  * 
   	  * 
 	  * START-HISTORY:
+	  * 18 Nov 26 Windows port - four-version audit round 2 (P-5475): K$WINSIZE stands before the S.63 gates and K$LOCK.TRACE after the AI keys, in Linux's order.
 	  * 17 Nov 26 Windows port - four-version audit round 1 (P-1965): K$OS.ADMINISTRATOR (63) is retired, as gplsrc/keys.h; nothing asked it.
 	  * 13 Nov 26 Windows port - K$RUNIN.CHILD (84) and K$RUNIN.DEBUG (85), run.in WITH debug (RELEASE_1.1 253(b)).
 	  * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K$LOCK.TRACE (115), LOCK.TRACER.
@@ -252,10 +253,6 @@
       $define K$SHARED.ONCE     131     ;* a file name: 1 the first time this process is asked about it, 0 afterwards (the audit of a shared open) (18 Oct 26, S.66)
       $define K$PROFILER        116     ;* n > 0 start the application event profiler (the events in n), 0 stop, -1 ask, -2 the table (16 Oct 26)
       $define K$PROFILER.USER   117      ;* user * 4096 + 2048 + n start it in another process, user * 4096 alone stop it and have it write F<user> to $ipc; administrator only
-      $define K$LOCK.TRACE      115      ;* 1 start lock tracing (administrator: makes the locktrace file), 0 stop, -1 ask; the state, -1 if refused (16 Oct 26; carried 13 Nov 26, RELEASE_1.1 182)
-      * 13 Oct 26 dm (Linux 7ff476f) - The terminal's own size: kernel(K$WINSIZE, '') answers width, a field mark, height as the kernel last
-      *   read them from the tty (start-up and every SIGWINCH), or null when it could not.  Must match gplsrc/keys.h.
-      $define K$WINSIZE          92      ;* The terminal's size from the tty
       * 10 Nov 26 Windows port - from Linux (S.69 step 2): the in-SD AI helper's four keys, so the AI routines carry unchanged.  13 Nov 26 (RELEASE_1.1 246):
       *   the kernel serves them as Linux's does (op_ai.c, the pipe \\.\pipe\sd-ai).  Must match gplsrc/keys.h.
       $define K$SHOW.SAFE       151     ;* any text: the same text with every byte of the kernel's one rule (0-31, 127, 128-159, 248-255) as '?', the same length; for printing another session's text (10 Nov 26, Linux d35f5e31, S.88)
@@ -263,6 +260,7 @@
       $define K$AI.POLL         161     ;* 'W' waiting, 'D':@fm:the helper's reply (JSON), or 'E':@fm:why
       $define K$AI.CANCEL       162     ;* give the request up ('OK')
       $define K$AI.STATUS       163     ;* the helper's status line, 'D':@fm:json, or 'E':@fm:why
+      $define K$LOCK.TRACE      115      ;* 1 start lock tracing (administrator: makes the locktrace file), 0 stop, -1 ask; the state, -1 if refused (16 Oct 26; carried 13 Nov 26, RELEASE_1.1 182)
 * 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  kernel(K$JOB.MARK, 0) answers the name of the scheduled administrator
 *   job this process is (Task Scheduler's batch logon of the local account SDSYS, elevated, and an administrator-only definition in sd-jobs naming
 *   this very command), or ''.  Must match gplsrc/keys.h.
@@ -277,6 +275,9 @@
 * 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug; Windows only.  Must match gplsrc/keys.h, which says what each answers.
       $define K$RUNIN.CHILD     84      ;* run.in's debugged child: account:@fm:store:@fm:groups, '' for any other process
       $define K$RUNIN.DEBUG     85      ;* the SDSYS session's end of a run: 'O', 'P' (relay) or 'C' (end)
+      * 13 Oct 26 dm (Linux 7ff476f) - The terminal's own size: kernel(K$WINSIZE, '') answers width, a field mark, height as the kernel last
+      *   read them from the tty (start-up and every SIGWINCH), or null when it could not.  Must match gplsrc/keys.h.
+      $define K$WINSIZE          92      ;* The terminal's size from the tty
 * 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  K$REAL.USER 90 and K$LOGIN.UID 91 are Linux's own and are not carried.
 * 13 Oct 26 dm - S.63.  The per-account OS-access gates are back (see gplsrc/keys.h): K$SH and
 *   K$OS.EXEC, at 93 and 94 now.  Settable only from $internal, like K$ADMINISTRATOR; LOGIN and CPROC
