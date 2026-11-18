@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Nov 26 Windows port - from Linux ab511b4e (S.270, RELEASE_1.1 343): EXECUTE ... CAPTURING around a command whose own EXECUTE ...
+ *           TRAPPING ABORTS CAPTURING trapped an abort crashed the session.  The nested EXECUTE saves the outer capture always (an empty
+ *           one too), and op_capture's aborted branch takes the outer capture up again; op_rtnlist pops the target only above its base.
  * 12 Nov 26 Windows port - from Linux d049d8bb (RELEASE_1.1 250): op_capture() tracks the chunk before the last as such. `prev` was
  *           set to every chunk in turn, so it was the last chunk itself; output that was a lone newline freed the emptied only
  *           chunk while capture_head still pointed at it ("double free or corruption" on Linux).
@@ -99,6 +102,24 @@ void op_capture() {
 
     s_free(capture_head);
     capture_head = NULL;
+
+    /* 18 Nov 26 (S.270): the abort ended only THIS level's capture.  An outer EXECUTE ... CAPTURING stacked under it is taken
+       up again here, as the normal path below does, so the caller's output goes on being captured and the outer CAPTURE finds
+       the capture it started. */
+    if (process.program.flags & PF_CAPTURING) {
+      capture_head = process.program.saved_capture_head;
+      capture_tail = process.program.saved_capture_tail;
+      process.program.saved_capture_head = NULL;
+      process.program.saved_capture_tail = NULL;
+      capturing = TRUE;
+      stack_display_pu();
+      process.program.flags &= ~PF_CAPTURING;
+    }
+
+    /* S.270: the abort no longer wipes this program's e-stack (kernel.c unwinds only the levels it casts off), so the target's
+       address is still here: take it off.  Only when it is above this program's base - never below what the program owns. */
+    if (e_stack > e_stack_base + process.program.e_stack_depth)
+      k_pop(1);
     return;
   }
 
@@ -238,11 +259,10 @@ void op_execute() {
     {
       process.program.flags |= PF_CAPTURING;
 
-      if (capture_head != NULL) /* Stack data already captured */
-      {
-        process.program.saved_capture_head = capture_head;
-        process.program.saved_capture_tail = capture_tail;
-      }
+      /* 18 Nov 26 (S.270): saved ALWAYS, an empty outer capture (NULL) included.  Saved only when it held data, a stale pointer
+         from an earlier nesting was restored later and the outer CAPTURE dereferenced it (signal 11). */
+      process.program.saved_capture_head = capture_head;
+      process.program.saved_capture_tail = capture_tail;
     } else {
     }
 
@@ -400,6 +420,10 @@ void op_rtnlist() {
     }
 
     rtnlist = FALSE;
+    k_pop(1);
+  } else if (e_stack > e_stack_base + process.program.e_stack_depth) {
+    /* S.270: an abort trapped by EXECUTE ... TRAPPING ABORTS RTNLIST no longer wipes the e-stack, so the target's address is
+       still here: take it off (the target itself is left as the abort left it). */
     k_pop(1);
   }
 }
