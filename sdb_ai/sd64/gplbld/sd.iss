@@ -2618,7 +2618,7 @@ begin
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Script := ExpandConstant('{app}\sync-route-groups.ps1');
   { 18 Nov 26 - four-version audit round 2 (Linux's mail 2026-11-18T0220, item 1): ON A FIRST INSTALL sdssh IS MADE EMPTY.
-    [Run] has just put the installing user in sdusers, so the seed would have delivered that user with ssh on, unasked;
+    the Run section has just put the installing user in sdusers, so the seed would have delivered that user with ssh on, unasked;
     Linux Core makes sdssh empty.  DataTreeWasAbsent (sampled in InitializeSetup, before any file was written) is the
     marker that predates this run.  An upgrade from before the route split still seeds, and keeps the ssh it had. }
   Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + Script + '"';
