@@ -1,0 +1,1 @@
+Listing %1 lets the programs of that user, from any session of theirs on this\ncomputer - one they reached over the network included - sign in as sdsys over\nthe API at 127.0.0.1 with the SD password of sdsys and be the administrator.

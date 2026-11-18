@@ -5,6 +5,10 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - RELEASE_1.1 339, from Linux 38cfb301 (S.267): the remote admin view shows two fields, Local ssh users and Local API
+*              users (the two lists of LOCAL.SDSYS, read by running the verb with no keyword and parsing sd-sdsyslocal.ps1's fixed status words);
+*              Up and Down choose a list, U adds a name (after a box showing 15179 / 15180 that wants the name typed again), X removes one chosen
+*              from the list and C clears it (each a plain box).  The key line of the top box names only the keys of the view shown.
 * 18 Nov 26 Windows port - from Linux 10767826 (S.62 P-4630, the owner's Q9): confirm.and.run says 15172 (Linux 14172, "Making the change (a few
 *              seconds)...") on the status line before the command runs.
 * 17 Nov 26 Windows port - four-version audit round 1, Linux 1557e270: read.all's status line is 15150 (Linux's 14150, "Reading the settings (a few
@@ -57,11 +61,16 @@
 *     5  TLS           this machine's own TLS identity as SETTINGS.REPORT gives it: the certificate fields and the public-key hash another SD server pins.  Never the private key.
 *     6  remote admin  REMOTE.SDSYS with no keyword: whether SDRADMIN may sign in over ssh, wall by wall.  O opens it (the terminal is given to REMOTE.SDSYS ON,
 *                      which makes the account and asks its password the first time) and F shuts it, each after a box, O's wanting the word OPEN.
+*                      Under it the two fields of LOCAL.SDSYS (RELEASE_1.1 339, Linux S.267), Local ssh users and Local API users: the Windows users
+*                      who may reach SDSYS from THIS computer, both empty as delivered.  Up and Down choose a field; U adds a name (the box shows what
+*                      listing it means and wants the name typed again), X removes a name chosen from the list, C clears the list.  The lists are read
+*                      only by running local.sdsys with no keyword; the page opens no file in sd-tls.
 *   Keys: Up, Down, PgUp, PgDn, Home, End; F5 reads again; F1 or ? or a click on the [?] explains the page; Ctrl-Q leaves.  A click on a row puts the cursor there.
 *
 *   WHAT IT RUNS.  Each change only after its box was answered Run (Cancel is what Enter chooses): REMOTE.API and REMOTE.SSH with no keyword through the routine (to report);
 *   REMOTE.SSH ON or OFF and DELETE.SERVER through the routine; REMOTE.API ON, LOCAL or OFF and SET.SERVER on the terminal, given to the verb.  LIST.SERVERS is not run (the file
-*   is read with !netdefs).  REMOTE.SDSYS with no keyword and OFF through the routine; REMOTE.SDSYS ON on the terminal.  The verbs ask for the administrator again and write their own audit lines.  The page writes nothing itself.
+*   is read with !netdefs).  REMOTE.SDSYS with no keyword and OFF through the routine; REMOTE.SDSYS ON on the terminal.  LOCAL.SDSYS through the
+*   routine (to report, and ssh|api add NAME no.query, remove NAME and clear after the box).  The verbs ask for the administrator again and write their own audit lines.  The page writes nothing itself.
 *
 * END-DESCRIPTION
 *
@@ -79,7 +88,7 @@ $include tk.h
 
    prompt ''
 
-   allow = 'remote.api remote.ssh delete.server remote.sdsys'   ;* the commands this page may run through the routine (remote.api only to report; a change of it, remote.sdsys on and set.server go to the verb on the terminal)
+   allow = 'remote.api remote.ssh delete.server remote.sdsys local.sdsys'   ;* the commands this page may run through the routine (remote.api only to report; a change of it, remote.sdsys on and set.server go to the verb on the terminal)
    call $tk_open('tool.remote', 'admin', ctx, err)
    if err # '' then
       display err
@@ -101,6 +110,9 @@ $include tk.h
    call $tk_keys('add', keys, 'n', 'new', 'new', 'Servers', 1)
    call $tk_keys('add', keys, 'o', 'open', 'sdsyson', 'Login', 1)
    call $tk_keys('add', keys, 'f', 'shut', 'sdsysoff', 'Login', 1)
+   call $tk_keys('add', keys, 'u', 'add', 'localadd', 'Login', 1)           ;* RELEASE_1.1 339: the list the cursor is on (Local ssh users or Local API users)
+   call $tk_keys('add', keys, 'x', 'remove', 'localremove', 'Login', 1)
+   call $tk_keys('add', keys, 'c', 'clear', 'localclear', 'Login', 1)
    call $tk_keys('add', keys, 'f5', 'read', 'refresh', '', 1)
    call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
    call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U4: Esc goes back to the doors view first, else opens the menu bar
@@ -111,6 +123,9 @@ $include tk.h
    call $tk_keys('menu', keys, 'new', '&Server', '&New server', '', '')
    call $tk_keys('menu', keys, 'sdsyson', '&Login', '&Open remote administration', '', '')
    call $tk_keys('menu', keys, 'sdsysoff', '&Login', '&Shut remote administration', '', '')
+   call $tk_keys('menu', keys, 'localadd', '&Login', '&Add a local user', '', '')
+   call $tk_keys('menu', keys, 'localremove', '&Login', '&Remove a local user', '', '')
+   call $tk_keys('menu', keys, 'localclear', '&Login', '&Clear a local list', '', '')
    call $tk_keys('menu', keys, 'doors', '&View', '&Doors', '', '')
    call $tk_keys('menu', keys, 'routes', '&View', '&Routes', '', '')
    call $tk_keys('menu', keys, 'servers', '&View', '&Servers', '', '')
@@ -141,6 +156,8 @@ $include tk.h
    unames = '' ; nu = 0
    ugates = ''
    tls.lines = ''
+   loc.out = '' ; loc.names = '' ; loc.show = ''                ;* S.267: what local.sdsys said, the names of each list (1 ssh, 2 API), what each field shows
+   loc.at = 0 ; lsel = 1                                        ;* the row of the first field in the sdsys view, and the field the cursor is on
    ci = 1 ; ta = 0
    gen = 0
    done = 0
@@ -212,6 +229,10 @@ read.all:
    cmd = 'remote.sdsys'
    gosub run.report
    sd.out = rep
+   cmd = 'local.sdsys'                                          ;* RELEASE_1.1 339: both lists, as sd-sdsyslocal.ps1 reports them
+   gosub run.report
+   loc.out = rep
+   gosub parse.local
    call !netdefs('READ', defs, nderr)
    if nderr # '' then defs = ''
    nsrv = dcount(defs, @fm)
@@ -239,6 +260,46 @@ read.all:
    end
    if ci > nrows then ci = nrows
    if ci < 1 then ci = 1
+   if view = 6 then ci = loc.at + lsel - 1                     ;* S.267: the cursor of the sdsys view is always on one of the two fields
+   return
+
+* RELEASE_1.1 339 (Linux S.267).  The two lists from local.sdsys's report, read as sd-sdsyslocal.ps1's fixed words, one line a list: "sdsys local ssh: none
+* listed", "sdsys local ssh: listed <names>" or "sdsys local ssh: unsafe, treated as none listed (...)" (and the same for api).  loc.names<1> and <2> are the
+* names of the ssh and API lists that name.ok accepts (the names X offers), loc.show<1> and <2> what each field shows.  A list with no such line was not read:
+* its field says so, with the first line the verb printed (a session whose helper could not run, the refusal).
+parse.local:
+   loc.names = '' ; loc.show = ''
+   loc.why = ''
+   for k = 1 to dcount(loc.out, @fm)
+      if loc.why = '' and trim(loc.out<k>) # '' then loc.why = trim(loc.out<k>)
+   next k
+   if loc.why = '' then loc.why = 'local.sdsys printed nothing'
+   for lk = 1 to 2
+      pfx = 'sdsys local ' : (if lk = 1 then 'ssh' else 'api') : ': '
+      loc.show<lk> = 'not read: ' : loc.why
+      for k = 1 to dcount(loc.out, @fm)
+         ol = trim(loc.out<k>)
+         if ol[1, len(pfx)] = pfx then
+            rest = ol[len(pfx) + 1, len(ol)]
+            begin case
+               case rest = 'none listed'
+                  loc.show<lk> = 'none listed'
+               case rest[1, 7] = 'listed '
+                  rest = trim(rest[8, len(rest)])
+                  loc.show<lk> = rest
+                  ln.ok = ''
+                  for wn = 1 to dcount(rest, ' ')
+                     word = field(rest, ' ', wn)
+                     gosub name.ok
+                     if nameok then ln.ok := (if ln.ok = '' then '' else ' ') : word
+                  next wn
+                  loc.names<lk> = ln.ok
+               case 1
+                  loc.show<lk> = rest                           ;* unsafe, treated as none listed (...): the helper's own words
+            end case
+         end
+      next k
+   next lk
    return
 
 * cmd is a verb with no keyword (it reports and changes nothing); rep is what it printed, or why it was not run
@@ -323,6 +384,14 @@ build.rows:
          for i = 1 to dcount(sd.out, @fm)
             if trim(sd.out<i>) # '' then rowtxt<-1> = sd.out<i>
          next i
+         * S.267: a blank row, then the two fields of local.sdsys; a field longer than the row ends in ... and the foot box shows the whole list
+         rowtxt<-1> = ''
+         loc.at = dcount(rowtxt, @fm) + 1
+         for lk = 1 to 2
+            lr = (if lk = 1 then 'Local ssh users: ' else 'Local API users: ') : loc.show<lk>
+            if len(lr) > tw then lr = lr[1, tw - 4] : ' ...'
+            rowtxt<-1> = lr
+         next lk
       case 1
          hdr = 'The certificate and public-key lines of SETTINGS.REPORT [api]; the private key is never read'
          for i = 1 to dcount(tls.lines, @fm)
@@ -331,6 +400,7 @@ build.rows:
    end case
    nrows = dcount(rowtxt, @fm)
    if rowtxt = '' then nrows = 0
+   if view = 6 then ci = loc.at + lsel - 1                     ;* S.267: the cursor of the sdsys view is on one of the two fields
    return
 
 * One USER account (i is its place in unames) as a line: the doors it has and what that means
@@ -426,7 +496,7 @@ draw.all:
    if view = 3 then t.list = 'SDNet servers'
    if view = 4 then t.list = 'Connected now'
    if view = 5 then t.list = 'TLS identity of this machine'
-   if view = 6 then t.list = 'Remote administration over ssh (SDRADMIN)'
+   if view = 6 then t.list = 'Remote administration over ssh (SDRADMIN), and SDSYS from this computer'
    screen box at lst.x,lst.y size lst.w,lst.h title t.list
    screen box at det.x,det.y size det.w,det.h title 'About this view'
    gosub draw.top
@@ -442,7 +512,19 @@ draw.top:
    screen text s[1, tw] at tx,top.y + 2 width tw
    s = nsrv : ' SDNet server' : (if nsrv = 1 then '' else 's') : ' defined.   ' : nu : ' user account' : (if nu = 1 then '' else 's') : '.   ' : nsess : ' session' : (if nsess = 1 then '' else 's') : ' now.'
    screen text s at tx,top.y + 3 width tw
-   screen text '1 doors  2 routes  3 servers  4 connected  5 TLS  6 remote admin   doors: A api, S ssh  servers: X delete, N new  remote admin: O open, F shut' at tx,top.y + 4 width tw
+   * RELEASE_1.1 339 (Linux S.267): the views, then only the keys of the view shown (the line had no room left for the remote admin view's U, X and C)
+   s = '1 doors  2 routes  3 servers  4 connected  5 TLS  6 remote admin   '
+   begin case
+      case view = 1
+         s := 'doors: A api, S ssh'
+      case view = 3
+         s := 'servers: X delete, N new'
+      case view = 6
+         s := 'remote admin: O open, F shut  local lists: U add, X remove, C clear'
+      case 1
+         s := 'Ctrl-K the keys'
+   end case
+   screen text s[1, tw] at tx,top.y + 4 width tw
    call $tk_help('mark', mk.x, mk.y, 0, 0)
    return
 
@@ -461,7 +543,7 @@ draw.list:
       s = ''
       if kk <= nrows then s = rowtxt<kk>
       rat = 'normal'
-      if kk = ci and kk <= nrows and view # 1 and view # 5 and view # 6 then rat = 'highlight'
+      if kk = ci and kk <= nrows and view # 1 and view # 5 and (view # 6 or kk >= loc.at) then rat = 'highlight'     ;* S.267: on the sdsys view, the field the cursor is on
       screen text s[1, tw] at tx,lst.y + 1 + r attr rat width tw
    next r
    return
@@ -509,10 +591,15 @@ draw.detail:
          next k
          lines<-1> = k.user : ' user, ' : k.api : ' api, ' : k.sdnet : ' sdnet, ' : k.ph : ' phantom.'
       case view = 6
+         * RELEASE_1.1 339: a list too long for its row is shown whole here first
+         lf = loc.names<lsel>
+         if len(lf) + 30 > tw then lines<-1> = (if lsel = 1 then 'Local ssh users' else 'Local API users') : ', all ' : dcount(lf, ' ') : ': ' : lf
          lines<-1> = 'SDRADMIN may sign in over ssh only when the administrator opens that door, with its password, into a fixed list of account commands; it is never a Windows administrator. It is shut as delivered.'
          lines<-1> = 'Each line is one wall: the account enabled, SDRADMIN in sdssh, the sshd arm, the broker task, the state LOGIN reads. All five open is open; all shut is closed; a mix is inconsistent and names the odd ones.'
          lines<-1> = 'O opens the door (REMOTE.SDSYS ON) after a box that wants the word open typed (in either case): the terminal is given to the verb, which makes SDRADMIN and asks its password the first time. Open it only on a machine whose SDRADMIN password is long and used nowhere else.'
          lines<-1> = 'F shuts the door again (REMOTE.SDSYS OFF) and logs SDRADMIN out. An elevated administrator can do the same from any prompt: remote-admin.ps1 -On or -Off in the SD program folder.'
+         lines<-1> = 'Local ssh users and Local API users are the lists of local.sdsys: the Windows users who may reach SDSYS from this computer, by ssh -t name@localhost sd-sdsys or by a program over the API at 127.0.0.1, each with the SD password of sdsys. Both are empty as delivered.'
+         lines<-1> = 'Up and Down choose a list. U adds a name after a box that wants the name typed again (that user can then become the administrator), X removes one, C clears the list.'
       case 1
          lines<-1> = 'The certificate the API presents, and the hash of its public key: that hash is what another SD server pins in its definition of this machine (SET.SERVER ... pin).'
          lines<-1> = 'Give the public-key hash to the administrator of the other machine by a way you trust. The certificate fingerprint changes when it is renewed; the public-key hash does not.'
@@ -536,6 +623,14 @@ on.key:
    msg = ''
    if len(nm) = 1 and nm >= 'A' and nm <= 'Z' then nm = downcase(nm)
    begin case
+      case view = 6 and (nm = 'up' or nm = 'pgup' or nm = 'home')      ;* S.267: the sdsys view's cursor moves between its two fields only
+         lsel = 1
+         ci = loc.at
+         gosub redraw
+      case view = 6 and (nm = 'down' or nm = 'pgdn' or nm = 'end')
+         lsel = 2
+         ci = loc.at + 1
+         gosub redraw
       case nm = 'up'
          if ci > 1 then ci -= 1
          gosub redraw
@@ -573,6 +668,8 @@ on.key:
          gosub do.new
       case (nm = 'o' or nm = 'f') and view = 6
          gosub do.sdsys
+      case (nm = 'u' or nm = 'x' or nm = 'c') and view = 6
+         gosub do.local
       case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
          call $tk_std('theme', ctx, keys, '', std.r)
          if std.r<1> then gosub draw.all
@@ -633,6 +730,11 @@ on.mouse:
       if mx >= tx and mx <= tx + tw - 1 and my >= lst.y + 2 and my <= lst.y + 1 + VR then
          if ta + my - (lst.y + 1) <= nrows then
             ci = ta + my - (lst.y + 1)
+            if view = 6 then                                ;* S.267: a click on a field chooses it; a click elsewhere leaves the cursor on its field
+               if ci = loc.at + 1 then lsel = 2
+               if ci = loc.at then lsel = 1
+               ci = loc.at + lsel - 1
+            end
             gosub redraw
          end
       end
@@ -664,7 +766,10 @@ confirm.and.run:
          msg = sent[1, 60] : ' ran (status ' : stat : ')'
          lastl = ''
          for k = 1 to dcount(out, @fm)
-            if trim(out<k>) # '' then lastl = trim(out<k>)
+            ol = trim(out<k>)
+            if ol # '' then
+               if field(sent, ' ', 1) # 'local.sdsys' or ol[1, 12] # 'local.sdsys ' then lastl = ol     ;* RELEASE_1.1 339: local.sdsys ends a refusal with 15183; the helper's own line is before it
+            end
          next k
          if lastl # '' then msg = msg : ': ' : lastl
       end
@@ -786,6 +891,80 @@ do.sdsys:
       el<-1> = 'sshd is shut to SDRADMIN, the account is disabled and taken out of sdssh, the broker stops, and every SDRADMIN session is logged out, as delivered.'
       gosub confirm.and.run
    end
+   return
+
+* RELEASE_1.1 339 (Linux S.267).  U, X and C on the remote admin view: the list the cursor is on (lsel 1 the ssh list, 2 the API list).  The
+* sentence is local.sdsys, the list word and the action word, all fixed here, and for U and X a name that name.ok accepted; it runs through the
+* routine after its box.  U opens a way to the administrator, so its box shows what listing the name means (15179 / 15180) and wants the name typed
+* again; X (a name chosen from the list as read) and C tighten, a plain Run / Cancel box.
+do.local:
+   lw = (if lsel = 2 then 'api' else 'ssh')
+   lname = (if lsel = 2 then 'Local API users' else 'Local ssh users')         ;* (not lt: LT is the operator)
+   typed = ''
+   el = ''
+   begin case
+      case nm = 'u'
+         screen ask 'Windows user name to add to ' : lname width 32 value '' title lname returning word then got = 1 else got = 0
+         if not(got) then
+            msg = sysmsg(12826)                                 ;* nothing was run
+            return
+         end
+         word = trim(word)
+         gosub name.ok
+         if not(nameok) then
+            ol = sysmsg(15184, word[1, 40])                     ;* not a Windows user name
+            gosub one.line
+            msg = ol
+            return
+         end
+         sent = 'local.sdsys ' : lw : ' add ' : word : ' no.query'
+         typed = word
+         ol = sysmsg((if lsel = 2 then 15180 else 15179), word)  ;* what listing the name means
+         gosub one.line
+         el<-1> = ol
+         el<-1> = 'That opens a way to the administrator, so the name has to be typed again. The helper checks it too: an existing local Windows user, enabled, not a built-in account, not SDSYS, in sdusers.'
+      case nm = 'x'
+         nl = loc.names<lsel>
+         if nl = '' then
+            msg = lname : ': no name is listed, so there is none to remove'
+            return
+         end
+         its = convert(' ', @vm, nl)
+         screen pick its title 'Remove from ' : lname returning pk else pk = 0
+         if pk < 1 or pk > dcount(its, @vm) then
+            msg = sysmsg(12826)                                 ;* nothing was run
+            return
+         end
+         word = its<1, pk>
+         gosub name.ok
+         if not(nameok) then
+            msg = sysmsg(12826)
+            return
+         end
+         sent = 'local.sdsys ' : lw : ' remove ' : word
+         el<-1> = word : ' is taken off ' : lname : ': that way to the administrator is closed for that user. This tightens; nothing is opened.'
+      case 1
+         sent = 'local.sdsys ' : lw : ' clear'
+         el<-1> = 'Every name is taken off ' : lname : ' and the file of the list is removed: nobody reaches SDSYS that way from this computer, as delivered. This tightens; nothing is opened.'
+   end case
+   gosub confirm.and.run
+   return
+
+* RELEASE_1.1 339.  Is word a Windows user name as local.sdsys takes it (message 15184): 1 to 20 characters, no space, no control character and none
+* of the characters Windows forbids in a user name?  nameok is 1 or 0.  An apostrophe passes here; the sentence is a TCL line and local.sdsys
+* doubles it inside the helper's quoted argument.
+name.ok:
+   nameok = (word # '' and len(word) <= 20)
+   for ni = 1 to len(word)
+      nc = word[ni, 1]
+      if seq(nc) < 33 or seq(nc) = 127 then nameok = 0
+      if index('"/\[]:;|=,+*?<>@', nc, 1) then nameok = 0
+   next ni
+   return
+
+* A message as one line for the status bar or the box: its line breaks are spaces
+one.line:
+   ol = trim(convert(char(10) : char(13) : @fm, '   ', ol))
    return
 
 * X: forget the server under the cursor

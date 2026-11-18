@@ -1,0 +1,1 @@
+Listing %1 lets that user, from any session of theirs on this computer - one\nthey reached over the network included - become the administrator with the\nSD password of sdsys (ssh -t %1@localhost sd-sdsys).

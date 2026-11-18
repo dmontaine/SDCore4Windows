@@ -1956,6 +1956,13 @@ def main():
                    # assert-current's $neverShipped list.  Its unit test
                    # (test-sdsysapi-units.py) does not.
                    'sd-sdsysapi.ps1',
+                   # 18 Nov 26 - RELEASE_1.1 339 (Linux S.267's sd-elevate
+                   # sdsys-local): LOCAL.SDSYS and tool.remote write the two
+                   # local SDSYS lists into <ProgramData>\SD\sd-tls through it,
+                   # as SDSYS's elevated helper.  It SHIPS - do NOT add it to
+                   # assert-current's $neverShipped list.  Its unit test
+                   # (test-localsdsys-units.py) does not.
+                   'sd-sdsyslocal.ps1',
                    # 13 Nov 26 - RELEASE_1.1 281: the task folder \SD's one rule,
                    # dot-sourced by remote-admin.ps1, sd-jobs.ps1 and
                    # finish-install.ps1.  It SHIPS - do NOT add it to

@@ -1,0 +1,177 @@
+* LOCALSDSYS
+* LOCAL.SDSYS verb
+* Copyright (c) 2026, SD Core for Windows.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Nov 26 Windows port - New.  RELEASE_1.1 339, from Linux 38cfb301 (S.267; owner, 17 Nov 2026: "I actually like sdsys over ssh locally
+*               as that allows the admin to access sdsys without having to go through switching logins and back.  If could be be restricted
+*               to only usernames listed in a text field rather than a gate"; "It will need two fields ... on for a list of users who have
+*               local access through ssh and the other for local access through api.  Again delivered with that access off and the admin can
+*               decide if he wants to open up that capability"; 18 Nov: "Yes, build it").  Linux's words, syntax and audit line; the helper is
+*               gplbld/sd-sdsyslocal.ps1 through SDSYS's elevated helper (!ps_script_out) in place of "sudo -n sd-elevate sdsys-local", and a
+*               name is a Windows user name (Linux mail 2026-11-18T0745, Q5).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    LOCAL.SDSYS
+*    LOCAL.SDSYS {SSH | API}
+*    LOCAL.SDSYS {SSH | API} ADD user {NO.QUERY}
+*    LOCAL.SDSYS {SSH | API} REMOVE user
+*    LOCAL.SDSYS {SSH | API} CLEAR
+*
+*    The two lists of Windows users who may reach SDSYS FROM THIS COMPUTER, both empty as delivered:
+*       SSH   a listed user's ssh login from this computer (ssh -t user@localhost sd-sdsys) is started as the SDSYS Windows account by the SD
+*             service and becomes the administrator after the SD password of sdsys is typed (LOGIN);
+*       API   a listed user's program on this computer may sign in as sdsys over the API at 127.0.0.1 with the SD password of sdsys (APISRVR).
+*    ADD says once what listing the name means and asks, unless NO.QUERY is given; REMOVE and CLEAR tighten, so nothing is asked.  With no
+*    keyword the state of both lists is printed (SSH or API alone prints that one) and nothing changes.
+*
+*    ADMINISTRATOR ONLY.  The words are lower case whatever was typed; a user name is checked here, character by character, before it is put on
+*    the helper's command line (Windows' rule: 1 to 20 characters, no space, no control character, none of " / \ [ ] : ; | = , + * ? < > @), and
+*    the helper checks it again - an existing local Windows account, enabled, RID 1000 or more, not SDSYS or one of SD's or Windows' own
+*    accounts, in sdusers - and its refusal is shown as it is.  One audit line per change: local.sdsys <ssh|api> <add|remove|clear>
+*    {user=<name>} status=ok|refused.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $local.sdsys
+$catalog $localsdsys
+
+$include keys.h
+$include int$keys.h
+$include err.h
+
+deffun ps_script_out(script, want.out) calling '!ps_script_out'
+
+   prompt ''
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
+
+* The words are read from the sentence as plain words, lower case: a Windows user name is found case-blind by the helper, which stores it in the
+* account's own spelling.
+   words = downcase(trim(@sentence))
+   convert ' ' to @fm in words
+   nwords = dcount(words, @fm)
+
+   if nwords < 2 then
+      list.kind = 'ssh' ; gosub list.status
+      list.kind = 'api' ; gosub list.status
+      stop
+   end
+
+   list.kind = words<2>
+   if list.kind # 'ssh' and list.kind # 'api' then
+      @system.return.code = -ER$ARGS
+      stop sysmsg(15178)  ;* the syntax
+   end
+   if nwords = 2 then
+      gosub list.status
+      stop
+   end
+
+   action = words<3>
+   uname = words<4>
+   no.query = @false
+   begin case
+      case action = 'add'
+         if nwords = 5 and words<5> = 'no.query' then
+            no.query = @true
+         end else
+            if nwords # 4 then
+               @system.return.code = -ER$ARGS
+               stop sysmsg(15178)
+            end
+         end
+      case action = 'remove'
+         if nwords # 4 then
+            @system.return.code = -ER$ARGS
+            stop sysmsg(15178)
+         end
+      case action = 'clear'
+         if nwords # 3 then
+            @system.return.code = -ER$ARGS
+            stop sysmsg(15178)
+         end
+      case 1
+         @system.return.code = -ER$ARGS
+         stop sysmsg(15178)
+   end case
+
+* Only what a Windows user name may hold, so nothing else can reach the PowerShell line: 1 to 20 characters, none of them a control character,
+* a space or one Windows forbids in a user name.  An apostrophe is allowed by Windows; it is doubled inside the quoted argument below.
+   if action # 'clear' then
+      chk = uname
+      convert '"/\[]:;|=,+*?<>@' to '' in chk
+      bad = (len(uname) < 1 or len(uname) > 20 or chk # uname)
+      for i = 1 to len(uname)
+         c = seq(uname[i, 1])
+         if c < 33 or c = 127 then bad = @true
+      next i
+      if bad then
+         @system.return.code = -ER$ARGS
+         stop sysmsg(15184, uname)  ;* not a Windows user name
+      end
+   end
+
+* ADD says what it opens and asks first (an empty answer, or an input that has ended, is no).
+   if action = 'add' then
+      if list.kind = 'ssh' then crt sysmsg(15179, uname) else crt sysmsg(15180, uname)
+      if not(no.query) then
+         display sysmsg(15181, uname, list.kind) : ' ' :
+         input answer
+         if downcase(trim(answer)) # 'y' then
+            crt sysmsg(15182, uname)  ;* nothing was changed
+            @system.return.code = 0
+            stop
+         end
+      end
+   end
+
+* The helper's words go straight to the terminal.
+   helper.args = '-List ' : list.kind : ' -Action ' : action
+   if action # 'clear' then helper.args := ' -Name ' : char(39) : change(uname, char(39), char(39) : char(39)) : char(39)
+   gosub run.helper
+   if rc # 0 then
+      crt sysmsg(15183, list.kind : ' ' : action, rc)
+      outcome = 'refused'
+   end else
+      outcome = 'ok'
+   end
+   void kernel(K$AUDIT, 'local.sdsys ' : list.kind : ' ' : action : (if action = 'clear' then '' else ' user=' : uname) : ' status=' : outcome)
+
+   @system.return.code = (if rc = 0 then 0 else -ER$FAILED)
+   stop
+
+* One list as the helper reports it ("sdsys local ssh: none listed", "... listed <names>").  Nothing is changed.
+list.status:
+   helper.args = '-List ' : list.kind : ' -Action status'
+   gosub run.helper
+   if rc # 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(15183, list.kind : ' status', rc)
+   end
+   return
+
+* RUN.HELPER - sd-sdsyslocal.ps1 with helper.args, through SDSYS's elevated helper (!ps_script_out brings the output back; with no helper,
+* as in a session started by the SD service, the session's own elevated process runs it).  Sets rc and shows the helper's lines.
+run.helper:
+   q = char(39)
+   hcmd = '& ' : q : kernel(K$WINPATH, '/sd-sdsyslocal.ps1') : q : ' ' : helper.args
+   both = ps_script_out(hcmd : @fm : 'exit $LASTEXITCODE', @true)
+   rc = field(both, @fm, 1)
+   helper.out = field(both, @fm, 2, 99999)
+   for i = 1 to dcount(helper.out, @fm)
+      if helper.out<i> # '' then crt helper.out<i>
+   next i
+   return
+
+end
+
+* END-CODE

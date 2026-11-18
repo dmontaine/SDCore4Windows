@@ -67,6 +67,10 @@ ALLOWED = {
     ('11930', '12935'): 'OS: a Windows file\'s rights are its access list, not chmod modes; the cure names the principals win32gcat.c judges (RELEASE_1.1 249)',
     # 17 Nov 26: ('11979', '10087') taken off - since Linux 0d2ac6f8 the pair no longer differs.
     ('14170', '15170'): 'OS: the account\'s Windows user, not a Linux user - the same sentence with the operating system\'s name (Linux 1557e270)',
+    # 18 Nov 2026 (RELEASE_1.1 339, Linux S.267, the words Linux accepted in mail 2026-11-18T0745): the API list's transport and the name rule.
+    ('14178', '15178'): 'OS: the API list is for programs at 127.0.0.1 (Windows has no Unix socket of the API); otherwise Linux\'s syntax and words (RELEASE_1.1 339, Linux T0745)',
+    ('14180', '15180'): 'OS: "over the API at 127.0.0.1" for Linux\'s "over the Unix socket of the API"; otherwise Linux\'s sentence (RELEASE_1.1 339, Linux T0745)',
+    ('14184', '15184'): 'OS: a Windows user name\'s rule (1 to 20 characters, the characters Windows forbids), Linux T0745 Q5; Linux states its own rule (RELEASE_1.1 339)',
 }
 
 MSG = re.compile(r'\b1[0-5]\d{3}\b')
