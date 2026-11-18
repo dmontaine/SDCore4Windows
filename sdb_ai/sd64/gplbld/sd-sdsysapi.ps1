@@ -32,6 +32,8 @@
 #
 # START-HISTORY:
 # 16 Nov 26 Windows port - written for RELEASE_1.1 331 (Linux S.256).
+# 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux T0745 Q7): an entry that is or holds a loopback address is refused ("a loopback address is
+#           this computer, which only local.sdsys api lists: X"); the report names one already in the file as not used.  "any" stays.
 # END-HISTORY
 
 param(
@@ -162,7 +164,29 @@ function ConvertTo-Network([string]$e) {
         if ($plen -eq 0) { Refuse ('a /0 range is every address, and is refused: ' + $e) }
     }
     if ($v6) { $text = Format-V6 $net } else { $text = ($net -join '.') }
+    # 18 Nov 26 (RELEASE_1.1 339, Linux T0745 Q7): this computer's own loopback is never on this list - APISRVR does not read the list for a
+    # loopback peer (local.sdsys api is that way in), so an entry that is or holds 127.0.0.0/8 or ::1 would say something that is not done.
+    if (Test-HoldsLoopback ($text + '/' + $plen)) { Refuse ('a loopback address is this computer, which only local.sdsys api lists: ' + $e) }
     return ($text + '/' + $plen)
+}
+
+# 18 Nov 26 (RELEASE_1.1 339): $true when a standard-form entry ("a.b.c.d/n" or "v6/n") is, or contains, a loopback address: for IPv4 when
+# its first min(n, 8) bits are 127's; for IPv6 when its first n bits are ::1's.
+function Test-HoldsLoopback([string]$entry) {
+    $parts = $entry.Split('/')
+    if ($parts.Count -ne 2) { return $false }
+    $plen = [int]$parts[1]
+    if ($parts[0].Contains(':')) {
+        $a = ConvertFrom-V6 $parts[0]
+        if ($null -eq $a) { return $false }
+        $one = New-Object byte[] 16
+        $one[15] = 1
+        return ((Get-Bits $a).Substring(0, $plen) -eq (Get-Bits $one).Substring(0, $plen))
+    }
+    $a = ConvertFrom-V4 $parts[0]
+    if ($null -eq $a) { return $false }
+    $k = [Math]::Min($plen, 8)
+    return ((Get-Bits $a).Substring(0, $k) -eq (Get-Bits ([byte[]](127, 0, 0, 0))).Substring(0, $k))
 }
 
 # ---------------------------------------------------------------- the place
@@ -213,6 +237,13 @@ switch ($Action) {
             }
         }
         Say ('sdsys over the API from other computers: ' + $state)
+        if ($state -ne 'off') {
+            foreach ($x in $list) {
+                if ($x -ne 'any' -and (Test-HoldsLoopback $x)) {
+                    Say ("a loopback entry ($x) is in the list and is not used: local.sdsys api is the way from this computer")
+                }
+            }
+        }
         exit 0
     }
     'off' {

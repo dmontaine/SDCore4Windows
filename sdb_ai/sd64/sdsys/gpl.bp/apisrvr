@@ -19,6 +19,9 @@
 *
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): SCRAM as sdsys from a loopback peer is never matched against remote.sdsys api's
+*           list or its "any"; it is admitted only for a program of a user on sd-tls\sdsys-local-api (K$SDSYS.LOCAL 'peer' / 'api', read
+*           from what the front recorded at accept), audited "from=this machine user=<name>", refused otherwise with 12992.
 * 17 Nov 26 Windows port - four-version audit round 3 (P-4639, P-4911): SrvrAccount's group refusal is one block, as Linux's
 *           (group.lookup.failed or not.in.group, then 10003); the same refusals and audit lines as before.
 * 18 Nov 26 Windows port - four-version audit round 2 (P-1274, P-5463, P-5465 to P-5467), as Linux S.62: SrvrAccount clears acc.rec
@@ -2315,7 +2318,34 @@ vb.scram.final:
                   server.error = SV$ON.ERROR
                   goto exit.vb.scram.fail
                end
-               if downcase(scram.user) = 'sdsys' then
+               api.loop = downcase(trim(system(42)))
+               if api.loop[1,7] = '::ffff:' and index(api.loop, '.', 1) then api.loop = api.loop[8,999]
+               if downcase(scram.user) = 'sdsys' and (field(api.loop, '.', 1) = '127' or api.loop = '::1') then
+* 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267; T0745 Q6-Q8).  A LISTED USER'S PROGRAM ON THIS COMPUTER (owner, 17 Nov 2026: "the
+*   other for local access through api.  Again delivered with that access off").  A loopback peer is this computer, so it is NEVER matched
+*   against remote.sdsys api's addresses or its "any" (a 127.0.0.1 line already there is not used: Q7); it is admitted only when the program
+*   this process's front named at accept (linuxio.c sdl_peer_record: the TCP table's owner, opened first, older than the connection, its
+*   logon that user's own) is a user on the administrator-only list sd-tls\sdsys-local-api (local.sdsys api add; absent, so empty, as
+*   delivered) that may still be listed.  SCRAM has already proved the SD password of sdsys; nothing more is asked.  The grant is audited
+*   after the handover as "elevation granted reason=sdsys api from=this machine user=<name>" (Linux's words).  Anything else is refused
+*   with 12992; a list in use adds the kernel's reason word to the reason.
+                  api.peer.addr = system(42)
+                  api.local.user = kernel(K$SDSYS.LOCAL, 'peer')
+                  api.local.why = ''
+                  if kernel(K$SDSYS.LOCAL, 'api' : @fm : (if api.local.user = '' then '-' else api.local.user)) = 1 then
+                     sdsys.api.from = 'this machine user=' : api.local.user
+                     api.in.sdapi = @true
+                     api.route.stat = 0
+                  end else
+                     api.local.word = kernel(K$SDSYS.LOCAL, 1)
+                     if api.local.word # 'list-empty' then api.local.why = ' why=' : api.local.word
+                     scram.refuse.reason = 'sdsys api from this machine by ' : (if api.local.user = '' then 'a program not named' else api.local.user) : ', not listed by local.sdsys api' : api.local.why
+                     abort.message = sysmsg(12992)
+                     * SDSYS may use the API from this computer only from a program of a user listed with local.sdsys api
+                     server.error = SV$ON.ERROR
+                     goto exit.vb.scram.fail
+                  end
+               end else if downcase(scram.user) = 'sdsys' then
                   api.peer.addr = system(42)
                   gosub read.sdsys.api
                   if not(sdsys.api.on) then

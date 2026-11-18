@@ -81,6 +81,7 @@ reccache
 sd_encrypt_sodium
 sd_jobmark
 sd_sftp
+sd_sdsysask
 sd_keyring
 sd_scram
 sd_tls
@@ -102,6 +103,8 @@ win32vt
 win32session
 win32group
 win32jobmark
+win32localsdsys
+win32sdsysask
 win32gcat
 win32ai
 win32trace

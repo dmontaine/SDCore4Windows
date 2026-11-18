@@ -81,7 +81,9 @@ COMP     := gcc
 #   (0xC0000142, measured b190).  Its ConvertStringSidToSid and
 #   LookupAccountSid halves are advapi32, already above.
 OPENSSL_LIBS ?= -lssl -lcrypto
-L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32 -lsecur32 -luserenv -lnetapi32 $(OPENSSL_LIBS)
+# 18 Nov 26 Windows port - RELEASE_1.1 339: -liphlpapi (the TCP table) and -lwevtapi (sshd's own record in OpenSSH/Operational) for
+#           win32localsdsys.c, which the SD service links too (below).
+L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32 -lsecur32 -luserenv -lnetapi32 -liphlpapi -lwevtapi $(OPENSSL_LIBS)
 
 RM       := rm
 
@@ -350,12 +352,14 @@ SVCDIR   := $(GPLSRC)sdsvc
 # child, sdrunin.c, with the S4U logon of win32s4ulogon.c (the same file sd.exe
 # links; it takes no MSYS2 header).  -lsecur32 for LsaLogonUser, -lbcrypt for
 # BCryptGenRandom (the store's and the child pipe's names).
+# 18 Nov 26 Windows port - RELEASE_1.1 339: and it is the door of "ssh -t
+# <user>@localhost sd-sdsys", sdsyslocal.c (pseudo console: kernel32, no new lib).
 sdsvc:
 	@echo Building native service wrapper
 	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 \
 	    $(SVCDIR)/sdsvc.c $(SVCDIR)/sdaudit.c $(GPLSRC)win32audit.c \
-	    $(SVCDIR)/sdrunin.c $(GPLSRC)win32s4ulogon.c -lsecur32 -lbcrypt \
-	    -ladvapi32 -luserenv -o $(GPLBIN)sdsvc.exe
+	    $(SVCDIR)/sdrunin.c $(SVCDIR)/sdsyslocal.c $(GPLSRC)win32s4ulogon.c $(GPLSRC)win32localsdsys.c -lsecur32 -lbcrypt \
+	    -ladvapi32 -luserenv -lnetapi32 -liphlpapi -lwevtapi -o $(GPLBIN)sdsvc.exe
 
 # 16 Sep 26 Windows port - RELEASE_1.1 43: THE API's TLS RELAY IS NATIVE, AND
 # FOR A REASON THAT IS MEASURED RATHER THAN CHOSEN.  sd starts one per

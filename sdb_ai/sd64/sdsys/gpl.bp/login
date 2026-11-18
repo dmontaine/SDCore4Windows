@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): an SDSYS session that would be refused because it is not elevated at a desktop is
+*           first asked whether the SD service started it for a listed user's ssh login (kernel(K$SDSYS.LOCAL)); if so the SD password of
+*           sdsys is asked once and the SDSYS case grants (audit "elevation granted reason=sdsys local ssh user=<name>", notice 15177) or it
+*           is refused (15175, 15176).  The refusal's audit reason gains " why=<reason>" only while the ssh list is in use (sdsys.local).
 * 18 Nov 26 Windows port - four-version audit round 5 (Solo's P-8161, kept the same here): gate.ok is no longer set at the top;
 *           internal.gate sets it and it is read only after that gosub.  BCOMP's 2825 is for a variable assigned nowhere
 *           (bcomp:1797), so the reason recorded for the line (RELEASE_1.1 82) did not hold.
@@ -690,6 +694,20 @@ deffun radmin_open(arg) calling '!radmin_open'
    job.name = ''
    if upcase(@logname) = 'SDSYS' then job.name = kernel(K$JOB.MARK, 0)
 
+* 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267, CPROC's sdsys.local; owner, 17-18 Nov 2026).  An SDSYS session that would be refused
+*   because it is not elevated at a desktop (the case 1 refusal below) is first asked whether the SD service started it for a listed user's
+*   ssh login from this computer; see sdsys.local.  Granted, the SDSYS case below takes it; refused there, it ends here.
+   lsd.state = ''
+   lsd.why = ''
+   lsd.user = ''
+   if upcase(@logname) = 'SDSYS' and not(kernel(K$ADMINISTRATOR, -1)) and job.name = '' then
+      gosub sdsys.local
+      if lsd.state = 'refused' then
+         initial.account = 'sdsys'
+         goto terminate.connection
+      end
+   end
+
    begin case
 * 13 Nov 26 Windows port - RELEASE_1.1 253(b).  RUN.IN'S DEBUGGED CHILD enters the account the SD service named, and only if its token holds that
 *   account's own group and sdusers - which only the service could have put there (an S4U logon with groups needs SeTcb).  No administrator flag.
@@ -915,7 +933,7 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   is the process-start elevation seed and remains the second half - elevation
 *   is immutable, so it still answers correctly after a logto, which is why the
 *   case kept it and :695 uses it for the internal route too.
-      case upcase(@logname) = 'SDSYS' and (kernel(K$ADMINISTRATOR, -1) or job.name # '')
+      case upcase(@logname) = 'SDSYS' and (kernel(K$ADMINISTRATOR, -1) or job.name # '' or lsd.state = 'granted')
          initial.account = 'sdsys'
 
          read acc.rec from acc.f, initial.account else
@@ -926,7 +944,8 @@ deffun radmin_open(arg) calling '!radmin_open'
 
 *        10 Nov 26 Windows port - S.102 stage 3: a job has no desktop to show UAC on and its token is already elevated (K$JOB.MARK
 *        requires it), so it does not start or register with the per-user elevation helper.
-         if job.name = '' then
+*        18 Nov 26 (RELEASE_1.1 339): nor does the SD service's session for a listed user's ssh login - no desktop either (DESIGN.md F8).
+         if job.name = '' and lsd.state # 'granted' then
             if elevate('START', '') # 0 then
                display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
                audit.reason = 'elevation refused or unavailable'
@@ -957,7 +976,7 @@ deffun radmin_open(arg) calling '!radmin_open'
          if upcase(@logname) = 'SDSYS' and not(kernel(K$ADMINISTRATOR, -1)) then
             display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
             initial.account = 'sdsys'     ;* 18 Nov 26 (audit round 2, P-3368): terminate.connection names initial.account, as Linux
-            audit.reason = 'SDSYS requires an elevated session'
+            audit.reason = 'SDSYS requires an elevated session' : lsd.why   ;* RELEASE_1.1 339: " why=<word>" only while the ssh list has names
             goto terminate.connection
          end
 
@@ -1178,6 +1197,8 @@ deffun radmin_open(arg) calling '!radmin_open'
 *     10 Nov 26 Windows port - S.102 stage 3: a job's grant says so (Linux's wording); every line of its run ends " job=<name>" (k_error.c).
       if job.name # '' then
          void kernel(K$AUDIT, 'elevation granted account=SDSYS reason=scheduled job')
+      end else if lsd.state = 'granted' then
+         void kernel(K$AUDIT, 'elevation granted reason=sdsys local ssh user=' : lsd.user)   ;* RELEASE_1.1 339: Linux's line
       end else
          void kernel(K$AUDIT, 'elevation granted account=SDSYS')
       end
@@ -1192,7 +1213,11 @@ deffun radmin_open(arg) calling '!radmin_open'
       if kernel(K$TTY, 0) # '' and not(bitand(kernel(K$COMMAND.OPTIONS, 0), CMD.QUIET)) then
          crt
          crt str('-', 79)
-         display sysmsg(12012) ;* SD administration granted: this session is the SDSYS Windows account, elevated
+         if lsd.state = 'granted' then
+            display sysmsg(15177, lsd.user) ;* ... reached from the ssh login of %1 on this computer (RELEASE_1.1 339)
+         end else
+            display sysmsg(12012) ;* SD administration granted: this session is the SDSYS Windows account, elevated
+         end
          crt str('-', 79)
          crt
       end
@@ -1489,6 +1514,77 @@ deffun radmin_open(arg) calling '!radmin_open'
    end
 
    ok = @true
+   return
+
+* 18 Nov 26 Windows port - RELEASE_1.1 339.  SDSYS REACHED FROM THIS COMPUTER BY A LISTED USER (Linux S.267, CPROC's sdsys.local, in its order
+*   and words; owner, 17 Nov 2026: "I actually like sdsys over ssh locally as that allows the admin to access sdsys without having to go
+*   through switching logins and back.  If could be be restricted to only usernames listed in a text field rather than a gate"; 18 Nov:
+*   "Yes, build it").  The kernel answers, from the operating system alone, the Windows user behind this session when the SD service
+*   started this sd as SDSYS for that user's ssh login from this computer and the user is on the administrator-only list sd-tls\sdsys-local-ssh
+*   (local.sdsys ssh add; absent, so empty, as delivered) - the questions the service asked before it started anything, asked again here.
+*   A phantom, or a session with no terminal, is not asked (Linux 044271af).  Then the SD password of sdsys, ONCE (an input that ends is an
+*   empty password, so a refusal, never a loop), checked by !CRED_VERIFY; no credential, or a wrong one, refuses with its own message and
+*   audit line.  The grant itself is the SDSYS case's (kernel(K$ADMINISTRATOR, 1), then the audit line "elevation granted reason=sdsys local
+*   ssh user=<name>", then 15177).  lsd.state: granted, refused or '' (not this case: the caller's refusal stands, and lsd.why adds
+*   " why=<reason word>" to its audit reason only when the list is in use, so an install that never lists anybody writes exactly the line it
+*   always did).
+sdsys.local:
+   lsd.state = ''
+   lsd.why = ''
+   lsd.user = kernel(K$SDSYS.LOCAL, 0)
+   if lsd.user = '' then
+      lsd.word = kernel(K$SDSYS.LOCAL, 1)
+      if lsd.word # 'list-empty' then lsd.why = ' why=' : lsd.word
+      return
+   end
+
+   if is.phantom or kernel(K$TTY, 0) = '' then
+      lsd.why = ' why=no-terminal'
+      return
+   end
+
+   lsd.has.cred = @false
+   openpath @sdsys:@ds:'$cred' to lsd.cred.f then
+      read lsd.cred.rec from lsd.cred.f, 'sdsys' then
+         if lsd.cred.rec<CRED$VERSION> = SCRAM$CRED.VERSION and lsd.cred.rec<CRED$STOREDKEY> # '' then lsd.has.cred = @true
+      end
+      close lsd.cred.f
+   end
+   lsd.cred.rec = ''
+   if not(lsd.has.cred) then
+      lsd.msg = sysmsg(15176)
+      loop
+         display remove(lsd.msg, lsd.more)
+      while lsd.more
+      repeat
+      void kernel(K$AUDIT, 'elevation refused reason=sdsys local ssh no credential user=' : lsd.user)
+      audit.reason = 'sdsys local ssh no credential'
+      lsd.state = 'refused'
+      return
+   end
+
+   display 'SD password of sdsys: ' :
+   input lsd.pw hidden
+   display
+   lsd.ok = @false
+   call !CRED_VERIFY('sdsys', lsd.pw, lsd.ok)
+   lsd.pw = ''
+   if not(lsd.ok) then
+      lsd.msg = sysmsg(15175)
+      loop
+         display remove(lsd.msg, lsd.more)
+      while lsd.more
+      repeat
+      void kernel(K$AUDIT, 'elevation refused reason=sdsys local ssh wrong password user=' : lsd.user)
+      audit.reason = 'sdsys local ssh wrong password'
+*     The wait comes AFTER the record, as the API's refused login has it (APISRVR, S.60): PWDELAY seconds, 3 unless sd.conf says otherwise.
+      lsd.delay = config('PWDELAY')
+      if lsd.delay > 0 then sleep lsd.delay
+      lsd.state = 'refused'
+      return
+   end
+
+   lsd.state = 'granted'
    return
 
 terminate.connection:

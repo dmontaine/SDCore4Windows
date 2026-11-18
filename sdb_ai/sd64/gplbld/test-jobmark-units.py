@@ -181,7 +181,7 @@ def text_rows():
     code = "\n".join(l for l in lgn.split("\n") if not l.lstrip().startswith("*"))
     rows.append(("TEXT: LOGIN asks K$JOB.MARK once, only of an SDSYS login, and the SDSYS case admits on the mark; the grant says reason=scheduled job only for a job",
                  code.count("kernel(K$JOB.MARK, 0)") == 1 and "if upcase(@logname) = 'SDSYS' then job.name = kernel(K$JOB.MARK, 0)" in code
-                 and "case upcase(@logname) = 'SDSYS' and (kernel(K$ADMINISTRATOR, -1) or job.name # '')" in code
+                 and "case upcase(@logname) = 'SDSYS' and (kernel(K$ADMINISTRATOR, -1) or job.name # '' or lsd.state = 'granted')" in code   # 18 Nov 26: RELEASE_1.1 339's local door
                  and re.search(r"if job.name # '' then\s*\n\s*void kernel\(K\$AUDIT, 'elevation granted account=SDSYS reason=scheduled job'\)", code) is not None, ""))
     return rows
 

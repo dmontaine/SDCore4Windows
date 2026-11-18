@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): K_SDSYS_LOCAL (175), SDSYS reached from this computer by a listed user.
  * 17 Nov 26 Windows port - four-version audit round 1, owner's answer 5a: SKT_INFO_TRACE (10) is carried from Linux 400500c.
  *           (P-1969) K_OS_ADMINISTRATOR (63) is retired: nothing asked it; 63 stays reserved.
  * 17 Nov 26 Windows port - four-version audit round 1 (P-3078 to P-3081): K_WINSIZE and K_SH..K_PATH_IN before K_SET_ACCOUNT, and
@@ -583,6 +584,13 @@
    (win32jobmark.c win32_sdsys_desktop_ok()); 0 otherwise.  Read-only, any program may ask.  CPROC's LOGTO SDSYS asks it: the way back to
    SDSYS for the session that came from there, which Linux answers with K$ADMINISTRATOR (kept across LOGTO there, cleared here). */
 #define K_OS_SDSYS_USER      174
+/* 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267, 38cfb301; the same number).  kernel(K$SDSYS.LOCAL, 0) answers the Windows user
+   behind this session when it is a listed user's ssh login from this computer reaching SDSYS: the SD service started this sd as SDSYS
+   ("sd -SDSYSLOCAL <pid>", sdsyslocal_claim) and the process asks every question again itself (win32localsdsys.c sdl_ssh_self), or '';
+   1: the reason word of the last ''; 'api' : @fm : user: 1 when the API's recorded loopback peer is that user and on the local API list
+   (sdl_api_listed), else 0; 'peer' (Windows only: no socket credential): the recorded loopback peer's user name, or ''.  Answers only,
+   never a grant.  GPL.BP/INT$KEYS.H carries the same number. */
+#define K_SDSYS_LOCAL        175
 /* 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug (win32runin.h).  WINDOWS ONLY, in the gap after the Windows-only
    58-68 that Linux leaves free (its 90 and 91 are above it):
      K_RUNIN_CHILD  for run.in's debugged child (sd -RUNIN, its token checked by sd.c runin_door()): account <FM> store <FM> the

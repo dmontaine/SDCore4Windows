@@ -13,6 +13,8 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 18 Nov 26 Windows port - RELEASE_1.1 339: the service is the door of "ssh -t <user>@localhost sd-sdsys" (sdsyslocal.c, pipe
+ *           SDL_PIPE); started beside run.in's and stopped with it.
  * 15 Nov 26 Windows port - RELEASE_1.1 295: each of the three self-stops sets its own service-specific exit code (1 no start, 2 the daemon
  *           never came up, 3 the daemon went away), named in sdsvc.log too.
  * 13 Nov 26 Windows port - RELEASE_1.1 253(b): the service starts run.in's debugged child for an elevated administrator
@@ -132,6 +134,8 @@
 #include <userenv.h>
 #include "../win32runin.h"
 #include "sdrunin.h" /* 13 Nov 26 - run.in's debugged child, RELEASE_1.1 253(b) */
+#include "../win32localsdsys.h"
+#include "sdsyslocal.h" /* 18 Nov 26 - "ssh -t <user>@localhost sd-sdsys", RELEASE_1.1 339 */
 
 #define SVC_NAME "SD"
 #define SDWIND_EXE "sdwind.exe"
@@ -653,6 +657,25 @@ static void svc_runin_start(void) {
   (void)sdrunin_start(SD_RUNIN_PIPE, sysdir, base, exe, svc_log);
 }
 
+/* ======================================================================
+   The door of "ssh -t <user>@localhost sd-sdsys".
+
+   18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267: sd-elevate sdsys-session, the root door).  A listed user's ssh login
+   from this computer asks here for an SDSYS session; sdsyslocal.c asks the operating system every question about the asking
+   process (win32localsdsys.c) and only then logs SDSYS on by S4U and starts "sd.exe -SDSYSLOCAL <pid>" in a pseudo console.
+   The lists are empty as delivered, so as delivered every asker is refused.  NOTHING HERE IS FATAL, as for run.in's: without
+   it sd-sdsys is refused, and everything else in SD runs.                                                                    */
+
+static void svc_sdsyslocal_start(void) {
+  char exe[MAX_PATH];
+
+  if (!sd_exe_path(exe, sizeof(exe))) {
+    svc_log("sdsys local: not started - sd.exe could not be found");
+    return;
+  }
+  (void)sdsyslocal_start(SDL_PIPE, exe, svc_log);
+}
+
 static void WINAPI svc_ctrl(DWORD ctrl) {
   switch (ctrl) {
     case SERVICE_CONTROL_STOP:
@@ -721,6 +744,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
   /* 13 Nov 26 - the audit writer, before SD: see svc_audit_start(). */
   svc_audit_start();
   svc_runin_start(); /* 13 Nov 26 - RELEASE_1.1 253(b): see svc_runin_start() */
+  svc_sdsyslocal_start(); /* 18 Nov 26 - RELEASE_1.1 339: see svc_sdsyslocal_start() */
 
   /* A NON-ZERO EXIT IS NOT ALWAYS A FAILURE.  "sd -start" exits 1 when SD is
      already running, which at boot means somebody started it by hand first -
@@ -732,6 +756,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
             (unsigned long)GetLastError(), SVC_EXIT_NO_START);
     sdaudit_stop();
     sdrunin_stop();
+    sdsyslocal_stop();
     svc_status.dwServiceSpecificExitCode = SVC_EXIT_NO_START;
     report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
     return;
@@ -779,6 +804,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
 
     sdaudit_stop();
     sdrunin_stop();
+    sdsyslocal_stop();
     svc_status.dwServiceSpecificExitCode = SVC_EXIT_DAEMON_NEVER_UP;
     report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
     return;
@@ -816,6 +842,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
 
       sdaudit_stop();
       sdrunin_stop();
+      sdsyslocal_stop();
       svc_status.dwServiceSpecificExitCode = SVC_EXIT_DAEMON_GONE;
       report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
       CloseHandle(svc_stop_event);
@@ -832,6 +859,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
   svc_log("service stopping: \"sd -stop\" exited with %lu", (unsigned long)rc);
   sdaudit_stop(); /* after the sessions' last records, not before */
   sdrunin_stop(); /* 13 Nov 26 - any run still going is ended, its store removed */
+  sdsyslocal_stop(); /* 18 Nov 26 - any sd-sdsys session still going is ended */
 
   CloseHandle(svc_stop_event);
   svc_stop_event = NULL;

@@ -3,6 +3,18 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+18 Nov 26  SDSYS FROM YOUR OWN LOGIN: TWO LISTS OF WINDOWS USERS, BOTH EMPTY AS DELIVERED.
+
+             What        - The administrator can list Windows users who may reach SDSYS from this computer without signing in to
+                           Windows as SDSYS: the ssh list (ssh -t <user>@localhost sd-sdsys, then the SD password of sdsys) and
+                           the api list (a program of that user at 127.0.0.1 signing in as sdsys with the SD password of sdsys).
+                           The new command local.sdsys reports and changes them (add, with a warning and a question; remove;
+                           clear), and so do two fields on tool.remote's remote administration view.  Both lists are empty as
+                           delivered, and with them empty nothing changes.  Each change and each grant or refusal is audited.
+                         - A sign-in as sdsys from 127.0.0.1 is no longer admitted by remote.sdsys api's addresses or by its
+                           "any": only the api list admits it, and remote.sdsys api on refuses a loopback address.
+             Not         - Not in SD Core Solo, which has no SDSYS.  Not for another computer: remote.sdsys's doors are unchanged.
+
 17 Nov 26  A CHANGE TO NETDIRS REACHES NEW SESSIONS WITHOUT A RESTART; A LONG AUDIT RECORD KEEPS ITS LINE END.
 
              What        - Each session reads sd.conf's NETDIRS line when it starts, as SD Core for Linux does, so a

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): K_SDSYS_LOCAL (175), SDSYS reached from this computer by a listed user (win32localsdsys.c).
  * 17 Nov 26 Windows port - four-version audit round 3 (P-4609): case K_SH / K_OS_EXEC sit after K_MAXMIN_POS_SET, as Linux's (layout only).
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 P-4608): a phantom child that cannot start writes "phantom: cannot start a phantom
  *           from <path> - <reason>" (or why there is no path) to the error log and ends; it called k_error(), whose longjmp() left the
@@ -119,6 +120,10 @@
 #include "sd_jobmark.h"   /* 10 Nov 26 Windows port - K_JOB_MARK (Linux S.102 stage 3, carry area 14) */
 #include "win32auditpipe.h" /* 13 Nov 26 Windows port - K_LOCK_TRACE's file (RELEASE_1.1 182); no Windows type */
 #include "win32runin.h"     /* 13 Nov 26 Windows port - K_RUNIN_CHILD, K_RUNIN_DEBUG (RELEASE_1.1 253(b)); no Windows type */
+#include "win32localsdsys.h" /* 18 Nov 26 Windows port - K_SDSYS_LOCAL (RELEASE_1.1 339); no Windows type */
+
+/* 18 Nov 26 Windows port - RELEASE_1.1 339: the reason word of the last '' or 0 that K_SDSYS_LOCAL answered, for the audit line. */
+static const char* sd_local_why = "list-empty";
 #include "sd_sftp.h"        /* 15 Nov 26 Windows port - K_XFER (Linux d15ace15, S.242 stage 3, RELEASE_1.1 299) */
 #include <sys/time.h>
 
@@ -1890,6 +1895,58 @@ void op_kernel() {
           (sd_job_name(jdir, job_claim, single_command, win32_job_admin_path, jn, sizeof(jn)) == 0))
         strcpy(sd_job_active, jn);
       k_put_c_string(sd_job_active, &result);
+    } break;
+
+    /* 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267, 38cfb301; the owner, 17-18 Nov 2026: SDSYS reached from this computer by the
+       users the administrator lists, ssh and the API, both empty as delivered).  Answers only, never a grant (keys.h has the four forms).
+       Each form reads its list FIRST, so an empty list always answers list-empty and LOGIN / APISRVR write the line they always wrote.
+       0: this process is the SD service's SDSYS session for the listed user's ssh login named by "sd -SDSYSLOCAL <pid>", and that login
+       passes every question again, asked here (sdl_ssh_self); a socket session or a process with no claim is not-ssh.  'peer' and
+       'api' read only what this process's API front recorded at accept (linuxio.c, sdl_peer_record): the caller's word for the user is
+       compared with the recorded peer's name, never believed. */
+    case K_SDSYS_LOCAL: {
+      char arg[80];
+      char nm[SDL_NAME_MAX + 64];
+      char lp[MAX_PATHNAME_LEN + 1];
+      sdl_list sl;
+      int alen = k_get_c_string(descr, arg, sizeof(arg) - 1);
+
+      nm[0] = '\0';
+      if ((alen == 1) && (arg[0] == '0')) {
+        if (!sdl_list_path("ssh", lp, sizeof(lp)))
+          sd_local_why = "list-unsafe";
+        else if (sdl_read(lp, 1, &sl, &sd_local_why) <= 0)
+          ;   /* list-empty or list-unsafe */
+        else if ((sdsyslocal_claim == NULL) || (connection_type == CN_SOCKET))
+          sd_local_why = "not-ssh";
+        else if (sdl_ssh_self(strtoul(sdsyslocal_claim, NULL, 10), nm, sizeof(nm), &sd_local_why) != 0)
+          nm[0] = '\0';
+        k_put_c_string(nm, &result);
+      } else if ((alen == 1) && (arg[0] == '1')) {
+        snprintf(arg, sizeof(arg), "%s", sd_local_why);   /* k_put_c_string takes a char *, the reason word is a const string */
+        k_put_c_string(arg, &result);
+      } else if ((alen == 4) && (strcmp(arg, "peer") == 0)) {
+        if (sdl_peer_sid()[0] == '\0')
+          sd_local_why = sdl_peer_why();
+        else if (!sdl_sid_name(sdl_peer_sid(), nm, sizeof(nm)))
+          sd_local_why = "no-user";
+        k_put_c_string(nm, &result);
+      } else if ((alen > 4) && (strncmp(arg, "api", 3) == 0) && (arg[3] == FIELD_MARK)) {
+        result.data.value = 0;
+        if (!sdl_list_path("api", lp, sizeof(lp)))
+          sd_local_why = "list-unsafe";
+        else if (sdl_read(lp, 1, &sl, &sd_local_why) <= 0)
+          ;   /* list-empty or list-unsafe */
+        else if (sdl_peer_sid()[0] == '\0')
+          sd_local_why = sdl_peer_why();
+        else if (!sdl_sid_name(sdl_peer_sid(), nm, sizeof(nm)) || (stricmp(nm, arg + 4) != 0))
+          sd_local_why = "other-user";
+        else
+          result.data.value = sdl_api_listed(sdl_peer_sid(), nm, sizeof(nm), &sd_local_why);
+      } else {
+        sd_local_why = "bad-argument";
+        k_put_c_string("", &result);
+      }
     } break;
 
     /* 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug: see keys.h.  The child's answer exists only in a process sd.c's

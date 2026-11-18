@@ -45,6 +45,9 @@ param(
     [switch]$DryRun
 )
 
+# Windows PowerShell's own module folders, as gpl.bp/ps_scripto sets them (RELEASE_1.1 111): Get-LocalUser and Get-LocalGroupMember.
+$env:PSModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules;$env:SystemRoot\system32\WindowsPowerShell\v1.0\Modules"
+
 $ErrorActionPreference = 'Stop'
 $Prog = 'sd-sdsyslocal'
 

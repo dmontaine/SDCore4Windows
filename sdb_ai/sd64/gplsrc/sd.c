@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Nov 26 Windows port - RELEASE_1.1 339: main() calls sdsys_local_detect() right after xfer_detect(); "ssh -t <user>@localhost sd-sdsys"
+ *           makes this process the asker of the SD service's door (sd_sdsysask.c, win32sdsysask.c) and nothing else.
+ * 18 Nov 26 Windows port - RELEASE_1.1 339: -SDSYSLOCAL pid, the claim the SD service's SDSYS session for a listed user's ssh login makes.
  * 17 Nov 26 Windows port - four-version audit round 3 (P-7017, P-7018, P-7019): "sd: -internal may only be used ..." in lower case, as Linux;
  *           the one-SD-per-session guard sits after comlin()'s declarations, where Linux has it.
  * 18 Nov 26 Windows port - four-version audit round 2 (P-5452): the one-SD-per-session guard says "type exit", lower case, as Linux sd.c:333-336.
@@ -129,6 +132,7 @@
 #include "win32pipe.h"
 #include "win32runin.h" /* 13 Nov 26 Windows port - RELEASE_1.1 253(b): -RUNIN's door; no Windows type */
 #include "sd_sftp.h"    /* 15 Nov 26 Windows port - xfer_detect() (Linux d15ace15, S.242 stage 3, RELEASE_1.1 299) */
+#include "win32sdsysask.h" /* 18 Nov 26 Windows port - sdsys_local_detect() (RELEASE_1.1 339); no Windows type */
 #include "locks.h"
 #include "keys.h"
 
@@ -171,6 +175,11 @@ int main(int argc, char *argv[]) {
      sshd sent here (no terminal, SSH_ORIGINAL_COMMAND the Subsystem path) is the file transfer server, not a login.  Its channel is moved
      off descriptors 0 and 1 (sd_sftp.c). */
   xfer_detect(argc);
+
+  /* 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267).  "ssh -t <user>@localhost sd-sdsys": SSH_ORIGINAL_COMMAND exactly sd-sdsys
+     turns this process into the asker of the SD service's door (sd_sdsysask.c), which relays the SDSYS session and exits; it never
+     binds the shared segment or runs LOGIN as this user.  Anything else returns here and changes nothing. */
+  sdsys_local_detect(argc);
 
  /* 20240126 mab add syslog */
  /* log startup and command line args */
@@ -426,7 +435,14 @@ Private bool comlin(int argc, char *argv[]) {
    may type it; for anybody else it answers "" and changes nothing. */
       if (++arg < argc)
         job_claim = argv[arg];
-    } else if (!stricmp(argv[arg], "-I")) {    
+    } else if (!stricmp(argv[arg], "-SDSYSLOCAL")) {
+/* 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267).  The pid of the listed user's sd.exe in an ssh login from this computer, which
+   the SD service gives the SDSYS process it starts for that login (sdsvc/sdsyslocal.c).  ONLY A KEY: kernel(K$SDSYS.LOCAL, 0) answers a
+   user only for a process that is the SD service's S4U logon of SDSYS, a child of the SD service, and finds that pid passing every
+   question again itself (win32localsdsys.c sdl_ssh_self).  Anybody may type it; for anybody else it answers "" and changes nothing. */
+      if (++arg < argc)
+        sdsyslocal_claim = argv[arg];
+    } else if (!stricmp(argv[arg], "-I")) {
 /* 20240702 mab Bootstrap build arg must be exactly "-I" */		  
         /* Bootstrap Install*/
         check_admin();

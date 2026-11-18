@@ -12299,6 +12299,13 @@
 "tier": "reference",
 "words": 18
 },
+"msg:12992": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 23
+},
 "msg:12993": {
 "kind": "message",
 "part": "reference/messages.md",
@@ -14069,6 +14076,76 @@
 "since": "-",
 "tier": "reference",
 "words": 12
+},
+"msg:15175": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 22
+},
+"msg:15176": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 30
+},
+"msg:15177": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 31
+},
+"msg:15178": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 87
+},
+"msg:15179": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 38
+},
+"msg:15180": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 47
+},
+"msg:15181": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 12
+},
+"msg:15182": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 12
+},
+"msg:15183": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 17
+},
+"msg:15184": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 49
 },
 "msg:15995": {
 "kind": "message",
@@ -25499,7 +25576,7 @@
 "part": "reference/system-keys.md",
 "since": "-",
 "tier": "reference",
-"words": 1814
+"words": 1829
 },
 "sys:ikeys:lgn$": {
 "kind": "sys.keys",
@@ -27951,6 +28028,13 @@
 "tier": "reference",
 "words": 37
 },
+"tcl:local.sdsys": {
+"kind": "tcl.verb",
+"part": "reference/tcl-verbs.md",
+"since": "-",
+"tier": "reference",
+"words": 42
+},
 "tcl:lock": {
 "kind": "tcl.verb",
 "part": "reference/tcl-verbs.md",
@@ -29608,7 +29692,7 @@
 "part": "reference/voc.md",
 "since": "-",
 "tier": "reference",
-"words": 104
+"words": 105
 },
 "voc:type:F": {
 "kind": "voc.type",

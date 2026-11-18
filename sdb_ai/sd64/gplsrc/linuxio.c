@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Nov 26 Windows port - RELEASE_1.1 339: the PF_INET case records a loopback peer's program (sdl_peer_record) for the local SDSYS door.
  * 18 Nov 26 Windows port - four-version audit round 2 (P-3082, P-3083, P-5448, P-5449): the TCP peer's address is read in Linux's
  *            code form (refusal first; a failed inet_ntop() is "?" without ER_BADADDR, as Linux), and its syslog line is Linux's one line.
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 P-4606): the TLS-directory refusal says what api_tls_dir() does ("cannot derive the
@@ -87,6 +88,7 @@
 #include "telnet.h"
 #include "tio.h"
 #include "sd_tls.h"
+#include "win32localsdsys.h"   /* 18 Nov 26 Windows port - RELEASE_1.1 339: sdl_peer_record() */
 
 #include <netdb.h>
 #include <pwd.h>
@@ -340,6 +342,16 @@ bool start_connection(int unused) {
             port_no = ntohs(s->sin_port);
             if (inet_ntop(AF_INET, &s->sin_addr, ip_addr, MAX_SOCKET_ADDR_STR_LEN) == NULL)
               strncpy(ip_addr, "?", MAX_SOCKET_ADDR_STR_LEN - 1);
+            /* 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267, T0745 Q8): a loopback peer's program is named NOW, before the
+               TLS relay and before anything that can wait, for APISRVR's local SDSYS door (K$SDSYS.LOCAL 'peer' / 'api').  This
+               process is still the API front, LocalSystem as sdwind started it.  sdl_peer_record() does nothing for any other
+               address, and an ordinary account's login never reads what it records. */
+            {
+              struct sockaddr_in me4;
+              socklen_t me4len = sizeof(me4);
+              if ((getsockname(0, (struct sockaddr *)&me4, &me4len) == 0) && (me4.sin_family == AF_INET))
+                sdl_peer_record((unsigned long)s->sin_addr.s_addr, ntohs(me4.sin_port), (unsigned short)port_no);
+            }
           }
           /* 12 Nov 26 Windows port - from Linux e79f6499 (RELEASE_1.1 252, audit P-23): TCP is for the API server ONLY.  The API
              listener starts "sd -N -Q" (is_sdApiSrvr), and a pre-authenticated session arrives on a pipe, not here; a plain

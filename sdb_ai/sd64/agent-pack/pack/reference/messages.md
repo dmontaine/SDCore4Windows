@@ -9291,6 +9291,15 @@ cited by: `login`
 
 cited by: `login`
 
+### msg:12992
+> kind=message tier=reference since=- src=sdsys/messages/12992:1#fdc1a758
+
+```
+SDSYS may use the API from this computer only from a program of a user\nlisted with local.sdsys api.
+```
+
+cited by: `apisrvr`
+
 ### msg:12993
 > kind=message tier=reference since=- src=sdsys/messages/12993:1#49c7d49a
 
@@ -11438,6 +11447,96 @@ Making the change (a few seconds)...
 
 cited by: `tool_config`, `tool_remote`
 
+### msg:15175
+> kind=message tier=reference since=- src=sdsys/messages/15175:1#03b055e8
+
+```
+The SD password of sdsys was not right, so this session is not the\nadministrator and ends here.
+```
+
+cited by: `login`
+
+### msg:15176
+> kind=message tier=reference since=- src=sdsys/messages/15176:1#4a9c4349
+
+```
+sdsys has no SD password, so it cannot be reached from another user's login;\nthis session ends here.  Set one with modify.password from a sdsys login.
+```
+
+cited by: `login`
+
+### msg:15177
+> kind=message tier=reference since=- src=sdsys/messages/15177:1#f688de8a
+
+```
+SD administration granted: this session is the SDSYS Windows account, elevated,\nreached from the ssh login of %1 on this computer with the SD password of sdsys
+```
+
+cited by: `login`
+
+### msg:15178
+> kind=message tier=reference since=- src=sdsys/messages/15178:1#94bb2d6c
+
+```
+local.sdsys\nlocal.sdsys {ssh | api}\nlocal.sdsys {ssh | api} add user {no.query}\nlocal.sdsys {ssh | api} remove user\nlocal.sdsys {ssh | api} clear\n\nSSH   the users whose ssh login from this computer (ssh -t user@localhost\n      sd-sdsys) may become sdsys with the SD password of sdsys.\nAPI   the users whose programs on this computer may sign in as sdsys over\n      the API at this computer's loopback address (127.0.0.1).\nBoth lists are empty as delivered and take at most 32 names each.  With no\nkeyword it reports both lists and changes nothing.
+```
+
+cited by: `localsdsys`
+
+### msg:15179
+> kind=message tier=reference since=- src=sdsys/messages/15179:1#dfb5fc9b
+
+```
+Listing %1 lets that user, from any session of theirs on this computer - one\nthey reached over the network included - become the administrator with the\nSD password of sdsys (ssh -t %1@localhost sd-sdsys).
+```
+
+cited by: `localsdsys`
+
+### msg:15180
+> kind=message tier=reference since=- src=sdsys/messages/15180:1#b02e3036
+
+```
+Listing %1 lets the programs of that user, from any session of theirs on this\ncomputer - one they reached over the network included - sign in as sdsys over\nthe API at 127.0.0.1 with the SD password of sdsys and be the administrator.
+```
+
+cited by: `localsdsys`
+
+### msg:15181
+> kind=message tier=reference since=- src=sdsys/messages/15181:1#862f6e4b
+
+```
+List %1 for sdsys over %2? (y/<n>)
+```
+
+cited by: `localsdsys`
+
+### msg:15182
+> kind=message tier=reference since=- src=sdsys/messages/15182:1#90d95e2c
+
+```
+%1 was not listed; nothing was changed.
+```
+
+cited by: `localsdsys`
+
+### msg:15183
+> kind=message tier=reference since=- src=sdsys/messages/15183:1#dfeba70e
+
+```
+local.sdsys %1 did not succeed (status %2); the lines above say why.
+```
+
+cited by: `localsdsys`
+
+### msg:15184
+> kind=message tier=reference since=- src=sdsys/messages/15184:1#5607dc0c
+
+```
+%1 is not a Windows user name: 1 to 20 characters, no space, no control\ncharacter, and none of the characters Windows forbids in a user name\n(" / [ ] : ; | = , + * ? < > @ and the backslash).
+```
+
+cited by: `localsdsys`, `tool_remote`
+
 ### msg:15995
 > kind=message tier=reference since=- src=sdsys/messages/15995:1#32ac8f74
 
@@ -11777,7 +11876,7 @@ User is not an administrator
 Command requires administrator privileges
 ```
 
-cited by: `apndpath`, `audit_read`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat` and 27 more
+cited by: `apndpath`, `audit_read`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat` and 28 more
 
 ### msg:2002
 > kind=message tier=reference since=- src=sdsys/messages/2002:1#b8493524

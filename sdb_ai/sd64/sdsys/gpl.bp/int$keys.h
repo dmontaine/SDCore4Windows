@@ -18,6 +18,7 @@
   	  * 
   	  * 
 	  * START-HISTORY:
+	  * 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): K$SDSYS.LOCAL (175).
 	  * 18 Nov 26 Windows port - four-version audit round 2 (P-5475): K$WINSIZE stands before the S.63 gates and K$LOCK.TRACE after the AI keys, in Linux's order.
 	  * 17 Nov 26 Windows port - four-version audit round 1 (P-1965): K$OS.ADMINISTRATOR (63) is retired, as gplsrc/keys.h; nothing asked it.
 	  * 13 Nov 26 Windows port - K$RUNIN.CHILD (84) and K$RUNIN.DEBUG (85), run.in WITH debug (RELEASE_1.1 253(b)).
@@ -272,6 +273,11 @@
 * 15 Nov 26 Windows port - RELEASE_1.1 310 (Windows only; Linux reserves 174, mail T1625).  kernel(K$OS.SDSYS.USER, -1): 1 when this process
 *   signed in as SDSYS at a desktop (the local SDSYS by SID, interactive, elevated).  CPROC's LOGTO SDSYS asks it.  Must match gplsrc/keys.h.
       $define K$OS.SDSYS.USER  174      ;* Did this process sign in as SDSYS at a desktop?
+* 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267, the same number).  kernel(K$SDSYS.LOCAL, 0): the Windows user behind a listed
+*   user's ssh login from this computer that the SD service started as SDSYS, or ''; 1: the reason word of the last ''; 'api' : @fm : user:
+*   1 when the API's loopback peer is that user and on the local API list; 'peer' (Windows only): that peer's user name, or ''.  Must match
+*   gplsrc/keys.h.
+      $define K$SDSYS.LOCAL    175      ;* A listed user's local login reaching SDSYS, or '' (S.267)
 * 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug; Windows only.  Must match gplsrc/keys.h, which says what each answers.
       $define K$RUNIN.CHILD     84      ;* run.in's debugged child: account:@fm:store:@fm:groups, '' for any other process
       $define K$RUNIN.DEBUG     85      ;* the SDSYS session's end of a run: 'O', 'P' (relay) or 'C' (end)

@@ -626,7 +626,7 @@ def text_rows(t):
     mn = body(sv, "static void WINAPI svc_main(DWORD argc, LPSTR *argv) {")
     rows.append(("W17", "built and started: the Makefile builds sdrunin.c and win32s4ulogon.c into sdsvc.exe; gpl.src puts win32s4ulogon and win32runin into sd; "
                  "the service starts the broker before \"sd -start\" and stops it wherever it stops the audit writer",
-                 "$(SVCDIR)/sdrunin.c $(GPLSRC)win32s4ulogon.c -lsecur32 -lbcrypt" in mk and "win32s4ulogon" in gs and "win32runin" in gs
+                 "$(SVCDIR)/sdrunin.c $(SVCDIR)/sdsyslocal.c $(GPLSRC)win32s4ulogon.c $(GPLSRC)win32localsdsys.c -lsecur32 -lbcrypt" in mk and "win32s4ulogon" in gs and "win32runin" in gs   # 18 Nov 26: RELEASE_1.1 339's door beside it
                  and 0 < mn.find("  svc_runin_start();") < mn.find('run_sd("-start", &rc)') and mn.count("sdrunin_stop();") == mn.count("sdaudit_stop();") == 4, ""))
     # 14 Nov 26 (RELEASE_1.1 253(b), VM sit2 C11: "the child's token has no logon SID"): a Network logon carries none, so the groups logon MAKES one
     sl = body(t["win32s4ulogon.c"], "void* win32_s4u_logon_groups(")
@@ -780,7 +780,7 @@ MUTANTS = [
     ("../sdsys/gpl.bp/pdbg", "PDBG does not answer SOURCE", "         case msg.type = 'SOURCE'\n", "         case msg.type = 'SOURCEX'\n"),
     ("../gplbld/install-service.ps1", "sdrunin is put in a group", "    $script:RuninAccountOk = $true\n",
      "    Add-LocalGroupMember -Group 'Users' -Member $u.SID\n    $script:RuninAccountOk = $true\n"),
-    ("../Makefile", "the broker is not built into the service", "$(SVCDIR)/sdrunin.c $(GPLSRC)win32s4ulogon.c -lsecur32 -lbcrypt", "$(GPLSRC)win32s4ulogon.c -lsecur32 -lbcrypt"),
+    ("../Makefile", "the broker is not built into the service", "$(SVCDIR)/sdrunin.c $(SVCDIR)/sdsyslocal.c $(GPLSRC)win32s4ulogon.c", "$(SVCDIR)/sdsyslocal.c $(GPLSRC)win32s4ulogon.c"),
     ("sdsvc/sdsvc.c", "the service never starts the broker", "  svc_runin_start(); /*", "  (void)0; /*"),
     # 14 Nov 26 (RELEASE_1.1 253(b)): the logon SID the groups logon makes
     ("win32s4ulogon.c", "the made logon SID is not marked as one", "    tg->Groups[ng].Attributes = SE_GROUP_LOGON_ID | SE_GROUP_MANDATORY",
