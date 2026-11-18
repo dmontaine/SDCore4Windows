@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY):
+ * 18 Nov 26 Windows port - four-version audit round 5 (P-8043, P-8046, P-8047): the space after "=" that round 4 lost, three places.
  * 17 Nov 26 Windows port - four-version audit round 4 (P-1223, P-7687, P-7688): every node-0 test after get_ak_node() is laid out as
  *           Linux's (new_node2, new_node3, the internal split, the old root, write_ak_big_rec's head and next node); "new_node1 = (".
  * 17 Nov 26 Windows port - four-version audit round 3 (P-1223): the node-0 test after the first get_ak_node() is laid out as Linux's (no braces).

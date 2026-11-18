@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Nov 26 Windows port - four-version audit round 5 (P-8042): NETDIRS's default is set after NETREPLY, as Linux's.  Order only.
  * 17 Nov 26 Windows port - four-version audit round 4 (P-6841, as Linux S.62): NETDIRS= is read into pcfg.netdirs, the process's own
  *           copy, which every session fills (session_trust()); it was the segment's, read once when SD started.
  * 17 Nov 26 Windows port - four-version audit round 3 (P-7016): the BACKUPDIR= branch sits before SDSYS=, as Linux's (layout only).
