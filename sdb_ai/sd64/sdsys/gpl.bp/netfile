@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - from Linux (S.62, T1825): operation 1 is named analyze.file (the verb's one name), as APISRVR's audit line has it.
 * 21 Oct 26 dm  S.73 item 3, D1: NF$INDEXQ 24 (act.indexq), the eight index QUERY statements of a remote file - INDICES, SELECTINDEX in both forms, SETLEFT, SETRIGHT, SELECTLEFT, SELECTRIGHT.  They
 *               change nothing and need no group beyond sdfiles (the owner's "no new gate"), so a read-mode handle may ask; not audited.  Needs selectindexv() and selectindexk() of the class.
 * 21 Oct 26 dm  S.73 item 3 (QMNet tiers C and D): NF$ADMIN 20 (a verb run on the server on the open file: analyse, configure, index, delete a file), NF$CREATEFILE 21 (create.file on a server, no file
@@ -1071,7 +1072,7 @@ act.admin:
    end
    opname = ''
    if opn >= 1 and opn <= 9 and opn # 7 and opn # 8 then
-      opname = field('analyse.file,configure.file,create.index,build.index,delete.index,disable.index,,create.file,delete.file', ',', opn)
+      opname = field('analyze.file,configure.file,create.index,build.index,delete.index,disable.index,,create.file,delete.file', ',', opn)
    end
    if opname = '' then
       txt = b ; gosub clean.text

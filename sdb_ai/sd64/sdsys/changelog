@@ -3,6 +3,14 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+18 Nov 26  A FILE OR FOLDER SDSYS MAKES IN ITS OWN DIRECTORY IS READ-ONLY TO SD USERS.
+
+             What        - The SD system directory no longer hands write access to everything made in it later: what an SDSYS
+                           session or the installer creates there is readable by SD users and writable only by administrators,
+                           as SD Core for Linux.  The places every session writes - the IPC area, the print queue, the error
+                           log, dumps and $hold - keep their write access.
+                         - The client of a remote file names operation 1 analyze.file (it said analyse.file), as the server.
+
 18 Nov 26  CREATE.ACCOUNT AND MODIFY.ACCOUNT FOLLOW SD CORE FOR LINUX'S PROGRAMS LINE FOR LINE.
 
              What        - modify.account ... unsuspended on an account that is not suspended says "... is not suspended;

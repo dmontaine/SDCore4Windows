@@ -70,6 +70,10 @@
 # (I)(OI)(CI)(M), a child file (I)(M), and an unelevated token is refused a new
 # file in the folder.  Directories only: a file has no children to keep anything.
 #
+# 18 Nov 26 - -KeepChildren NO LONGER HANDS MODIFY TO NEW CHILDREN (Linux S.268, e01214ea): $ipc, prt, errlog, dumps and
+# $hold get their own sdusers (OI)(CI)(M) (a file: (M)) first, and the folder's inherit-only grant is (RX), so a file or
+# folder an SDSYS session or load.examples makes in sdsys later is read-only to SD users.
+#
 # 17 Nov 26 - -AdminOnly, FOR sdsys\docs\admin (P-2914, Linux S.100: there docs/admin
 # is 700 with 600 files, owned by sdsys).  SYSTEM and Administrators Full, inherited by
 # everything under it, and NO sdusers ACE: an ordinary session cannot list or read the
@@ -142,11 +146,30 @@ try {
                 Write-Output "secure-sysdirs: -KeepChildren is for a directory and $($item.FullName) is a file - nothing secured"
                 exit 2
             }
-            $kind   = 'directory, children keep Modify'
+            # 18 Nov 26 - Linux S.268 (template e01214ea, mail T1825): NOTHING AN SDSYS SESSION MAKES IN SDSYS IS WRITABLE BY THE
+            # USERS GROUP.  The inherit-only Modify of 14 Nov handed Modify to every NEW child too, so a file or folder an SDSYS
+            # session (or load.examples) created in sdsys later was sdusers-writable.  Now the places sessions must write - Linux's
+            # errlog, prt, dumps and $ipc, and $hold - get their OWN Modify first (whichever exist), and the folder hands down only
+            # read (RX).  Granted before the folder is restamped, so the children never pass through a state without Modify.
+            foreach ($w in @('$ipc', 'prt', 'errlog', 'dumps', '$hold')) {
+                $wp = Join-Path $item.FullName $w
+                if (-not (Test-Path -LiteralPath $wp)) { continue }
+                $wi = Get-Item -LiteralPath $wp -Force
+                $wg = if ($wi.PSIsContainer) { 'sdusers:(OI)(CI)(M)' } else { 'sdusers:(M)' }
+                Write-Output ("secure-sysdirs: {0} <- /grant {1}" -f $wi.FullName, $wg)
+                $wout = & icacls.exe $wi.FullName '/grant' $wg 2>&1
+                $wtext = ($wout | Out-String)
+                if (($LASTEXITCODE -ne 0) -or ($wtext -match 'Access is denied') -or ($wtext -match 'Failed processing [1-9]')) {
+                    Write-Output "secure-sysdirs: icacls failed on $($wi.FullName) with $LASTEXITCODE"
+                    Write-Output $wtext
+                    exit 1
+                }
+            }
+            $kind   = 'directory, its writable places keep Modify'
             $grants = @('*S-1-5-18:(OI)(CI)(F)',
                         '*S-1-5-32-544:(OI)(CI)(F)',
                         'sdusers:(RX)',
-                        'sdusers:(OI)(CI)(IO)(M)')
+                        'sdusers:(OI)(CI)(IO)(RX)')
         } elseif ($AdminOnly) {
             if (-not $item.PSIsContainer) {
                 Write-Output "secure-sysdirs: -AdminOnly is for a directory and $($item.FullName) is a file - nothing secured"
@@ -200,7 +223,7 @@ try {
         }
 
         if ($KeepChildren) {
-            Write-Output ("secure-sysdirs: {0} takes no new name from sdusers; its inheriting children keep Modify" -f
+            Write-Output ("secure-sysdirs: {0} takes no new name from sdusers; `$ipc, prt, errlog, dumps and `$hold keep Modify; anything else in it is read-only to sdusers" -f
                           $item.FullName)
         } elseif ($AdminOnly) {
             Write-Output ("secure-sysdirs: {0} is readable and writable by administrators only" -f
