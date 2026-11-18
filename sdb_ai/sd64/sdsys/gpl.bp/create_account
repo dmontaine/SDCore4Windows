@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - the targeted check after round 6 (P-8296, P-8297): the case-inversion warning is Linux's one if, and 10007
+*           and the password loop follow create_user's refusal instead of sitting in its else, as Linux's create_account:339-346.
 * 18 Nov 26 Windows port - four-version audit round 6, D3 (RELEASE_1.1 336): the routine takes the shape of Linux's create_account.  The settings are read
 *              in Linux's order and names (os.sh.want, os.exec.want; the duplicated files.write.want line goes); ROOT / SDSYS / SDUSERS are one case; the
 *              early register read before the name checks goes (the locked read below is the test); the account directory and the groups are made in a
@@ -513,11 +515,9 @@ PW.REUSE.AGAIN:
            goto exit.create
          end
 
-		 * Check INVERT/NOINVERT STATUS (1=INVERT on)
-         PVAL = SYSTEM(1001)
-         IF PVAL = 1 THEN
-           CRT "Warning: **** Case Inversion is not active during password entry! ****"
-         END
+         if system(1001) = 1 then
+           crt "Warning: **** Case Inversion is not active during password entry! ****"
+         end
          if not(create_user(acc.uname)) then
            * create user failed
 * 21 Aug 26 Windows port - THE MINUS WAS MISSING, and it is the one error exit
@@ -536,8 +536,8 @@ PW.REUSE.AGAIN:
            @system.return.code = -ER$NOT.CREATED
            err = 10006:@vm:status() ;* Create User Failed, OS Error: %1
            goto exit.create
-         end else
-           crt sysmsg(10007,acc.uname)  ;* 'User ':acc.uname:' Created'
+         end
+         crt sysmsg(10007,acc.uname)  ;* 'User ':acc.uname:' Created'
            * user created set passowrd
 PW.TRY.AGAIN:
            if not(set_passwd(acc.uname)) then
@@ -634,7 +634,6 @@ PW.TRY.AGAIN:
               end
               goto exit.create
            end
-         end
      end case
      
      
