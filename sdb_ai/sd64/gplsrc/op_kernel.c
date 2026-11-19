@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Nov 26 Windows port - RELEASE_1.1 344, from Linux 02507803 (S.264): K_OWN_ADDR (176), is an address one of this machine's own (sd_ownaddr.c).
  * 18 Nov 26 Windows port - the owner: LOGTO back into SDSYS as on Linux - K_OS_SDSYS_USER also answers 1 for a process LOGIN or CPROC
  *           granted USR_ADMIN (sdsys_entered, kept across LOGTO), not only for the desktop sign-in.
  * 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): K_SDSYS_LOCAL (175), SDSYS reached from this computer by a listed user (win32localsdsys.c).
@@ -123,6 +124,7 @@
 #include "win32auditpipe.h" /* 13 Nov 26 Windows port - K_LOCK_TRACE's file (RELEASE_1.1 182); no Windows type */
 #include "win32runin.h"     /* 13 Nov 26 Windows port - K_RUNIN_CHILD, K_RUNIN_DEBUG (RELEASE_1.1 253(b)); no Windows type */
 #include "win32localsdsys.h" /* 18 Nov 26 Windows port - K_SDSYS_LOCAL (RELEASE_1.1 339); no Windows type */
+#include "sd_ownaddr.h"      /* 18 Nov 26 Windows port - K_OWN_ADDR (RELEASE_1.1 344, Linux S.264) */
 
 /* 18 Nov 26 Windows port - RELEASE_1.1 339: the reason word of the last '' or 0 that K_SDSYS_LOCAL answered, for the audit line. */
 static const char* sd_local_why = "list-empty";
@@ -1914,6 +1916,17 @@ void op_kernel() {
        passes every question again, asked here (sdl_ssh_self); a socket session or a process with no claim is not-ssh.  'peer' and
        'api' read only what this process's API front recorded at accept (linuxio.c, sdl_peer_record): the caller's word for the user is
        compared with the recorded peer's name, never believed. */
+    case K_OWN_ADDR: /* 18 Nov 26 Windows port - RELEASE_1.1 344 (Linux S.264): 1 the address is one of this machine's own, 0 not, -1 not an address / unreadable */
+      {
+        char own_arg[80];
+
+        if (k_get_c_string(descr, own_arg, sizeof(own_arg) - 1) < 0)
+          result.data.value = -1;
+        else
+          result.data.value = sd_own_address(own_arg);
+      }
+      break;
+
     case K_SDSYS_LOCAL: {
       char arg[80];
       char nm[SDL_NAME_MAX + 64];

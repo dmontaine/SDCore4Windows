@@ -223,7 +223,8 @@ def text_problems(login, apisrvr, opk, keys, ikeys):
         p.append("the grant, its audit line and 15177 are not in that order")
     if "audit.reason = 'SDSYS requires an elevated session' : lsd.why" not in login:
         p.append("the old refusal does not carry the reason word")
-    i_loc = apisrvr.find("if downcase(scram.user) = 'sdsys' and (field(api.loop, '.', 1) = '127' or api.loop = '::1') then")
+    # 18 Nov 26 (RELEASE_1.1 344, Linux S.264): the condition also takes a peer at one of this machine's own addresses (test-ownaddr-units A1)
+    i_loc = apisrvr.find("if downcase(scram.user) = 'sdsys' and (field(api.loop, '.', 1) = '127' or api.loop = '::1' or api.own.addr) then")
     i_rem = apisrvr.find("gosub read.sdsys.api", i_loc if i_loc > 0 else 0)
     i_pe = apisrvr.find("kernel(K$SDSYS.LOCAL, 'peer')", i_loc if i_loc > 0 else 0)
     i_api = apisrvr.find("kernel(K$SDSYS.LOCAL, 'api' : @fm :", i_loc if i_loc > 0 else 0)
@@ -263,7 +264,7 @@ MUT = [
     ("the audit line after the sleep", "login",
      "      lsd.delay = config('PWDELAY')\n      if lsd.delay > 0 then sleep lsd.delay\n", ""),
     ("the case grants without the door's answer", "login", " or lsd.state = 'granted')", " or 1)"),
-    ("the loopback door removed", "apisrvr", "and (field(api.loop, '.', 1) = '127' or api.loop = '::1') then", "and 0 then"),
+    ("the loopback door removed", "apisrvr", "and (field(api.loop, '.', 1) = '127' or api.loop = '::1' or api.own.addr) then", "and 0 then"),
     ("key 175 asks the ssh door before the list", "opk", "else if (sdl_read(lp, 1, &sl, &sd_local_why) <= 0)\n          ;   /* list-empty or list-unsafe */\n        else if ((sdsyslocal_claim", "else if ((sdsyslocal_claim"),
 ]
 for name, which, old, new in MUT:

@@ -19,6 +19,7 @@
 *
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - RELEASE_1.1 344 (Linux S.264): SCRAM as sdsys from one of this machine's own addresses meets the local door.
 * 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): SCRAM as sdsys from a loopback peer is never matched against remote.sdsys api's
 *           list or its "any"; it is admitted only for a program of a user on sd-tls\sdsys-local-api (K$SDSYS.LOCAL 'peer' / 'api', read
 *           from what the front recorded at accept), audited "from=this machine user=<name>", refused otherwise with 12992.
@@ -2320,7 +2321,13 @@ vb.scram.final:
                end
                api.loop = downcase(trim(system(42)))
                if api.loop[1,7] = '::ffff:' and index(api.loop, '.', 1) then api.loop = api.loop[8,999]
-               if downcase(scram.user) = 'sdsys' and (field(api.loop, '.', 1) = '127' or api.loop = '::1') then
+* 18 Nov 26 Windows port - RELEASE_1.1 344 (Linux S.264; owner, 18 Nov 2026: "yes" to closing it in the code).  A peer at ONE OF THIS
+*   MACHINE'S OWN ADDRESSES (kernel(K$OWN.ADDR), compared as bits) came from this computer - an ssh tunnel aimed at its own network address
+*   is the case; a remote host cannot complete a TCP connection from an address that is ours - so it meets the local door below, never
+*   remote.sdsys api's list.  That door names a program only for a loopback peer (linuxio.c sdl_peer_record), so such a peer is refused
+*   with 12992 whatever either list holds, as on Linux ("over TCP is refused whatever the list holds").
+               api.own.addr = (kernel(K$OWN.ADDR, api.loop) = 1)
+               if downcase(scram.user) = 'sdsys' and (field(api.loop, '.', 1) = '127' or api.loop = '::1' or api.own.addr) then
 * 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267; T0745 Q6-Q8).  A LISTED USER'S PROGRAM ON THIS COMPUTER (owner, 17 Nov 2026: "the
 *   other for local access through api.  Again delivered with that access off").  A loopback peer is this computer, so it is NEVER matched
 *   against remote.sdsys api's addresses or its "any" (a 127.0.0.1 line already there is not used: Q7); it is admitted only when the program

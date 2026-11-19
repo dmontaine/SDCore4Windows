@@ -278,6 +278,9 @@
 *   1 when the API's loopback peer is that user and on the local API list; 'peer' (Windows only): that peer's user name, or ''.  Must match
 *   gplsrc/keys.h.
       $define K$SDSYS.LOCAL    175      ;* A listed user's local login reaching SDSYS, or '' (S.267)
+* 18 Nov 26 Windows port - RELEASE_1.1 344 (Linux S.264).  kernel(K$OWN.ADDR, address): 1 the address is one of this machine's own, 0 not,
+*   -1 not an address or unreadable.  Must match gplsrc/keys.h.
+      $define K$OWN.ADDR       176      ;* Is this address one of this machine's own? (S.264)
 * 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug; Windows only.  Must match gplsrc/keys.h, which says what each answers.
       $define K$RUNIN.CHILD     84      ;* run.in's debugged child: account:@fm:store:@fm:groups, '' for any other process
       $define K$RUNIN.DEBUG     85      ;* the SDSYS session's end of a run: 'O', 'P' (relay) or 'C' (end)

@@ -80,6 +80,7 @@ pdump
 reccache
 sd_encrypt_sodium
 sd_jobmark
+sd_ownaddr
 sd_sftp
 sd_sdsysask
 sd_keyring

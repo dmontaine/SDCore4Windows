@@ -593,6 +593,10 @@
    (sdl_api_listed), else 0; 'peer' (Windows only: no socket credential): the recorded loopback peer's user name, or ''.  Answers only,
    never a grant.  GPL.BP/INT$KEYS.H carries the same number. */
 #define K_SDSYS_LOCAL        175
+/* 18 Nov 26 Windows port - RELEASE_1.1 344, from Linux 02507803 (S.264; the same number).  kernel(K$OWN.ADDR, address): 1 when the
+   address is one of this machine's own interface addresses (sd_ownaddr.c, getifaddrs, compared as bits), 0 when not, -1 when it is not
+   an address or the interfaces could not be read.  GPL.BP/INT$KEYS.H carries the same number.                                        */
+#define K_OWN_ADDR           176
 /* 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug (win32runin.h).  WINDOWS ONLY, in the gap after the Windows-only
    58-68 that Linux leaves free (its 90 and 91 are above it):
      K_RUNIN_CHILD  for run.in's debugged child (sd -RUNIN, its token checked by sd.c runin_door()): account <FM> store <FM> the
