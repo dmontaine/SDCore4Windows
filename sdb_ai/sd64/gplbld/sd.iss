@@ -1211,9 +1211,12 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; it can only be true when the server was absent - that is its own Check.
 
 ; THE FULL-SCREEN EDITORS, 26 Aug 2026, and this is not a task either.  There
-; are two verbs and two editors: EDIT runs Microsoft Edit, which ships IN
-; Windows on current builds, and MICRO runs micro, which is always a winget
-; install.  install-editors.ps1 checks for each before reaching for winget.
+; are two verbs and two editors: EDIT runs Microsoft Edit and MICRO runs micro.
+; CORRECTED 19 Nov 2026 (four-version audit, OUTSTANDING item 3): this said micro
+; "is always a winget install".  Since PRE_RELEASE_FIXES 66 BOTH ship in usr\bin
+; beside sd.exe (stage.py BUNDLED_EDITORS, pinned by SHA-256: Edit 1.2.1, micro
+; 2.0.15), and install-editors.ps1 takes that bundled copy first; winget is only
+; its fallback when a bundled copy is missing.
 ; Offering them as a checkbox would mean a programmer account with a verb that
 ; does nothing on a machine where somebody unticked a box months earlier.
 ;
