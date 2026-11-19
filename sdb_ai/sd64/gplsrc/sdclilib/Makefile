@@ -16,7 +16,8 @@
 ifeq ($(origin CC),default)
 CC := gcc
 endif
-CLIENTLIB ?= $(lastword $(sort $(wildcard /p/git-private/sdclientlib-binaries/*/win64)))
+# The newest set by its COMMIT.txt's time, not by name: a set's name starts with its commit hash, which does not sort by date.
+CLIENTLIB ?= $(patsubst %/COMMIT.txt,%/win64,$(firstword $(shell ls -t /p/git-private/sdclientlib-binaries/*/COMMIT.txt 2>/dev/null)))
 CLIENTHDR := ../../sdsys/syscom
 PROBEFLAGS = -std=c11 -Wall -Wextra -Wpedantic -I$(CLIENTHDR)
 PROBELIBS  = -L"$(CLIENTLIB)" -lsdclilib -lws2_32

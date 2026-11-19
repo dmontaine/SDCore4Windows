@@ -15,7 +15,8 @@ mkrelease.ps1 packages:
 
 each with its own COMMIT.txt (a line naming the set's SDClientLib commit, then "<sha256>  ./<name>" per file), which is the form mkrelease.ps1 -Clients
 checks.  Every file is checked against the set's COMMIT.txt BEFORE it is copied and its copy AFTER; a file missing from the set,
-missing from COMMIT.txt, or not matching it stops the run.  -From defaults to the newest set (by name) that has win64\ and win32\.
+missing from COMMIT.txt, or not matching it stops the run.  -From defaults to the newest set (by its COMMIT.txt's time) that has
+win64\ and win32\.
 
 Exit 0: both folders written and every copy matches.  1: a check failed (nothing is claimed).  2: cannot run (no set, bad -To).
 #>
@@ -40,7 +41,8 @@ if (-not $From) {
     $cand = @(Get-ChildItem -LiteralPath $Sets -Directory | Where-Object {
         (Test-Path -LiteralPath (Join-Path $_.FullName 'win64')) -and (Test-Path -LiteralPath (Join-Path $_.FullName 'win32')) -and
         (Test-Path -LiteralPath (Join-Path $_.FullName 'COMMIT.txt'))
-    } | Sort-Object Name)
+    } | Sort-Object { (Get-Item -LiteralPath (Join-Path $_.FullName 'COMMIT.txt')).LastWriteTimeUtc })
+    # 19 Nov 26 - newest by its COMMIT.txt, not by name: a set's name starts with its commit hash, which does not sort by date.
     if ($cand.Count -eq 0) { Cannot "no set under $Sets has win64\, win32\ and COMMIT.txt" }
     $From = $cand[-1].FullName
 }

@@ -32,6 +32,8 @@ import sys
 import tempfile
 import time
 
+ENV_ONLY = False
+
 
 def say(t):
     print(t, flush=True)
@@ -42,6 +44,9 @@ def setenv(name, value):
     environment, taken when it loaded; os.environ reaches only Python's UCRT copy and the process block.  Run against it with
     os.environ alone, the DLL read the user's real known_servers instead of the scratch store.  So set msvcrt's copy too."""
     os.environ[name] = value
+    if ENV_ONLY:
+        say("  setenv: %s set in os.environ ONLY (--environ-only: the DLL must read the live environment)" % name)
+        return
     try:
         rc = ctypes.cdll.msvcrt._putenv_s(name.encode(), value.encode())
         say("  setenv: %s set in os.environ and msvcrt (_putenv_s %d)" % (name, rc))
@@ -54,7 +59,15 @@ def main():
     ap.add_argument("--dll", default=os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "SD", "usr", "clients", "client64", "sdclilib.dll"))
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=4247)
+    # 19 Nov 26: Linux's set d66cb1f reads SD_KNOWN_SERVERS with GetEnvironmentVariableA; this leaves msvcrt's copy alone so the run
+    # shows whether the DLL sees a value set after the program started.  The user's own store is checked unchanged either way.
+    ap.add_argument("--environ-only", action="store_true")
     a = ap.parse_args()
+    global ENV_ONLY
+    ENV_ONLY = a.environ_only
+    own = os.path.join(os.environ.get("USERPROFILE", ""), ".sdcore", "known_servers")
+    own_before = os.path.getmtime(own) if os.path.isfile(own) else None
+    say("  own store: %s   mtime before: %s" % (own, own_before))
 
     say("probe-pin")
     say("  dll   : %s   exists: %s" % (a.dll, os.path.exists(a.dll)))
@@ -161,6 +174,12 @@ def main():
         ok = False
 
     shutil.rmtree(work, ignore_errors=True)
+    own_after = os.path.getmtime(own) if os.path.isfile(own) else None
+    if own_after == own_before:
+        say("PIN OWN STORE: untouched (%s)" % own)
+    else:
+        say("PIN OWN STORE: CHANGED - the DLL wrote the user's own store (%s -> %s)" % (own_before, own_after))
+        ok = False
     say("probe-pin: " + ("ALL STEPS HELD" if ok else "A STEP FAILED"))
     return 0 if ok else 1
 

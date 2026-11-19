@@ -756,7 +756,10 @@ Write-Host ("   source beside it: {0}, {1:N0} bytes, and {2}" -f (Split-Path -Le
 # package's layout.  An install without them has no client library (as Linux's from a clone), and the API verifiers need
 # one, so a cycle that cannot stage them fails here.
 Write-Host "   staging the clean-room client libraries beside it (stage-clients.ps1, a few seconds)"
-& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'stage-clients.ps1') -To (Join-Path $Out 'clients')
+# Through Write-Host, so the transcript keeps the child's lines (a native process's output reaches the console but not
+# Start-Transcript: the first cycle with this step, 19 Nov 05:09, logged none of its eight lines).
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'stage-clients.ps1') -To (Join-Path $Out 'clients') 2>&1 |
+    ForEach-Object { Write-Host ('     ' + $_) }
 if ($LASTEXITCODE -ne 0) { Fail "stage-clients.ps1 exited ${LASTEXITCODE} - no client libraries beside the installer" }
 
 if ($SkipInstall) {

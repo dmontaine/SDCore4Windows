@@ -356,6 +356,7 @@ try {
 
     $cmd = "cd '$msys' && SD_CLIENT_DEBUG='$msysPktLog' make check-remote APIHOST=127.0.0.1 APIPORT=$Port " +
            "APIUSER=$Prefix APIPASS='$pw' APIACCT=" + $Prefix.ToUpper()
+    $step6Start = Get-Date
     & $bash -lc $cmd
     $testRc = $LASTEXITCODE
     Note 'remote_connect_test exit code' 0 $testRc
@@ -410,14 +411,46 @@ try {
         # search is broken and the result above says nothing.
         Note 'same search finds the user name' $true $wire.Contains($Prefix)
     } else {
-        # 19 Nov 26 - RELEASE_1.1 351 (Linux S.262).  The packet log was the GPL client's (SDDebug writing "Type <n>" and a
-        # hex dump); the clean-room library that replaced it keeps none (its DLL carries no such text, measured 19 Nov), so
-        # with it this step has nothing to read.  NOT MEASURED is said out loud and counted as neither a pass nor a fail:
-        # the server refuses the cleartext login 24 anyway (phase 5), the password check is the clean-room library's own
-        # test (test_scram), and verify-scramlogin.ps1 drives SCRAM with its own client.  Linux asked whether the
-        # clean-room library can log packets (mail 19 Nov); if it comes to write this file, the checks above run again.
-        Write-Host '   NOT MEASURED: no packet log - the clean-room client library keeps none, so which login it spoke'
-        Write-Host '   and that the password was absent from its bytes are not read here (not counted as a pass).'
+        # 19 Nov 26 - RELEASE_1.1 351 (Linux S.262; Linux mail T2030).  The clean-room library's log: SDDebug(1) - which
+        # remote_connect_test calls when SD_CLIENT_DEBUG is set - writes "clidbg" in the CURRENT directory, the probe's
+        # localtest, emptied when opened.  Each request is "OUT (<n> bytes). Type <code>", each reply "IN (<n> bytes)", each
+        # followed by its dump ("  <6-digit offset>  <hex> ...  <ascii>") EXCEPT the login requests and replies, whose bodies
+        # are never written ("  (body not logged)").  Measured on b359: 47, 48, 3, 21, 1, 2 and no 24; the account name in a
+        # Type 3 dump.  A log older than this run's step 6 is not this run's and is refused.
+        $cli = Join-Path $Sd64 'gplsrc\sdclilib\localtest\clidbg'
+        Write-Host ('   packet log: ' + $cli)
+        if (-not (Test-Path -LiteralPath $cli)) {
+            Note 'clean-room packet log written (localtest\clidbg)' $true $false
+        } elseif ((Get-Item -LiteralPath $cli).LastWriteTime -lt $step6Start) {
+            Note 'clean-room packet log written by THIS run' $true $false
+        } else {
+            $lines = @(Get-Content -LiteralPath $cli)
+            $types = @($lines | ForEach-Object { if ($_ -match '^OUT \(\d+ bytes\)\. Type (\d+)\s*$') { [int]$Matches[1] } })
+            Write-Host ('   ' + $lines.Count + ' lines; request types sent: ' + (($types | Sort-Object -Unique) -join ', '))
+            Note 'client sent SCRAM client-first (47)' $true ($types -contains 47)
+            Note 'client sent SCRAM client-final (48)' $true ($types -contains 48)
+            Note 'client sent NO cleartext login (24)' $false ($types -contains 24)
+            # Every login request's body is withheld: the line after each "Type 47" / "Type 48" says so.
+            $bare = 0
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -match '^OUT \(\d+ bytes\)\. Type (47|48)\s*$') {
+                    if ($i + 1 -ge $lines.Count -or $lines[$i + 1] -notmatch '^\s+\(body not logged\)\s*$') { $bare++ }
+                }
+            }
+            Note 'every login request body withheld from the log' 0 $bare
+            # The dumped bytes, rebuilt from the hex (a 16-byte line splits a long string, so the ascii column is not searched).
+            $bytes = New-Object System.Collections.Generic.List[byte]
+            foreach ($line in $lines) {
+                $m = [regex]::Match($line, '^\s+[0-9a-f]{6}\s+((?:[0-9a-f]{2} ?){1,16})')
+                if ($m.Success) { foreach ($h in [regex]::Matches($m.Groups[1].Value, '[0-9a-f]{2}')) { $bytes.Add([Convert]::ToByte($h.Value, 16)) } }
+            }
+            $wire = [Text.Encoding]::ASCII.GetString($bytes.ToArray())
+            Write-Host ('   reassembled ' + $bytes.Count + ' dumped bytes')
+            Note 'password absent from the bytes logged' $false $wire.Contains($pw)
+            # THE CONTROL: the account name is sent in clear in a Type 3 request, so the same search over the same bytes must
+            # find it; if not, the search is broken and the line above says nothing.
+            Note 'same search finds the account name' $true $wire.Contains($Prefix.ToUpper())
+        }
     }
 }
 finally {

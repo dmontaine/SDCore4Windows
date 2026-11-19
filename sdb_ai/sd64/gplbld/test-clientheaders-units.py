@@ -75,7 +75,10 @@ def cleanroom_lib():
     if env:
         return os.path.join(env, "sdclilib.dll") if os.path.isdir(env) else env
     base = os.path.join("P:" + os.sep, "git-private", "sdclientlib-binaries")
-    sets = sorted(d for d in (os.listdir(base) if os.path.isdir(base) else []) if os.path.isfile(os.path.join(base, d, "win64", "sdclilib.dll")))
+    # newest by its COMMIT.txt, not by name: a set's name starts with its commit hash, which does not sort by date
+    sets = sorted((d for d in (os.listdir(base) if os.path.isdir(base) else [])
+                   if os.path.isfile(os.path.join(base, d, "win64", "sdclilib.dll")) and os.path.isfile(os.path.join(base, d, "COMMIT.txt"))),
+                  key=lambda d: os.path.getmtime(os.path.join(base, d, "COMMIT.txt")))
     return os.path.join(base, sets[-1], "win64", "sdclilib.dll") if sets else os.path.join(base, "<none>", "win64", "sdclilib.dll")
 
 

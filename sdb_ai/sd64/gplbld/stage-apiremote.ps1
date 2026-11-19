@@ -107,7 +107,8 @@ $srcExe = Join-Path $cliDir 'tests\remote_connect_test.c'
 # (gplbld\stage-clients.ps1 checks the same sets against their COMMIT.txt).
 $sets = 'P:\git-private\sdclientlib-binaries'
 $set = @(Get-ChildItem -LiteralPath $sets -Directory -ErrorAction SilentlyContinue |
-         Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'win64\sdclilib.dll') } | Sort-Object Name)
+         Where-Object { (Test-Path -LiteralPath (Join-Path $_.FullName 'win64\sdclilib.dll')) -and (Test-Path -LiteralPath (Join-Path $_.FullName 'COMMIT.txt')) } |
+         Sort-Object { (Get-Item -LiteralPath (Join-Path $_.FullName 'COMMIT.txt')).LastWriteTimeUtc })   # newest by COMMIT.txt, not by name
 $dll = if ($set.Count) { Join-Path $set[-1].FullName 'win64\sdclilib.dll' } else { Join-Path $sets '<none>\win64\sdclilib.dll' }
 Say "  client DLL: $dll"
 
