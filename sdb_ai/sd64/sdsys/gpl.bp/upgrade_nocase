@@ -50,7 +50,7 @@
 *           sd.voclib and the account's own directory.  A file is now judged once per account
 *           (real path), a path with no %0 (a directory file) is returned silently again, and
 *           a file named from outside is listed once.  Measured on that install: $hold.dic and
-*           voc were rebuilt as don:sdu_don, mode 664.
+*           voc were rebuilt as fred:sdu_fred, mode 664.
 * 07 Oct 26 Windows port - from Linux 400500c - First real install run (the owner's, of 5cb696b): "Error 3001 opening file".  The
 *           path is now judged BEFORE the file is opened (convert.one), so an SDSYS file or one
 *           outside the account is never touched; the opens that remain (a file, an account's VOC)

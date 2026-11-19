@@ -376,7 +376,7 @@ end.program:
 *     0, so a single crt of the whole thing staircases across the screen -
 *     confirmed on a real console by the owner, 26 and 27 Aug 2026:
 *
-*         edit is not available to don.
+*         edit is not available to fred.
 *                                     It runs an editor outside SD, so it...
 *
 *     A PIPE HIDES IT, which is why it survived so long: down a pipe the LF
@@ -732,8 +732,8 @@ return
 * change is gone.
 *
 * THE PATH IS NOT BUILT HERE, AND THAT IS DELIBERATE.  Choosing it needs
-* %USERPROFILE% - which is NOT C:\Users\<login>, measured: the login "don" has
-* the profile "C:\Users\dmont" - a fallback when a profile cannot be written,
+* %USERPROFILE% - which is NOT C:\Users\<login>, measured: the login "fred" has
+* the profile "C:\Users\fredk" - a fallback when a profile cannot be written,
 * and a copy of the syntax file.  micro-home.ps1 does all of it and prints one
 * line; its header carries the reasoning, including why the home must be per
 * user rather than one shared directory (micro executes Lua plugins from it).

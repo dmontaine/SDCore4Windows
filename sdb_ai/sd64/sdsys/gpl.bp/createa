@@ -88,8 +88,8 @@
 * 18 Sep 26 Windows port - RELEASE_1.1 67.  THE ATTACH ARM FOLDS THE NAME
 *            UNCONDITIONALLY.  It folded only in its else, and for an attached
 *            account the is_user match IS the premise, so it never folded: the
-*            first witnessed install left accounts\don pointing at
-*            user_accounts\Don with group sdu_Don - the 22 Aug 2026 symptom at
+*            first witnessed install left accounts\fred pointing at
+*            user_accounts\Fred with group sdu_Fred - the 22 Aug 2026 symptom at
 *            :912 mirrored.  A narrow exception to :695's "pre create the os
 *            user" escape hatch, which is left alone.
 * 18 Sep 26 Windows port - RELEASE_1.1 66.  THE INSTALL-ONLY DOOR IS BACK, AS
@@ -273,8 +273,8 @@
 *               markers can survive on Windows disks, so only the new name is
 *               safe in both trees).  AND THE ATTACHED ACCOUNT'S NAME IS FOLDED
 *               (the port's RELEASE_1.1 67, same fault here): the arm kept the
-*               Linux user's spelling, so a user "Don" got register key don but
-*               directory user_accounts/Don and group sdu_Don.  acc.uname stays
+*               Linux user's spelling, so a user "Fred" got register key fred but
+*               directory user_accounts/Fred and group sdu_Fred.  acc.uname stays
 *               the real Linux user (chown and membership need it); the account
 *               name, directory and sdu_ group are the lower-case name.
 * 18 Sep 26 Windows port - from Linux 9d6f407 - A4 (the first fresh cycle's witness run): set.owner goes through
@@ -418,7 +418,7 @@
 *                      landed.  An unelevated administrator lands in their own
 *                      account, USR_ADMIN is false, and the empty os.users
 *                      refuses them: measured on -Run b68, message 10053 and
-*                      "OS.EXECUTE from a program is refused", @logname don.
+*                      "OS.EXECUTE from a program is refused", @logname fred.
 *                      ***THE LOGTO LEAK NAMED BELOW IS ACCEPTED, NOT FIXED***
 *                      - the owner was shown it and the session-flag
 *                      alternative and chose this.  Do not reverse it without

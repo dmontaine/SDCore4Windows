@@ -54,7 +54,7 @@ $include int$keys.h
       end
    end
 
-   * The register holds a drive letter path ("C:/ProgramData/SD/user_accounts/don"); @PATH, FILEINFO(FL$PATH) and VOCPATH() give the
+   * The register holds a drive letter path ("C:/ProgramData/SD/user_accounts/fred"); @PATH, FILEINFO(FL$PATH) and VOCPATH() give the
    * same directory in this process's own spelling ("/cygdrive/c/ProgramData/..."), which is also what a program can open, so the
    * answer is given in that spelling and starts with a slash as on Linux.
    * 12 Nov 26 Windows port - RELEASE_1.1 264 (owner, 12 Nov: "Yes, as Linux"): the kernel's path test, K$PATH.OK, decides, as on

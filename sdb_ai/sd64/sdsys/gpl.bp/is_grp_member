@@ -62,7 +62,7 @@
 *      -1    COULD NOT TELL          -> @false, status 1
 *
 *    Membership is compared on the last backslash-delimited component, so
-*    MACHINE\don and don both match don.  A group may be named as a SID, which
+*    MACHINE\fred and fred both match fred.  A group may be named as a SID, which
 *    win32group.c resolves before the lookup.
 *
 *    WHAT REPLACED THE POWERSHELL, AND WHY.  This ran Get-LocalGroupMember

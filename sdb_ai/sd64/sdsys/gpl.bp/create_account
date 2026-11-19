@@ -354,10 +354,10 @@ deffun ps_script(script) calling '!ps_script'
 *   downcase(...)" - folding only in its else - so a name found under its typed
 *   spelling was never folded.  FOR AN ATTACHED ACCOUNT THE MATCH IS THE
 *   PREMISE, so it never folded at all, and the first witnessed install left
-*   "sdsys\accounts\don" pointing at "user_accounts\Don" with group "sdu_Don".
+*   "sdsys\accounts\fred" pointing at "user_accounts\Fred" with group "sdu_Fred".
 *   THAT IS THE 22 Aug 2026 SYMPTOM MIRRORED - see :912, where the owner's
-*   ruling was made "on seeing sdsys\accounts\DON sitting beside
-*   user_accounts\don for the same person".  The register key folds at :937
+*   ruling was made "on seeing sdsys\accounts\FRED sitting beside
+*   user_accounts\fred for the same person".  The register key folds at :937
 *   whatever happens here, so leaving this unfolded guarantees the mismatch.
 *
 *   :695's COMMENT IS THE THING TO READ BEFORE CHANGING THIS BACK: "if you
@@ -369,8 +369,8 @@ deffun ps_script(script) calling '!ps_script'
 *   would ever apply to is the installer's own.
 *
 *   SAFE BECAUSE THE WINDOWS LOOKUP IS CASE-INSENSITIVE, MEASURED RATHER THAN
-*   ASSUMED: Get-LocalUser 'don' resolves the account Windows spells 'Don',
-*   with 'donzzz' refused as the control.  So os_group("ADDMEM", ...) and the
+*   ASSUMED: Get-LocalUser 'fred' resolves the account Windows spells 'Fred',
+*   with 'fredzzz' refused as the control.  So os_group("ADDMEM", ...) and the
 *   sdu_ group built from acc.uname at :1193 and :1231 all reach the same
 *   Windows account under the folded name.  Nothing on the attach path creates
 *   an OS object under the typed spelling - create_user and set_passwd are both
@@ -384,7 +384,7 @@ deffun ps_script(script) calling '!ps_script'
 *   PORTS' createa MUST DIFFER, AND THEIR AGENT SAID SO IN WRITING (19 Sep
 *   2026).***  They hit the same fault and fixed it a DIFFERENT way, because
 *   LINUX OS USER NAMES ARE CASE-SENSITIVE: folding theirs unconditionally
-*   would chown to a user that does not exist when the login really is "Don".
+*   would chown to a user that does not exist when the login really is "Fred".
 *   So their createa keeps the uid as the Linux user spells it - for chown,
 *   sdusers and sdu_ membership - and folds only the account name, the
 *   directory, the sdu_ group NAME and ACC$GROUP.  Windows has no such split
@@ -743,7 +743,7 @@ PW.TRY.AGAIN:
 *   test, and nothing between the two can be reached by a name already in the register that the first would have stopped.
 
 * 22 Aug 26 Windows port - THE REGISTER KEY IS LOWER CASE.  Owner's instruction,
-*   on seeing "sdsys\accounts\DON" sitting beside "user_accounts\don" for the
+*   on seeing "sdsys\accounts\FRED" sitting beside "user_accounts\fred" for the
 *   same person.  This line upcased it, and the ACCOUNTS record id is a FILE
 *   NAME, so the register was the one part of the tree still shouting after
 *   e1095ab made every SDSYS file name lower case on disk.
@@ -755,7 +755,7 @@ PW.TRY.AGAIN:
 *
 *   NOTHING NEEDED TO CHANGE IN THE READERS, and that was measured rather than
 *   hoped for.  A directory-file record is a file on an NTFS volume, so the
-*   lookup is case-insensitive: a probe read DON, don, Don, SDSYS and sdsys from
+*   lookup is case-insensitive: a probe read FRED, fred, Fred, SDSYS and sdsys from
 *   the register and found all five.  MODIFYA:112, CPROC:2643 and LOGIN:913 keep
 *   their upcase() on the key they were HANDED and still hit the record.
 *
@@ -1255,7 +1255,7 @@ PW.TRY.AGAIN:
 *   verb does.  The os.execute half of that ruling stands exactly as written.]
 *   OS.EXECUTE was the one that did not, and it is the one he met: an
 *   UNELEVATED session belonging to the ADMINISTRATOR-tier account the installer
-*   creates was refused "edit is not available to don", because EDIT's
+*   creates was refused "edit is not available to fred", because EDIT's
 *   check.permitted and op_sh.c's os_permitted() both fall back to OS.USERS and
 *   OS.USERS ships empty.  PRE_RELEASE_FIXES item 2.
 *

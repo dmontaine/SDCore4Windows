@@ -215,7 +215,7 @@ drop.voc:
 
 * ------------------------------------------------------------------------------------------------- the account's directory, from its register record
 
-*  The register may hold an @SDSYS token, a drive letter path with forward slashes (C:/ProgramData/SD/user_accounts/don) or backslashes; the answer
+*  The register may hold an @SDSYS token, a drive letter path with forward slashes (C:/ProgramData/SD/user_accounts/fred) or backslashes; the answer
 *  is in forward slashes, without a trailing one, or a null string when it is not an absolute path.
 account.dir:
    acct.dir = trim(arec<ACC$PATH>)

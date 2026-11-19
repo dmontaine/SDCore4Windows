@@ -6,7 +6,7 @@
 *
 * START-HISTORY:
 * 26 Oct 26 dm  New.
-* 26 Oct 26 dm  'totext' and 'fromtext': the token form (owner: "just change them to @VM @SVM @TM for editing and then back again when saved ... Don:@VM:Henry:@VM:June";
+* 26 Oct 26 dm  'totext' and 'fromtext': the token form (owner: "just change them to @VM @SVM @TM for editing and then back again when saved", e.g. Fred:@VM:Henry:@VM:June;
 *               he chose @sm, lower case).  The IDE shows a record that holds marks this way.
 * END-HISTORY
 *
@@ -35,8 +35,8 @@
 *     op = 'fromtext'  a = text in the token form (a record's own text is fine too); b = out: the record.  ok = 1 always: any text can be read.
 *
 *   THE TOKEN FORM.  The fields stay the lines of the text (field marks).  Inside a line each value mark is written @vm, each subvalue mark @sm and each text mark @tm, and the
-*   pieces of the line are joined by a colon, as in BASIC: the field  Don]Henry]June  is  Don:@vm:Henry:@vm:June ; a mark at the start or the end has no text beside it
-*   (@vm:Henry  and  Don:@vm), and two marks together are  a:@vm:@vm:b .  A text that is empty is left out; a text may hold colons ("10:30" is  10:30:@vm:x ).  Reading accepts
+*   pieces of the line are joined by a colon, as in BASIC: the field  Fred]Henry]June  is  Fred:@vm:Henry:@vm:June ; a mark at the start or the end has no text beside it
+*   (@vm:Henry  and  Fred:@vm), and two marks together are  a:@vm:@vm:b .  A text that is empty is left out; a text may hold colons ("10:30" is  10:30:@vm:x ).  Reading accepts
 *   upper case (@VM) and writes lower case.  A token is a word @vm, @sm or @tm that is at the start of the line or after a colon AND at the end of the line or before a colon;
 *   "x@vm" is text.  A colon that follows a token is its separator and is not part of the text that comes next.
 *   'totext' checks its own work: the text it makes is read back and must be the record, field by field.  A field that holds the TEXT of a token - for example a field that is

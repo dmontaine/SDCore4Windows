@@ -156,7 +156,7 @@ deffun ps_script(script) calling '!ps_script'
 *
 *   ***CRLF, AND IT IS MEASURED RATHER THAN ASSUMED.*** A directory-file record
 *   is a file and a field mark is a line ending; on disk SD writes CRLF - od -c
-*   on sdsys/os.users/don reads "y e s \r \n y e s \r \n".  Writing LF-only from
+*   on sdsys/os.users/fred reads "y e s \r \n y e s \r \n".  Writing LF-only from
 *   PowerShell would put a record here that SD reads back with the wrong field
 *   count, silently, in the credential store.  [char]13 and [char]10 are used
 *   rather than an escape so nothing depends on how the script survives being
