@@ -12,6 +12,12 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                          - The client of a remote file names operation 1 analyze.file (it said analyse.file), as the server.
                          - A program that runs EXECUTE ... CAPTURING around a command whose own EXECUTE ... TRAPPING ABORTS
                            catches an abort no longer ends the session: the program carries on with the captured output.
+                         - create.account shows everything load.examples prints for the new account, and says what to type
+                           when the example programs could not be put there.
+                         - LOGTO SDSYS brings back any session that started in SDSYS - at SDSYS's desktop, through the SDSYS
+                           door from your own login, or as a scheduled administrator job - after it has gone to another
+                           account, as SD Core for Linux.  It was the desktop sign-in's only.  SDSYS is still never first
+                           reached by LOGTO.
 
 18 Nov 26  CREATE.ACCOUNT AND MODIFY.ACCOUNT FOLLOW SD CORE FOR LINUX'S PROGRAMS LINE FOR LINE.
 

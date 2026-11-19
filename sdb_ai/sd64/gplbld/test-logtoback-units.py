@@ -76,8 +76,13 @@ def checks(s):
        re.search(r"^#define K_OS_SDSYS_USER\s+174\b", s["keys"], re.M) and re.search(r"^\s*\$define K\$OS\.SDSYS\.USER\s+174\b", s["intkeys"], re.M))
     opk = code_c(s["opk"])
     case = between(opk, "case K_OS_SDSYS_USER:", "break;")
-    ck("K2 op_kernel.c answers K_OS_SDSYS_USER from win32_sdsys_desktop_ok() and reads no argument",
-       "result.data.value = win32_sdsys_desktop_ok(" in case and "k_get" not in case and "descr" not in case, case[:120])
+    ck("K2 op_kernel.c answers K_OS_SDSYS_USER from sdsys_entered or win32_sdsys_desktop_ok() and reads no argument",
+       "result.data.value = (sdsys_entered || win32_sdsys_desktop_ok(" in case and "k_get" not in case and "descr" not in case, case[:120])
+    # 18 Nov 26 - the owner: "log back into sdsys as on linux".  sdsys_entered is set ONLY with the $internal USR_ADMIN grant, never cleared.
+    adm = between(opk, "case K_ADMINISTRATOR:", "break;")
+    ck("K3 sdsys_entered is set only inside K_ADMINISTRATOR's $internal grant, starts 0, and nothing clears it",
+       "if (process.program.flags & HDR_INTERNAL) {\n          SET_MY_PRIV(USR_ADMIN, n > 0);\n          if (n > 0) sdsys_entered = 1;" in adm
+       and "Private int sdsys_entered = 0;" in opk and opk.count("sdsys_entered = ") == 2, adm[:160])
     jm = code_c(s["jm"])
     fn = between(jm, "int win32_sdsys_desktop_ok(char *why, size_t whylen)\n{", "\nint win32_job_admin_path")
     ck("W1 win32_sdsys_desktop_ok() compares the process user with the LOCAL SDSYS by SID",
@@ -115,7 +120,11 @@ MUTANTS = [
      "    return 1;\n}\n\nint win32_job_admin_path"),
     ("jm", "any account named SDSYS (no SID test)", "    if (!EqualSid(user, (PSID)sbuf)) {\n        snprintf(why, whylen, \"the process is not the local account SDSYS\");\n        return 0;\n    }\n    if (!member(WinNetworkSid",
      "    if (!member(WinNetworkSid"),
-    ("opk", "the key reads a caller's argument", "      result.data.value = win32_sdsys_desktop_ok(sdsys_why, sizeof(sdsys_why)) ? 1 : 0;", "      k_get_int(descr);\n      result.data.value = 1;"),
+    ("opk", "the key reads a caller's argument", "      result.data.value = (sdsys_entered || win32_sdsys_desktop_ok(sdsys_why, sizeof(sdsys_why))) ? 1 : 0;", "      k_get_int(descr);\n      result.data.value = 1;"),
+    ("opk", "any program may set the flag", "        if (process.program.flags & HDR_INTERNAL) {\n          SET_MY_PRIV(USR_ADMIN, n > 0);\n          if (n > 0) sdsys_entered = 1;",
+     "        if (n > 0) sdsys_entered = 1;\n        if (process.program.flags & HDR_INTERNAL) {\n          SET_MY_PRIV(USR_ADMIN, n > 0);"),
+    ("opk", "the way out clears the flag", "          if (n > 0) sdsys_entered = 1;", "          sdsys_entered = (n > 0);"),
+    ("opk", "the flag is not asked", "(sdsys_entered || win32_sdsys_desktop_ok(", "(win32_sdsys_desktop_ok("),
 ]
 
 
@@ -143,8 +152,8 @@ def main():
     rows = checks(s)
     for name, ok, why in rows:
         print("  [%s] %s%s" % ("PASS" if ok else "FAIL", name, ("   <- " + why) if (not ok and why) else ""))
-    if len(rows) != 7:
-        print("CANNOT RUN: expected 7 checks, made %d" % len(rows))
+    if len(rows) != 8:
+        print("CANNOT RUN: expected 8 checks, made %d" % len(rows))
         return 2
     failed = sum(1 for r in rows if not r[1])
     print("test-logtoback-units: %d checks, %d failed" % (len(rows), failed))

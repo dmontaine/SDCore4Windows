@@ -582,7 +582,9 @@
 /* 15 Nov 26 Windows port - RELEASE_1.1 310 (WINDOWS ONLY; Linux reserves the number, mail T1625).  kernel(K$OS.SDSYS.USER, -1): 1 when this
    process signed in as SDSYS at a desktop - its token is the local account SDSYS (by SID), an interactive logon, elevated
    (win32jobmark.c win32_sdsys_desktop_ok()); 0 otherwise.  Read-only, any program may ask.  CPROC's LOGTO SDSYS asks it: the way back to
-   SDSYS for the session that came from there, which Linux answers with K$ADMINISTRATOR (kept across LOGTO there, cleared here). */
+   SDSYS for the session that came from there, which Linux answers with K$ADMINISTRATOR (kept across LOGTO there, cleared here).
+   18 Nov 26 (owner: "log back into sdsys as on linux"): also 1 for any process LOGIN or CPROC admitted to SDSYS (op_kernel.c sdsys_entered,
+   set with the $internal USR_ADMIN grant and never cleared), so an ssh, API, local-door or job SDSYS session comes back too, as on Linux. */
 #define K_OS_SDSYS_USER      174
 /* 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267, 38cfb301; the same number).  kernel(K$SDSYS.LOCAL, 0) answers the Windows user
    behind this session when it is a listed user's ssh login from this computer reaching SDSYS: the SD service started this sd as SDSYS

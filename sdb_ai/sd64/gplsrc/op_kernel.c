@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Nov 26 Windows port - the owner: LOGTO back into SDSYS as on Linux - K_OS_SDSYS_USER also answers 1 for a process LOGIN or CPROC
+ *           granted USR_ADMIN (sdsys_entered, kept across LOGTO), not only for the desktop sign-in.
  * 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): K_SDSYS_LOCAL (175), SDSYS reached from this computer by a listed user (win32localsdsys.c).
  * 17 Nov 26 Windows port - four-version audit round 3 (P-4609): case K_SH / K_OS_EXEC sit after K_MAXMIN_POS_SET, as Linux's (layout only).
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 P-4608): a phantom child that cannot start writes "phantom: cannot start a phantom
@@ -223,6 +225,11 @@ Private char **phantom_child_environment(const char *nonce, char *buf, size_t bu
   return env;
 }
 Private char input_null_char = '\0';               /* INPUTNULL (sheet item 408): '\0' for none */
+/* 18 Nov 26 Windows port - the owner, 18 Nov: "if sdsys logs into another account it needs to be able to log back into sdsys as on linux".
+   1 once an $internal program (LOGIN or CPROC, on entry to SDSYS) has granted USR_ADMIN in this process; never cleared, so it holds after
+   any number of LOGTOs - what Linux's K$ADMINISTRATOR, kept across LOGTO there, says (ours is cleared on the way out of SDSYS).
+   K_OS_SDSYS_USER answers 1 for it.  No BASIC can set it: the grant is $internal only. */
+Private int sdsys_entered = 0;
 Private char *reset_all_command = NULL;            /* LOGTO ... RESET ALL (item 30): the command the bottom command processor is to run */
 Private bool run_exe(char *exe_name, char *cmd_line);
 
@@ -936,8 +943,10 @@ void op_kernel() {
            caller that tried to grant itself rights is simply told it has
            none.  See PROJECT_STATUS.md section 5.6.                        */
 
-        if (process.program.flags & HDR_INTERNAL)
+        if (process.program.flags & HDR_INTERNAL) {
           SET_MY_PRIV(USR_ADMIN, n > 0);
+          if (n > 0) sdsys_entered = 1;     /* 18 Nov 26: the way back to SDSYS after a LOGTO (K_OS_SDSYS_USER) */
+        }
       }
       result.data.value = MY_PRIV(USR_ADMIN);
       break;
@@ -1870,10 +1879,11 @@ void op_kernel() {
       k_xfer(descr, &result);
       break;
 
-    /* 15 Nov 26 Windows port - RELEASE_1.1 310: did this process sign in as SDSYS at a desktop (win32jobmark.c)?  Read-only; no argument is read. */
+    /* 15 Nov 26 Windows port - RELEASE_1.1 310: did this process sign in as SDSYS at a desktop (win32jobmark.c)?  Read-only; no argument is read.
+       18 Nov 26: ...or was it admitted to SDSYS at all (sdsys_entered: an ssh or API SDSYS session, the local SDSYS door, a job), as Linux. */
     case K_OS_SDSYS_USER: {
       char sdsys_why[256];
-      result.data.value = win32_sdsys_desktop_ok(sdsys_why, sizeof(sdsys_why)) ? 1 : 0;
+      result.data.value = (sdsys_entered || win32_sdsys_desktop_ok(sdsys_why, sizeof(sdsys_why))) ? 1 : 0;
       break;
     }
 

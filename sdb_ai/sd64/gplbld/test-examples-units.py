@@ -120,7 +120,11 @@ def checks(raw):
        and "read drec from sv, did then delete sv, did" in ld and ld.count("kernel(K$AUDIT") == 1)
     ca = code(raw["createa"])
     i_aud = ca.find("void kernel(K$AUDIT, 'create.account account='")
-    ck("X5", "create.account runs load.examples for the account it made, after its audit line", 0 < i_aud < ca.find("execute 'load.examples ' : downcase(acc.name)"))
+    i_ld = ca.find("execute 'load.examples ' : downcase(acc.name) trapping aborts\n")
+    ck("X5", "create.account runs load.examples for the account it made, after its audit line, trapping aborts and NOT capturing (S.270: capturing "
+             "around a trapped abort crashed the process), and says 15185 when its return code is not 0 (Linux ac4e08fb)", 0 < i_aud < i_ld
+       and i_ld < ca.find("ex.code = @system.return.code") < ca.find("if ex.code # 0 then crt sysmsg(15185")
+       and not re.search(r"execute 'load\.examples[^\n]*capturing", ca))
     iss = iss_code(raw["iss"])
     ps1 = "\n".join(l for l in (raw["ps1"] or "").split("\n") if not l.lstrip().startswith("#"))
     st = raw["stage"] or ""
@@ -203,7 +207,10 @@ MUTANTS = [
     ("the compile is not judged", "X4", sub("load", "if index(out, 'Compiled 1 program(s) with no errors', 1) then", "if 1 then")),
     ("load.examples enters the account with LOGTO, as on Linux", "X4", sub("load", "   x.path = acct.dir : '/examples.bp'", "   execute 'logto ' : acct capturing lt\n   x.path = acct.dir : '/examples.bp'")),
     ("SDSYS's compiler pointers are left behind", "X4", sub("load", "   next a\n   gosub drop.pointers", "   next a")),
-    ("create.account does not load the examples", "X5", sub("createa", "   execute 'load.examples ' : downcase(acc.name) capturing ex.out", "   ex.out = ''")),
+    ("create.account does not load the examples", "X5", sub("createa", "   execute 'load.examples ' : downcase(acc.name) trapping aborts\n", "   null\n")),
+    ("create.account captures load.examples again (S.270 crash)", "X5", sub("createa", "   execute 'load.examples ' : downcase(acc.name) trapping aborts\n",
+                                                                           "   execute 'load.examples ' : downcase(acc.name) trapping aborts capturing ex.out\n")),
+    ("create.account does not say a failed load", "X5", sub("createa", "   if ex.code # 0 then crt sysmsg(15185, downcase(acc.name))\n", "")),
     ("the installer does not run load-examples", "X6", sub("iss", "    ExamplesMsg := LoadExamples;", "    ExamplesMsg := '';")),
     ("the installer's failure line is not in the closing box", "X6", sub("iss", "           ExamplesMsg +\n", "")),
     ("load-examples.ps1 starts LOAD.EXAMPLES as an ordinary session", "X6", sub("ps1", "Invoke-Sd @('-internal', 'LOAD.EXAMPLES')", "Invoke-Sd @('LOAD.EXAMPLES')")),

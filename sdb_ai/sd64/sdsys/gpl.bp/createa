@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 18 Nov 26 Windows port - from Linux c657b4de / ac4e08fb (S.269, S.270; RELEASE_1.1 342): load.examples runs trapping aborts and NOT captured
+*           (capturing around a command whose own EXECUTE traps an abort crashed the process, S.270), is judged by its return code, and a
+*           load that did not happen says 15185 (Linux 14185).  No LOGTO back: here load.examples never leaves SDSYS (it reaches each
+*           account by its path), and a LOGTO into SDSYS is refused (RELEASE_1.1 64) - an OS deviation.
 * 17 Nov 26 Windows port - four-version audit round 4 (P-7695): no acc.name = '' before the type's begin case, as Linux (every arm that
 *           goes on assigns it; case 1 stops).  Layout only.
 * 17 Nov 26 Windows port - four-version audit round 3 (P-5471, P-5473): attach.marker's fallback is set just before the type's begin case,
@@ -737,10 +741,11 @@ $include createacc.h
 * 16 Nov 26 Windows port - from Linux cc7e41c6 (S.261).  THE EXAMPLE PROGRAMS (owner, 17 Nov 2026: "there should be a examples.bp file available to all
 *   users", asked how, "A copy in every account"): the new account gets its own examples.bp, compiled, from LOAD.EXAMPLES; its two summary lines are
 *   shown.  A failure there does not undo the account (it is made and audited above); the administrator runs load.examples <name> again.
-   execute 'load.examples ' : downcase(acc.name) capturing ex.out
-   for ex.i = 1 to dcount(ex.out, @fm)
-      if index(ex.out<ex.i>, 'Example programs in examples.bp', 1) or ex.out<ex.i>[1, 9] = 'Compiled ' or index(ex.out<ex.i>, 'was not loaded', 1) then crt ex.out<ex.i>
-   next ex.i
+*   18 Nov 26 (Linux ac4e08fb, S.270): NOT CAPTURED - capturing around a command whose own EXECUTE traps an abort crashed the process - so
+*   load.examples prints its own lines and is judged by its return code (-ER$FAILED when anything failed).  It never leaves SDSYS here, so no LOGTO back.
+   execute 'load.examples ' : downcase(acc.name) trapping aborts
+   ex.code = @system.return.code
+   if ex.code # 0 then crt sysmsg(15185, downcase(acc.name))
 
    @system.return.code = 0
    return      ;* 18 Nov 26 (audit round 2, P-5472): return, as Linux's; the same end of the verb
