@@ -3,7 +3,7 @@
 #
 #   powershell -ExecutionPolicy Bypass -File C:\sdrepo\sdb_ai\sd64\gplbld\witness-vm-radmin.ps1 -Only <section[,section]>
 #
-# ELEVATED PowerShell in the VM, SDSYS signed in once this boot (the seat).  Run the sections IN THIS ORDER, in one run or
+# ELEVATED PowerShell in the VM as an administrator who is NOT SDSYS (dmont), SDSYS signed in once this boot (the seat).  Run the sections IN THIS ORDER, in one run or
 # several (each needs the ones before it):
 #   delivered   F1  nothing exists as delivered: -Status absent, no SDRADMIN, no task, no sshd block, ssh refused
 #   on          F2  remote.sdsys on (the console verb through the seat; its Windows password is generated here and kept in
@@ -27,6 +27,7 @@
 #
 # START-HISTORY:
 # 13 Nov 26  New, for the Core VM witness sitting.  Parse-checked; not run (it needs the VM).
+# 19 Nov 26  Refuses to run as SDSYS (sit5 ran it so: -On succeeded for the "another administrator" checks, 5 harness FAILs).
 # END-HISTORY
 
 param([string[]]$Only = @(), [switch]$List)
@@ -42,6 +43,9 @@ $sections = Resolve-WitSections $Only $known
 if ($null -eq $sections) { exit 2 }
 Start-Wit 'witness-vm-radmin' $sections
 if (-not (Test-WitElevated)) { Write-Wit 'CANNOT RUN: not elevated.  Open PowerShell with "Run as administrator".'; exit 2 }
+# 19 Nov 26: the runner must be an administrator who is NOT SDSYS.  F5's pipe check and row 280's -On refusal measure "another
+# administrator"; run as SDSYS (sit5, 19 Nov) the -On succeeded, reopened the door, and F7's ssh-after-OFF got in: 5 harness FAILs.
+if ($env:USERNAME -ieq 'SDSYS') { Write-Wit ('CANNOT RUN: this PowerShell is SDSYS''s (' + $env:USERDOMAIN + '\' + $env:USERNAME + ').  Run it elevated as another administrator (dmont), with SDSYS signed in once this boot.'); exit 2 }
 
 $vm = $env:COMPUTERNAME
 $app = Join-Path $env:ProgramFiles 'SD'
