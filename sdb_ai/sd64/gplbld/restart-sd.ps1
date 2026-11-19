@@ -39,9 +39,26 @@
 # this to the elevated helper (PS_SCRIPT:166), a PowerShell process that is not
 # in SD's user table and so is not signalled - so the stop, the wait and the
 # start all complete even though the session that asked for them is gone.
+#
+# 18 Nov 26 - RELEASE_1.1 340: THAT WAS NOT TRUE, AND SD STAYED DOWN.  Measured
+# 18 Nov 01:25: remote.api on wrote sd.conf, SD stopped at 01:25:43 and was never
+# started again.  The helper is tied to the session that started it (elevate's
+# -OwnerPid) and exits when that session ends - which this very stop causes -
+# and with no helper ps_script runs PowerShell as the session's own child.  Either
+# way the script died between its stop and its start.  So a caller inside SD now
+# uses -Detach: the restart is handed to Task Scheduler as a one-shot SYSTEM task
+# (\SD\sdcore-restart, in the vetted \SD folder of sd-taskfolder.ps1), which no
+# SD session owns - Windows' form of Linux handing it to systemd - and -Detach
+# returns at once.  The task runs this script with -FromTask, which does the
+# same stop, wait and start as a direct call, writing its lines to
+# <ProgramData>\SD\restart-sd.log because nobody is left to read them.
+#   restart-sd.ps1 -Detach      (from inside SD: remote.api's restart)
+#   restart-sd.ps1 -FromTask    (run by that task only)
 
 param(
-    [switch]$Show
+    [switch]$Show,
+    [switch]$Detach,
+    [switch]$FromTask
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,6 +67,58 @@ $SvcName = 'SD'
 $SdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
 function Say([string]$t) { Write-Output ("restart-sd: " + $t) }
+
+# 18 Nov 26 - RELEASE_1.1 340: hand the restart to Task Scheduler and return (see the header).  The task is SYSTEM as a service account,
+# highest, allowed on battery, five minutes at most, one action: this script with -FromTask.  Made through the COM interface as
+# remote-admin.ps1's Invoke-SystemTask is (the WMI cmdlets stalled for minutes, row 312, and ignore ErrorActionPreference); a task of
+# the name is deleted first.  Success is anchored on the task being seen running (or already done), not on Run() returning.
+if ($Detach) {
+    . (Join-Path $PSScriptRoot 'sd-taskfolder.ps1')
+    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $me = $PSCommandPath
+    Say ("handing the restart to Task Scheduler: \SD\sdcore-restart, as SYSTEM, running " + $me + " -FromTask")
+    try {
+        $tsSvc = New-Object -ComObject Schedule.Service
+        $tsSvc.Connect()
+        $folder = Initialize-SdTaskFolder $tsSvc
+        try { $folder.DeleteTask('sdcore-restart', 0) } catch { }
+        $def = $tsSvc.NewTask(0)
+        $def.Principal.UserId = 'S-1-5-18'
+        $def.Principal.LogonType = 5                     # TASK_LOGON_SERVICE_ACCOUNT
+        $def.Principal.RunLevel = 1                      # TASK_RUNLEVEL_HIGHEST
+        $def.Settings.Enabled = $true
+        $def.Settings.DisallowStartIfOnBatteries = $false
+        $def.Settings.StopIfGoingOnBatteries = $false
+        $def.Settings.ExecutionTimeLimit = 'PT5M'
+        $a = $def.Actions.Create(0)                      # TASK_ACTION_EXEC
+        $a.Path = $ps
+        $a.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $me + '" -FromTask'
+        $task = $folder.RegisterTaskDefinition('sdcore-restart', $def, 6, 'S-1-5-18', $null, 5)   # 6 = create or update
+        $null = $task.Run($null)
+        $deadline = (Get-Date).AddSeconds(10)
+        $seen = $false
+        while ((Get-Date) -lt $deadline) {
+            $t = $folder.GetTask('sdcore-restart')
+            if ($t.State -eq 4 -or $t.LastRunTime -gt (Get-Date).AddMinutes(-1)) { $seen = $true; break }   # 4 = TASK_STATE_RUNNING
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    catch {
+        Say ("the restart task could not be started: " + $_.Exception.Message + " - SD was NOT restarted")
+        exit 1
+    }
+    if (-not $seen) {
+        Say 'the restart task did not start within 10 seconds - SD was NOT restarted'
+        exit 1
+    }
+    Say ("the restart is running as SYSTEM; this session ends when SD stops; its lines go to " + (Join-Path $env:ProgramData 'SD\restart-sd.log'))
+    exit 0
+}
+
+if ($FromTask) {
+    try { Start-Transcript -Path (Join-Path $env:ProgramData 'SD\restart-sd.log') -Append | Out-Null } catch { }
+    Say ("run by Task Scheduler at " + (Get-Date -Format s))
+}
 
 function Get-SdProcs {
     return @((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))

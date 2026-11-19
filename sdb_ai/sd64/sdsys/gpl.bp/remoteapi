@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - RELEASE_1.1 340: the restart is restart-sd.ps1 -Detach, a one-shot SYSTEM task, not a child of this session.
 * 15 Nov 26 Windows port - RELEASE_1.1 317: LOCAL runs api-listener.ps1 -Local (APILOCAL=1, the listener on 127.0.0.1 only, as Linux's
 *           LOCAL); a move between ON and LOCAL therefore moves the listener and is offered the restart.
 * 15 Nov 26 Windows port - RELEASE_1.1 314 (owner: "put the restart question in the page's dialog"): RESTART or NO.RESTART after the word answers
@@ -254,9 +255,11 @@ $include err.h
    end
 
 *  NOTHING AFTER THIS LINE IS SEEN BY THE CALLER, and that is by design rather
-*  than by accident - restart-sd.ps1 runs in the elevated helper, which is not
-*  in SD's user table and so survives, while this session is SIGTERMed with the
-*  rest.  The Y/N above is the last thing they read.
+*  than by accident - this session is SIGTERMed with the rest.  The Y/N above is
+*  the last thing they read.  18 Nov 26 (RELEASE_1.1 340): the restart is handed
+*  to Task Scheduler (restart-sd.ps1 -Detach, a one-shot SYSTEM task), because
+*  the elevated helper is tied to this session and died with it, leaving SD
+*  stopped and never started (measured 18 Nov 01:25).
    gosub run.restart
    stop
 
@@ -345,7 +348,7 @@ run.firewall:
    return
 
 run.restart:
-   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/restart-sd.ps1') : char(39)
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/restart-sd.ps1') : char(39) : ' -Detach'   ;* 18 Nov 26: RELEASE_1.1 340
    ps := @fm : 'exit $LASTEXITCODE'
    rc = ps_script(ps)
    return
