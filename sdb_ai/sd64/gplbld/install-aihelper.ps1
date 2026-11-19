@@ -2,6 +2,13 @@
 #
 #   powershell -ExecutionPolicy Bypass -File "C:\Program Files\SD\install-aihelper.ps1" -Install [-AppDir <dir>] [-DataDir <dir>]
 #   powershell -ExecutionPolicy Bypass -File "C:\Program Files\SD\install-aihelper.ps1" -Remove
+#   powershell -ExecutionPolicy Bypass -File "<copy>\install-aihelper.ps1" -RemoveProfile
+#
+# 19 Nov 26 - RELEASE_1.1 357 (sit6): -RemoveProfile takes away the service account's profile, C:\Windows\ServiceProfiles\sd-ai, which a
+# deleted service leaves behind (Windows never removes it; still there after a restart, measured).  ONLY WHEN THE DATABASE GOES: the profile
+# holds the DPAPI master key the AI keys in <DataDir>\ai\keys are encrypted with, so an uninstall that keeps the database must keep it too,
+# or a reinstall could not read the kept keys.  The uninstaller copies this script out of {app} at usUninstall and runs it after the data
+# tree is deleted.  A profile Windows still has loaded is queued for the next startup as RELEASE_1.1 323 queues an account's.
 #
 # Elevated.  Exit 0 done, 1 failed, 2 could not be attempted (not elevated, no helper in the program folder).
 #
@@ -29,6 +36,7 @@
 param(
     [switch] $Install,
     [switch] $Remove,
+    [switch] $RemoveProfile,
     [string] $AppDir = '',
     [string] $DataDir = ''
 )
@@ -57,19 +65,20 @@ $lib   = Join-Path $AppDir 'lib\sd-ai'
 $state = Join-Path $DataDir 'ai'
 
 $logPath = Join-Path $DataDir 'install-aihelper.log'
-try { Start-Transcript -Path $logPath -Append -Force | Out-Null } catch { }
+# Not for -RemoveProfile: it runs after the data tree is deleted, and a transcript there could make the folder again.
+if (-not $RemoveProfile) { try { Start-Transcript -Path $logPath -Append -Force | Out-Null } catch { } }
 
 function Say($m) { Write-Output "install-aihelper: $m" }
 Say ("{0}  {1}  AppDir={2}  DataDir={3}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'),
-     $(if ($Install) { '-Install' } elseif ($Remove) { '-Remove' } else { '(no switch)' }), $AppDir, $DataDir)
+     $(if ($Install) { '-Install' } elseif ($Remove) { '-Remove' } elseif ($RemoveProfile) { '-RemoveProfile' } else { '(no switch)' }), $AppDir, $DataDir)
 
 $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Say 'not elevated - creating or removing a service needs an elevated token'
     exit 2
 }
-if (-not ($Install -or $Remove)) {
-    Say 'pass -Install or -Remove'
+if (-not ($Install -or $Remove -or $RemoveProfile)) {
+    Say 'pass -Install, -Remove or -RemoveProfile'
     exit 2
 }
 
@@ -103,6 +112,41 @@ if ($Remove) {
     Remove-Svc
     try { if ([System.Diagnostics.EventLog]::SourceExists($SvcName)) { [System.Diagnostics.EventLog]::DeleteEventSource($SvcName) } } catch { }
     if ($script:SvcRemoved) { exit 0 } else { exit 1 }
+}
+
+# RELEASE_1.1 357.  The profile is found by its path AND a service SID (S-1-5-80-...), never by name alone; it is not touched while the
+# service exists.  Exit 0 removed, queued or none; 1 failed.
+if ($RemoveProfile) {
+    if ($null -ne (Get-Svc)) { Say "the $SvcName service still exists; its profile is left"; exit 1 }
+    $tail = '\ServiceProfiles\' + $SvcName
+    $prof = @(Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
+              Where-Object { $_.SID -match '^S-1-5-80(-\d+){5}$' -and $_.LocalPath -and $_.LocalPath.EndsWith($tail, [StringComparison]::OrdinalIgnoreCase) })
+    if ($prof.Count -eq 0) { Say 'service profile: none recorded'; exit 0 }
+    $p = $prof[0]
+    Say ('service profile: ' + $p.LocalPath + '  SID ' + $p.SID + '  loaded ' + $p.Loaded)
+    if (-not $p.Loaded) {
+        try { Remove-CimInstance -InputObject $p -ErrorAction Stop; Say ('service profile removed: ' + $p.LocalPath); exit 0 }
+        catch { Say ('service profile NOT removed: ' + $_.Exception.Message) }
+    }
+    # Loaded, or the removal refused: SYSTEM removes it at the next startup if it is not loaded then, and the task deletes itself (323's shape).
+    $sid  = $p.SID
+    $name = 'SD profile cleanup ' + $sid
+    $cmd  = '$p = Get-CimInstance Win32_UserProfile -Filter "SID=''' + $sid + '''"; ' +
+            'if ($p -and -not $p.Loaded) { Remove-CimInstance -InputObject $p }; ' +
+            'if (-not $p -or -not $p.Loaded) { Unregister-ScheduledTask -TaskName ''' + $name + ''' -TaskPath ''\'' -Confirm:$false }'
+    $enc  = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
+    try {
+        $act = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+                   -Argument ('-NoProfile -NonInteractive -EncodedCommand ' + $enc) -ErrorAction Stop
+        $trg = New-ScheduledTaskTrigger -AtStartup -ErrorAction Stop
+        $prn = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest -ErrorAction Stop
+        $null = Register-ScheduledTask -TaskName $name -TaskPath '\' -Action $act -Trigger $trg -Principal $prn -Force -ErrorAction Stop
+        Say ('service profile queued for the next startup (task "' + $name + '")')
+        exit 0
+    } catch {
+        Say ('service profile NOT queued: ' + $_.Exception.Message)
+        exit 1
+    }
 }
 
 # --- install -------------------------------------------------------------------

@@ -169,6 +169,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ; [name] renders as AppName, "SD Core".  Must sit after [Languages], which is
 ; what it overrides.
 SelectTasksLabel2=Select additional tasks for Setup to perform while installing [name], then click Next.
+; 19 Nov 26 - RELEASE_1.1 356: Inno's stock ReadyLabel2a ends "or click Back if you want to review or change any settings", and an
+; upgrade that skips every earlier page shows Ready FIRST, with no Back button (sit6, Solo).  One sentence that is true either way.
+ReadyLabel2a=Click Install to continue with the installation.
 
 [Tasks]
 Name: "addtopath"; Description: "Add SD Core to the system PATH"; \
@@ -1422,6 +1425,9 @@ var
     (was the box offered, so is the tick meaningful), and ApiListenerAfterwards
     (is there a preserved sd.conf to read, or is the box the only answer). }
   ApiConfWasAbsent: Boolean;
+  { 19 Nov 26 - RELEASE_1.1 357: install-aihelper.ps1 copied to the temporary folder at usUninstall (StashAccountSweep), run with
+    -RemoveProfile only after the database is deleted; empty when the copy failed, and then the profile is left. }
+  AiHelperScript: String;
   { 29 Aug 26 - PRE_RELEASE_FIXES 39.  Where the account sweep was stashed at
     usUninstall, or empty if it could not be.  It has to be COPIED out of the
     application directory before that directory is deleted: the sweep is
@@ -6218,6 +6224,14 @@ procedure StashAccountSweep;
 var
   Src, Dst: String;
 begin
+  { 19 Nov 26 - RELEASE_1.1 357: the AI helper's script too, for its service profile after the database question (see AiHelperScript). }
+  AiHelperScript := '';
+  Src := ExpandConstant('{app}\install-aihelper.ps1');
+  Dst := ExpandConstant('{tmp}\install-aihelper.ps1');
+  if FileExists(Src) then
+    if CopyFile(Src, Dst, False) then
+      AiHelperScript := Dst;
+
   SdAccountsScript := '';
   Src := ExpandConstant('{app}\remove-sdaccounts.ps1');
   if not FileExists(Src) then
@@ -6786,6 +6800,12 @@ begin
       DbFailed := not DelTree(DataPath, True, True, True)
     else
       DbFailed := not DelTreeExceptOne(DataPath, 'sd.conf');
+    { 19 Nov 26 - RELEASE_1.1 357: with the AI keys gone, the sd-ai service account's profile (their DPAPI master key) goes too; Windows
+      never removes a deleted service's profile.  Only here: a kept database keeps it, or a reinstall could not read the kept keys. }
+    if (not DbFailed) and (AiHelperScript <> '') then
+      Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+           '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + AiHelperScript + '" -RemoveProfile',
+           '', SW_HIDE, ewWaitUntilTerminated, Code);
   end
   else if ConfDelete then
   begin
