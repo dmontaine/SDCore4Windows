@@ -13,6 +13,8 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 18 Nov 26 Windows port - RELEASE_1.1 341: sdwind_running() counts only the sdwind.exe beside this program, by full image path; a name
+ *           test counted SD Core Solo's daemon and reported RUNNING over a Core whose "sd -start" had failed.
  * 18 Nov 26 Windows port - RELEASE_1.1 339: the service is the door of "ssh -t <user>@localhost sd-sdsys" (sdsyslocal.c, pipe
  *           SDL_PIPE); started beside run.in's and stopped with it.
  * 15 Nov 26 Windows port - RELEASE_1.1 295: each of the three self-stops sets its own service-specific exit code (1 no start, 2 the daemon
@@ -230,10 +232,54 @@ static void svc_log(const char* fmt, ...) {
    for sdwind instead - verify-createaccount.ps1 does, and PROJECT_STATUS.md 6
    says to.  This is that check, in C.                                       */
 
+/* 18 Nov 26 Windows port - RELEASE_1.1 341: OUR sdwind.exe, NOT ANY sdwind.exe.  On 18 Nov 2026 01:31 "sd -start" exited 1 and
+   the service reported RUNNING because the only sdwind.exe on the machine was SD Core Solo's (C:\Users\Don\SDCoreSolo\usr\bin,
+   started 00:08): a name test counts any install's daemon.  The daemon this service started is the sdwind.exe beside this
+   program (sd.iss puts sd.exe, sdsvc.exe and sdwind.exe in {app}\usr\bin), so only a process whose image IS that file counts,
+   compared by its full path (QueryFullProcessImageNameA, which LocalSystem may ask of any unprotected process).  A process whose
+   image cannot be read does not count.  If this program's own path cannot be read, the name test is the fallback, said once in
+   the log.  "sd -start" exiting 1 when SD is already up stays a start (below): with the path test that is now OUR SD. */
+static char own_sdwind[MAX_PATH] = "";
+static int own_sdwind_tried = 0;
+
+static void own_sdwind_path(void) {
+  DWORD n;
+  char *slash;
+
+  own_sdwind_tried = 1;
+  n = GetModuleFileNameA(NULL, own_sdwind, sizeof(own_sdwind));
+  if (n == 0 || n >= sizeof(own_sdwind) || (slash = strrchr(own_sdwind, '\\')) == NULL ||
+      (size_t)(slash - own_sdwind) + 1 + strlen(SDWIND_EXE) + 1 > sizeof(own_sdwind)) {
+    own_sdwind[0] = '\0';
+    svc_log("cannot read this program's own path; any %s counts as SD's daemon", SDWIND_EXE);
+    return;
+  }
+  strcpy(slash + 1, SDWIND_EXE);
+}
+
+static BOOL sdwind_is_ours(DWORD pid) {
+  HANDLE h;
+  char img[MAX_PATH];
+  DWORD len = sizeof(img);
+  BOOL ok;
+
+  if (own_sdwind[0] == '\0')
+    return TRUE;                    /* the fallback said in own_sdwind_path() */
+  h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  if (h == NULL)
+    return FALSE;
+  ok = QueryFullProcessImageNameA(h, 0, img, &len);
+  CloseHandle(h);
+  return ok && _stricmp(img, own_sdwind) == 0;
+}
+
 static BOOL sdwind_running(void) {
   HANDLE snap;
   PROCESSENTRY32 pe;
   BOOL found = FALSE;
+
+  if (!own_sdwind_tried)
+    own_sdwind_path();
 
   snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
   if (snap == INVALID_HANDLE_VALUE)
@@ -242,7 +288,7 @@ static BOOL sdwind_running(void) {
   pe.dwSize = sizeof(pe);
   if (Process32First(snap, &pe)) {
     do {
-      if (_stricmp(pe.szExeFile, SDWIND_EXE) == 0) {
+      if (_stricmp(pe.szExeFile, SDWIND_EXE) == 0 && sdwind_is_ours(pe.th32ProcessID)) {
         found = TRUE;
         break;
       }
