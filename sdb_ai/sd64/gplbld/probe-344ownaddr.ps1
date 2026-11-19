@@ -15,7 +15,8 @@
 # Exit 0 every address PASS, 1 a FAIL, 2 could not run (no python, no address, the control did not behave, the password was wrong).
 #
 # START-HISTORY:
-# 18 Nov 26  New, for the sitting of 18 Nov (RELEASE_1.1 344).  NOT RUN.
+# 18 Nov 26  New, for the sitting of 18 Nov (RELEASE_1.1 344).
+# 18 Nov 26  First run (owner, 23:05): 3 own addresses and the loopback control refused 12992, PASS.  Now keeps a transcript.
 # END-HISTORY
 
 $ErrorActionPreference = 'Stop'
@@ -27,7 +28,13 @@ $Rx10174 = 'SDSYS may be reached through the API from another computer only'
 $Rx5017  = 'Invalid username or password'
 
 function Say([string]$s) { Write-Host $s }
-function Bail([string]$why) { Say ('CANNOT RUN: ' + $why); Say 'VERDICT: CANNOT RUN'; exit 2 }
+# 18 Nov 26 (after the first run): a transcript in %LOCALAPPDATA%\SD-verify, so the result can be read afterwards; the first run's was
+# only on the owner's screen.  Every exit goes through Done, which closes it.
+$LogFile = Join-Path $env:LOCALAPPDATA ('SD-verify\probe-344ownaddr-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
+$null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $LogFile)
+try { $null = Start-Transcript -Path $LogFile -Force } catch { $LogFile = '(no log: ' + $_.Exception.Message + ')' }
+function Done([int]$code) { Write-Host ('log    : ' + $LogFile); try { $null = Stop-Transcript } catch { }; exit $code }
+function Bail([string]$why) { Say ('CANNOT RUN: ' + $why); Say 'VERDICT: CANNOT RUN'; Done 2 }
 
 Say ('=== probe-344ownaddr ' + (Get-Date -Format s))
 Say ('script : ' + $PSCommandPath)
@@ -116,6 +123,6 @@ if ($null -ne $before -and $null -ne $after -and $after.Length -ge $before.Lengt
 
 Say ''
 Say ('=== ' + $passes + ' PASS, ' + $fails + ' FAIL over ' + $own.Count + ' own address(es), loopback control OK')
-if ($fails) { Say 'VERDICT: FAIL'; exit 1 }
+if ($fails) { Say 'VERDICT: FAIL'; Done 1 }
 Say 'VERDICT: PASS - every own address met the local door'
-exit 0
+Done 0

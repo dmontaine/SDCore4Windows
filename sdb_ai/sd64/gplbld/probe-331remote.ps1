@@ -25,7 +25,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $Probe = Join-Path $PSScriptRoot 'scram-probe.py'
 function Say([string]$s) { Write-Host $s }
-function Bail([string]$why) { Say ('CANNOT RUN: ' + $why); Say 'VERDICT: CANNOT RUN'; exit 2 }
+# 18 Nov 26: a transcript in %LOCALAPPDATA%\SD-verify (probe-344ownaddr's first run was only on the owner's screen).  Every exit
+# goes through Done, which closes it.
+$LogFile = Join-Path $env:LOCALAPPDATA ('SD-verify\probe-331remote-' + $Expect + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
+$null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $LogFile)
+try { $null = Start-Transcript -Path $LogFile -Force } catch { $LogFile = '(no log: ' + $_.Exception.Message + ')' }
+function Done([int]$code) { Write-Host ('log    : ' + $LogFile); try { $null = Stop-Transcript } catch { }; exit $code }
+function Bail([string]$why) { Say ('CANNOT RUN: ' + $why); Say 'VERDICT: CANNOT RUN'; Done 2 }
 
 Say ('=== probe-331remote ' + (Get-Date -Format s))
 Say ('script : ' + $PSCommandPath)
@@ -71,7 +77,7 @@ $whoSdsys = $text -match '(?im)^\s*\|?\s*\d+\s+sdsys\b'
 Say ''
 Say ('read: refused=' + $refused + ' verified=' + $verified + ' 10174=' + $is10174 + ' 15116=' + $is15116 + ' 12992=' + $is12992 + ' 5017=' + $wrong + ' WHO-in-sdsys=' + $whoSdsys)
 if ($wrong) { Bail 'the password was refused (5017): the door is decided after it, so nothing was measured' }
-if ($is12992) { Say 'VERDICT: FAIL - the VM treated this host as ITSELF (12992): wrong -Vm address, or the VM saw a loopback peer'; exit 1 }
+if ($is12992) { Say 'VERDICT: FAIL - the VM treated this host as ITSELF (12992): wrong -Vm address, or the VM saw a loopback peer'; Done 1 }
 
 $ok = switch ($Expect) {
     'shut'      { $refused -and $is10174 -and -not $verified }
@@ -82,5 +88,5 @@ if ($Expect -eq 'notlisted' -and $is15116) {
     $m = [regex]::Match($text, 'and (\S+) is not one of them')
     if ($m.Success) { Say ('the VM saw this host as ' + $m.Groups[1].Value + ' - use that address (or its /24) in remote.sdsys api on') }
 }
-if ($ok) { Say ('VERDICT: PASS - ' + $Expect + ' as expected'); exit 0 }
-Say ('VERDICT: FAIL - expected ' + $Expect + '; see the output above'); exit 1
+if ($ok) { Say ('VERDICT: PASS - ' + $Expect + ' as expected'); Done 0 }
+Say ('VERDICT: FAIL - expected ' + $Expect + '; see the output above'); Done 1
