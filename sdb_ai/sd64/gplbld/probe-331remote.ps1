@@ -15,6 +15,8 @@
 # START-HISTORY:
 # 18 Nov 26  New, for the sitting of 18 Nov (RELEASE_1.1 331), in place of the api_admin_probe.exe witness the s256 sheet asked for:
 #            scram-probe.py is already the API client the suites drive.  NOT RUN.
+# 19 Nov 26  A loopback -Vm with a forwarded -Port (not 4247) is allowed: the sitting reaches the VM through NAT 127.0.0.1:14247,
+#            and the first run refused it as THIS machine.  12992 still fails a run where the VM saw a loopback peer.
 # END-HISTORY
 
 param(
@@ -43,7 +45,12 @@ Say ('python : ' + $py.Source)
 $ip = $null
 if (-not [Net.IPAddress]::TryParse($Vm, [ref]$ip)) { Bail ('-Vm must be an IP address, not ' + $Vm) }
 $own = @(Get-NetIPAddress -ErrorAction SilentlyContinue | ForEach-Object { $_.IPAddress })
-if ($own -contains $Vm -or $Vm -like '127.*' -or $Vm -eq '::1') { Bail ($Vm + ' is THIS machine - the remote door is measured from another computer (row 344 covers our own addresses)') }
+# 19 Nov 26: a loopback -Vm with a -Port other than 4247 is VirtualBox NAT's port forward (the sitting's own route, v-c5.txt): the VM
+# sees the connection from its NAT gateway, another computer.  If it saw a loopback peer instead, 12992 below fails the run.
+$loop = ($Vm -like '127.*' -or $Vm -eq '::1')
+if ($loop -and $Port -ne 4247) {
+    Say ('forward: ' + $Vm + ':' + $Port + ' is a port forward into the VM; the VM sees this host as its NAT gateway (10.0.2.2), not as itself')
+} elseif ($own -contains $Vm -or $loop) { Bail ($Vm + ' is THIS machine - the remote door is measured from another computer (row 344 covers our own addresses)') }
 $tcp = New-Object Net.Sockets.TcpClient
 try { $tcp.Connect($Vm, $Port); Say ('reach  : ' + $Vm + ':' + $Port + ' accepts a TCP connection') } catch { Bail ('nothing answers at ' + $Vm + ':' + $Port + ' - is the VM''s API open to the network (remote.api on)?') } finally { $tcp.Close() }
 
