@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 18 Nov 26 Windows port - RELEASE_1.1 349: the four ospath calls are void statements (dummy = drew "DUMMY is assigned a value but never used").
 * 19 Nov 26 Windows port - RELEASE_1.1 346, from Linux ce649c1a: as LOAD.EXAMPLES - with no account named, this account, for anybody with
 *               bp.edit (12413 otherwise, Linux's 11408); naming accounts is the administrator's, a suspended one named is said and skipped;
 *               no form for every account.  In every account's VOC.
@@ -170,8 +171,8 @@ do.account:
    close xf
    if have.obj then close of
    if left = 0 then
-      dummy = ospath('', OS$FLUSH.CACHE)
-      dummy = ospath(x.path, OS$DELETE)
+      void ospath('', OS$FLUSH.CACHE)
+      void ospath(x.path, OS$DELETE)        ;* 18 Nov 26 (RELEASE_1.1 349): void, not dummy =, so the compiler does not warn
       openpath x.path to xf then
          close xf
          display sysmsg(15129, acct : ' examples.bp', 'the file could not be deleted')
@@ -182,8 +183,8 @@ do.account:
          gosub drop.voc
          openpath o.path to of then
             close of
-            dummy = ospath('', OS$FLUSH.CACHE)
-            dummy = ospath(o.path, OS$DELETE)
+            void ospath('', OS$FLUSH.CACHE)
+            void ospath(o.path, OS$DELETE)
             openpath o.path to of then
                close of
                display sysmsg(15129, acct : ' examples.bp.out', 'the file could not be deleted')

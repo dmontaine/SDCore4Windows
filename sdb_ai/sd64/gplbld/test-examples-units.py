@@ -154,8 +154,9 @@ def checks(raw):
               "deleted only when nothing is left (left = 0) and judged on a reopen, no LOGTO, one audit line, a SUSPENDED account named said and skipped",
        raw["rm"] is not None and 0 <= rm.find(GATE) < rm.find("dir(src)") and (SUSP % "15131") in rm
        and "read old from xf, names<p> then" in rm and "delete xf, names<p> on error dok = @false" in rm and "delete of, names<p> on error dok = @false" in rm
-       and 0 < rm.find("if left = 0 then") < rm.find("dummy = ospath(x.path, OS$DELETE)") < rm.find("dummy = ospath(o.path, OS$DELETE)")
-       and rm.find("dummy = ospath(x.path, OS$DELETE)") < rm.find("openpath x.path to xf then\n         close xf\n         display sysmsg(15129")
+       and 0 < rm.find("if left = 0 then") < rm.find("void ospath(x.path, OS$DELETE)") < rm.find("void ospath(o.path, OS$DELETE)")
+       and rm.find("void ospath(x.path, OS$DELETE)") < rm.find("openpath x.path to xf then\n         close xf\n         display sysmsg(15129")
+       and "dummy" not in rm      # 18 Nov 26 (RELEASE_1.1 349): an assigned, unused dummy drew a compiler warning
        and "select xf to 12" in rm and rm.count("OS$DELETE") == 2 and "logto" not in rm.lower() and rm.count("kernel(K$AUDIT") == 1
        and "clear.file" not in rm)
     cited_r = set(re.findall(r"sysmsg\((\d+)", rm))
