@@ -3,6 +3,16 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+19 Nov 26  CONFIG GPL AND CONFIG CONTRIB WORK IN EVERY ACCOUNT.
+
+             What        - The sign-on banner tells every session to type CONFIG GPL for the licence and CONFIG
+                           CONTRIB for the contributors.  Both now work in every account.
+             Why         - CONFIG was a verb of the SDSYS account only, so an ordinary account answered "CONFIG is
+                           not in your VOC".
+             Does NOT    - Open the rest of CONFIG.  Listing the settings (CONFIG, CONFIG LPTR) and setting one for
+                           the session still need the administrator, and answer "Command requires administrator
+                           privileges" in any other account.
+
 19 Nov 26  A TRIGGER ON AN ACCOUNT'S VOC NO LONGER STOPS ITS SIGN-ON.
 
              What        - An account whose VOC file has a trigger could not sign on ("Requires file variable"): the

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 353 (Linux S.273): CONFIG goes into newvoc; every form but GPL and CONTRIB asks for
+*           the administrator first (Solo's rule).
 * 17 Nov 26 Windows port - four-version audit round 1: CONFIG GPL and CONFIG CONTRIB show the shipped files @sdsys/licence and
 *           @sdsys/contrib, as Linux does, read and paged by SD (no less on Windows); they read the $licence and $contrib VOC
 *           records, which left the VOC set on 16 Nov (RELEASE_1.1 255), so both answered "not in the SDSYS VOC".
@@ -82,6 +84,14 @@ $include parser.h
    call @parser(parser$get.token, token.type, token, keyword)  ;* Verb
 
    call @parser(parser$get.token, token.type, param, keyword)
+
+* 19 Nov 26 Windows port - RELEASE_1.1 353 (Linux S.273, c9de4dbf): CONFIG is in every account's VOC now (newvoc),
+*    because the sign-on banner tells every session to type CONFIG GPL and CONFIG CONTRIB, and it was in SDSYS's VOC
+*    alone.  Those two read-only displays are open to everyone; every other form - the listing, LPTR, setting a
+*    parameter - needs the administrator, as it did when only SDSYS had the verb.  SD Core Solo's rule.
+   if upcase(param) # 'GPL' and upcase(param) # 'CONTRIB' then
+      if not(kernel(K$ADMINISTRATOR, -1)) then stop sysmsg(2001) ;* Command requires administrator privileges
+   end
 
    begin case
       case upcase(param) = 'GPL' 		; gosub show.gpl
