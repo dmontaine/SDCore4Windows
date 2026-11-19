@@ -181,6 +181,9 @@ if ($sections -contains 'on') {
         Save-WitFixtures $f ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value)
     }
     $mark = Get-WitAuditMark
+    # 19 Nov 26: a repeat ON (SDRADMIN already there) makes no account, and its audit says so; read before the ON, not after
+    $hadRadmin = $null -ne (Get-LocalUser -Name SDRADMIN -ErrorAction SilentlyContinue)
+    Write-Wit ('  SDRADMIN before this ON: ' + $(if ($hadRadmin) { 'exists (a repeat ON)' } else { 'absent (the first ON)' }))
     $r = Invoke-WitSd -Commands @('remote.sdsys on', $pw, $pw) -Label 'remote.sdsys on' -Secrets @($pw) -TimeoutSec 300
     Set-WitVerdict '202' 'F2: remote.sdsys on succeeds (12601 "ssh is open for SDRADMIN")' $r.Text 'ssh is open for SDRADMIN' @('did not succeed', 'Command requires administrator', 'not available in a remote administration session')
     Set-WitVerdict '280' 'remote.sdsys on as SDSYS: the broker task is registered by SDSYS and its pipe appears' $r.Text 'the broker is running: \\\\\.\\pipe\\sd-radmin is there' @('did not succeed', 'is registered by SDSYS only', 'did not appear in 20 seconds')
@@ -229,7 +232,11 @@ if ($sections -contains 'on') {
     Set-WitCompare '202' 'F5: the broker''s pipe refuses another user (this elevated administrator: 5 = access denied)' '5' ([string]$e)
     $al = @(Get-WitAuditSince $mark | Where-Object { $_ -match 'remote\.sdsys' })
     Write-WitRaw 'audit: remote.sdsys lines' ($al -join "`n")
-    Set-WitVerdict '202' 'F2: the audit has remote.sdsys on made account=sdradmin and remote.sdsys on status=0' ($al -join "`n") '(?s)remote\.sdsys on made account=sdradmin.*remote\.sdsys on status=0' @()
+    if ($hadRadmin) {
+        Set-WitVerdict '202' 'F2: the audit has remote.sdsys on status=0 and no new account (a repeat ON)' ($al -join "`n") 'remote\.sdsys on status=0' @('made account=')
+    } else {
+        Set-WitVerdict '202' 'F2: the audit has remote.sdsys on made account=sdradmin and remote.sdsys on status=0' ($al -join "`n") '(?s)remote\.sdsys on made account=sdradmin.*remote\.sdsys on status=0' @()
+    }
 }
 
 # ===================================================================================================== ssh (F3, A3)
