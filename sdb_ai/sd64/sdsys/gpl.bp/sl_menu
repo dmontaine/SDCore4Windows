@@ -16,6 +16,9 @@
 * 19 Oct 26 dm  The op hit (which title is over a column), and title.at, which click.menu used inline: a click on a bar that is not open
 *               can start the menu under it (SCREEN MENUBAR ... CLICK; the IDE ignored a click on its bar until Esc had opened the menu).
 * 10 Nov 26 dm  S.173: the style hotkey.sel (code Z), the mnemonic letter on the selected entry of a bar.
+* 19 Nov 26 Windows port - RELEASE_1.1 347: Linux fe151086 (S.271) carried unchanged.
+* 19 Nov 26 dm  S.271: a shortcut key (^K, F5, Alt-T, Shift-F7) while a menu is open chooses the item that shows it, in any
+*               menu (shortcut.item); the open menu dropped every such key, so the shortcuts worked only from the item itself.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -47,7 +50,9 @@
 *             the screen under it back
 *     key     one key: left / right / home / end change menu, up / down / home / end change
 *             item (separators are skipped), enter chooses, esc and f10 leave, a letter chooses
-*             the item with that mnemonic or, if none has it, opens the menu with it.
+*             the item with that mnemonic or, if none has it, opens the menu with it; a ctrl-, alt-,
+*             shift- or function key chooses the item whose shortcut (subvalue 2) shows it, the open
+*             menu's first, then any other's (a disabled one does nothing).
 *             ret<1> is 'handled', 'unhandled' (a key the menu has no use for), 'done' (an item
 *             was chosen; ret<2> is its code) or 'cancel'.  The caller then closes it.
 *     close   closes the drop-down if open (as focus 0)
@@ -243,6 +248,8 @@ handle.key:
                end
             next m
          end
+      case key[1, 5] = 'ctrl-' or key[1, 4] = 'alt-' or key[1, 6] = 'shift-' or (key[1, 1] = 'f' and num(key[2, 99]) and key[2, 99] # '')
+         gosub shortcut.item                    ;* 19 Nov 26: an item's shown shortcut chooses it while a menu is open
       case 1
          ret = 'unhandled'
    end case
@@ -252,6 +259,41 @@ handle.key:
       gosub fix.top
       gosub draw.drop
    end
+   return
+
+* 19 Nov 26 dm - A shortcut key while a menu is open (a tester: "the shortcuts (^Q, ^T, ^K, ^O) work only when the cursor is
+* positioned on the corresponding menu item"; the open menu answered 'unhandled' and the run loop dropped the key).  The key's
+* name is made into the text an item shows as its shortcut (ctrl-k ^K, f5 F5, alt-t Alt-T, shift-f7 Shift-F7) and the item
+* that shows it is chosen: the open menu's own items first, then every other menu's.  A disabled item does nothing and the
+* cursor stays where it was; a key no item shows is 'unhandled' as before.
+shortcut.item:
+   begin case
+      case key[1, 5] = 'ctrl-' ; want = '^' : upcase(key[6, 99])
+      case 1 ; want = upcase(key)
+   end case
+   sc.m = 0 ; sc.i = 0
+   for pass = 1 to 2
+      for m = 1 to nm
+         if (pass = 1 and m # menu) or (pass = 2 and m = menu) then continue
+         sc.n = dcount(w<M.MENUS + m>, @vm) - 1
+         for i = 1 to sc.n
+            if w<M.MENUS + m, i + 1, 1> = '-' then continue
+            if upcase(trim(w<M.MENUS + m, i + 1, 2>)) = want then sc.m = m ; sc.i = i ; exit
+         next i
+         if sc.m then exit
+      next m
+      if sc.m then exit
+   next pass
+   begin case
+      case sc.m = 0
+         ret = 'unhandled'
+      case index(upcase(w<M.MENUS + sc.m, sc.i + 1, 4>), 'D', 1)
+         ret = 'handled'                         ;* a disabled item: nothing, and the cursor stays where it was
+      case w<M.MENUS + sc.m, sc.i + 1, 3>[1, 1] = '>'
+         ret = 'handled'                         ;* a submenu's entry opens nothing from another menu
+      case 1
+         ret = 'done' : @fm : w<M.MENUS + sc.m, sc.i + 1, 3>
+   end case
    return
 
 * The current item is chosen: a disabled one does nothing, one whose code begins with > opens its submenu, any other

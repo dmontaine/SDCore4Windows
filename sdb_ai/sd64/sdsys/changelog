@@ -3,6 +3,21 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+19 Nov 26  A PAGE'S SHORTCUT KEYS WORK WHILE ONE OF ITS MENUS IS OPEN.
+
+             What        - With a drop-down menu open on any full-screen page (the home screen, the IDE, the
+                           administrator's pages), a key that a menu entry shows - Ctrl-K, Ctrl-T, Ctrl-O, Ctrl-Q,
+                           F5, Alt-T - does what that entry does, whichever entry the cursor is on and whichever
+                           menu the entry is in.  The home screen's Keys tile now shows [K] as its icon.
+                         - A file transfer (RECEIVE / SEND) is recognised when ssh passes its command with a blank
+                           after it, as some OpenSSH versions do.
+             Why         - A tester found that the shortcuts worked only with the cursor on their own entry: an
+                           open menu threw away every key it had no use for.  The Keys tile's icon read ^K, which
+                           looked like its shortcut; Ctrl-K is the list of a page's keys on every page, and the
+                           tile, a keyboard test, is started with Enter.
+             Does NOT    - Change what any key does with no menu open, or start a dimmed entry: its key still does
+                           nothing.  A letter in an open menu still chooses the entry with that underlined letter.
+
 19 Nov 26  YOU LOAD THE EXAMPLE PROGRAMS INTO YOUR OWN ACCOUNT; NO ACCOUNT GETS THEM BY ITSELF.
 
              What        - LOAD.EXAMPLES with no account name puts SD's example programs into examples.bp of the account you

@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 347 (Linux fe151086, S.271): the Keys tile's glyph is [K] (the owner: "it should say [K]"); ^K read as its shortcut.
 * 19 Nov 26 Windows port - RELEASE_1.1 346 (Linux ce649c1a): an Example programs tile in Tools (load.examples into this account), dimmed with the reason where the account has no bp.edit.
 * 18 Nov 26 Windows port - four-version audit round 2 (P-1295, P-1296): ask.ai's Follow up lines are Linux's (focus, then msg); same result.
 * 15 Nov 26 Windows port - RELEASE_1.1 327 (the owner: after Follow up "the cursor does not appear in the ai entry, i have to click on the field"):
@@ -418,7 +419,7 @@ build.page:
    g += 1
    gr<g> = 'Everyone' : @vm : bnd : @vm : 6
    id = 'terminal' ; grp = g ; label = 'Terminal' ; glyph = '>_ ' ; sub = 'type exit to come back' ; act = 'terminal' ; pal = 'gray' ; size = 'w' ; pause = 0 ; why = '' ; gosub add.tile
-   id = 'keys' ; grp = g ; label = 'Keys' ; glyph = '^K ' ; sub = 'test your keyboard' ; act = 'cmd:tool.keys' ; pal = 'gray' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   id = 'keys' ; grp = g ; label = 'Keys' ; glyph = '[K]' ; sub = 'test your keyboard' ; act = 'cmd:tool.keys' ; pal = 'gray' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
    * the development tools, for every account in the account the person is in (plan 13.2: each app adds its tile in the commit that builds it); the last group, so that the others stay where they were
    bnd += 1
    g += 1

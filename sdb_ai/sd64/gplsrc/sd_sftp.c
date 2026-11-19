@@ -19,6 +19,10 @@
  * START-HISTORY:
  * 15 Nov 26 dm  S.242 stage 3 - written.  The check of its text is gplbld/test-sftp-units.py, the suite that runs it against the real
  *               OpenSSH client is gplbld/sandbox-sftp.py.
+ * 19 Nov 26 Windows port - RELEASE_1.1 348: Linux fe151086 (S.242) carried unchanged; Windows' OpenSSH hands the same SSH_ORIGINAL_COMMAND.
+ * 19 Nov 26 dm  S.242 - sx_is_subsystem(): the path followed only by blanks is the Subsystem request too.  OpenSSH 9.6 (Ubuntu 24.04)
+ *               passes "/usr/local/sdsys/bin/sd-sftp " with a trailing space, and every sftp login there started an ordinary session
+ *               (the client: "Received message too long"); found by witness-s242.py on an Ubuntu 24.04 install.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -208,13 +212,29 @@ Private char sx_msgbuf[1024];
    The channel is moved off descriptors 0 and 1, which are given /dev/null, BEFORE anything else runs: from here on no message, banner
    or run-time error SD prints can be read by the client as protocol.  Descriptor 2 is left: ssh shows it to the person.        */
 
+/* 19 Nov 26 dm - S.242: the Subsystem path, followed by nothing or by spaces and tabs only.  OpenSSH 9.6 (Ubuntu 24.04) runs a
+   Subsystem given in a Match block as the path and its empty argument list joined by a space ("subsystem: exec() /usr/local/sdsys/
+   bin/sd-sftp "), and that is the SSH_ORIGINAL_COMMAND the forced command sees; OpenSSH 10 (Debian 13) sends the path alone.  Blanks
+   carry no argument, so the rule is still "this path and nothing else": any other character after the path is not a match.        */
+Private int sx_is_subsystem(const char* cmd) {
+  size_t n = strlen(SD_SFTP_SUBSYSTEM);
+
+  if (strncmp(cmd, SD_SFTP_SUBSYSTEM, n) != 0)
+    return 0;
+  for (cmd += n; *cmd != '\0'; cmd++) {
+    if ((*cmd != ' ') && (*cmd != '\t'))
+      return 0;
+  }
+  return 1;
+}
+
 void xfer_detect(int argc) {
   const char* cmd = getenv("SSH_ORIGINAL_COMMAND");
   const char* conn = getenv("SSH_CONNECTION");
   int nul;
   int n;
 
-  if ((argc != 1) || (cmd == NULL) || (conn == NULL) || (strcmp(cmd, SD_SFTP_SUBSYSTEM) != 0) || isatty(0))
+  if ((argc != 1) || (cmd == NULL) || (conn == NULL) || !sx_is_subsystem(cmd) || isatty(0))
     return;
 
   xfer_fd_in = fcntl(0, F_DUPFD_CLOEXEC, 10);

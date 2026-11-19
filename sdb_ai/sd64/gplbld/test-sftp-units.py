@@ -102,9 +102,15 @@ def checks(s):
        sub and arm and sub.group(1) == arm.group(1) and glob, "%r / %r / global %s" % (sub and sub.group(1), arm and arm.group(1), glob))
 
     det = fn(c, "xfer_detect")
-    ck("S2 xfer_detect() answers only for no argument, both ssh variables, the EXACT path and no terminal, in one test that returns",
-       re.search(r"if \(\(argc != 1\) \|\| \(cmd == NULL\) \|\| \(conn == NULL\) \|\| \(strcmp\(cmd, SD_SFTP_SUBSYSTEM\) != 0\) \|\| isatty\(0\)\)\s+return;", det)
+    ck("S2 xfer_detect() answers only for no argument, both ssh variables, the path (sx_is_subsystem) and no terminal, in one test that returns",
+       re.search(r"if \(\(argc != 1\) \|\| \(cmd == NULL\) \|\| \(conn == NULL\) \|\| !sx_is_subsystem\(cmd\) \|\| isatty\(0\)\)\s+return;", det)
        and 'getenv("SSH_ORIGINAL_COMMAND")' in det and 'getenv("SSH_CONNECTION")' in det)
+    # 19 Nov 26 S.242 (Linux fe151086, RELEASE_1.1 348): OpenSSH 9.6 sends the Subsystem path with a trailing blank; blanks only, nothing else
+    isub = fn(c, "sx_is_subsystem")
+    ck("S2a sx_is_subsystem() wants the whole path at the start and then nothing but spaces and tabs to the end",
+       "strncmp(cmd, SD_SFTP_SUBSYSTEM, n) != 0" in isub and "size_t n = strlen(SD_SFTP_SUBSYSTEM);" in isub
+       and re.search(r"for \(cmd \+= n; \*cmd != '\\0'; cmd\+\+\) \{\s+if \(\(\*cmd != ' '\) && \(\*cmd != '\\t'\)\)\s+return 0;", isub) is not None,
+       isub[:400])
     ck("S3 ...and moves the channel off descriptors 0 and 1 (which get /dev/null) BEFORE it marks the process as the server",
        order(det, "fcntl(0, F_DUPFD_CLOEXEC", "fcntl(1, F_DUPFD_CLOEXEC", "dup2(nul, 0)", "dup2(nul, 1)", "is_xfer = TRUE;",
              "connection_type = CN_NONE;", 'strcpy(command_processor, "$xfersrv");'))
@@ -332,8 +338,10 @@ def report(rows):
 
 
 MUTANTS = [
-    ("sftp_h", "sd answers to another path than the ssh arm writes", '"/usr/local/sdsys/bin/sd-sftp"', '"/usr/lib/openssh/sftp-server"'),
-    ("sftp_c", "any SSH_ORIGINAL_COMMAND that starts with the path", "(strcmp(cmd, SD_SFTP_SUBSYSTEM) != 0)", "(strncmp(cmd, SD_SFTP_SUBSYSTEM, 5) != 0)"),
+    ("sftp_h", "sd answers to another path than the ssh arm writes", '#define SD_SFTP_SUBSYSTEM "sftp-server.exe"', '#define SD_SFTP_SUBSYSTEM "sd-sftp.exe"'),   # 19 Nov 26: Windows' path (the OS deviation, RELEASE_1.1 299); Linux's text never matched here
+    ("sftp_c", "any SSH_ORIGINAL_COMMAND that starts with part of the path", "strncmp(cmd, SD_SFTP_SUBSYSTEM, n) != 0", "strncmp(cmd, SD_SFTP_SUBSYSTEM, 5) != 0"),
+    ("sftp_c", "any characters may follow the path (an argument)", "    if ((*cmd != ' ') && (*cmd != '\\t'))\n      return 0;", "    if (*cmd == '\\0')\n      return 0;"),
+    ("sftp_c", "detection asks nothing of the command", " || !sx_is_subsystem(cmd) ||", " ||"),
     ("sftp_c", "a terminal session can be the server", " || isatty(0))\n    return;", ")\n    return;"),
     ("sftp_c", "the server is marked before the channel is moved", "  is_xfer = TRUE;\n  connection_type = CN_NONE;", "  connection_type = CN_NONE;"),
     ("sd_c", "main() logs before it looks", "  xfer_detect(argc);\n", ""),
