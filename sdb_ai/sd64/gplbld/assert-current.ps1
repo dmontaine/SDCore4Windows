@@ -212,6 +212,7 @@ $neverShipped = @(
     'build-sdpy.ps1', 'build-sdpyclient.ps1', 'gen_includes.py', 'mkbasicsyntax.py',
     'checksyntax.py', 'scan-msgdiff.py',   # 17 Nov 26: mkvocdoc.py and reword-yn-prompts.ps1 deleted (audit P-3060, P-3062)
     'mkrelease.ps1',   # 13 Nov 26: packages a built installer (RELEASE_1.1 268); runs after a cycle, never installed
+    'stage-clients.ps1',   # 19 Nov 26: puts the clean-room client DLLs beside the installer (RELEASE_1.1 351); never installed
     # fixtures and measurement stubs without the probe- prefix
     'apiadminprobe.sb', 'apiosexecprobe.sb', 'basicfuncs.sb', 'testsdcli.bp',
     'relay-hold.py', 'sample-sdstate.ps1', 'scram-probe.py',

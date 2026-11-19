@@ -671,7 +671,7 @@ GROUP_B_MUTANTS = [
     ("iss", "a helper that did not start is passed over (the old no-Python code 3)", "  if Code = 0 then\n    Exit;\n  Result := 'The AI helper service", "  if (Code = 0) or (Code = 3) then\n    Exit;\n  Result := 'The AI helper service"),
     ("makefile", "the test build's hooks are compiled into the shipped helper", "\t@PATH=\"$(UCRT_BIN):$$PATH\" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 -municode \\",
      "\t@PATH=\"$(UCRT_BIN):$$PATH\" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 -municode -DSDAI_TESTS \\"),
-    ("makefile", "sd does not build the helper", "sd: $(SDOBJS) sdclilib sdsvc sdtlsrelay sd-ai sdpy", "sd: $(SDOBJS) sdclilib sdsvc sdtlsrelay sdpy"),
+    ("makefile", "sd does not build the helper", "sd: $(SDOBJS) clientprobes sdsvc sdtlsrelay sd-ai sdpy", "sd: $(SDOBJS) clientprobes sdsvc sdtlsrelay sdpy"),
     ("stage", "sd-ai.exe may import the MSYS2 runtime or Python", "'sd-ai.exe':      ['msys-', 'python', 'user32', 'shell32'],", "'sd-ai.exe':      ['user32'],"),
     ("iss", "the service is left at uninstall", "    Parameters: \"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"\"{app}\\install-aihelper.ps1\"\" -Remove\"; \\\n", "    Parameters: \"-NoProfile\"; \\\n"),
     ("iss", "the group is left at uninstall", "  Exec(Net, 'localgroup sdaiusers /delete',    '', SW_HIDE, ewWaitUntilTerminated, Code);\n", ""),

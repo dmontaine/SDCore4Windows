@@ -347,10 +347,10 @@ try {
     # green on this step for weeks: the development box carries ucrt64\bin in
     # its global PATH, so the broken line was never the thing under test.  Same
     # shape as 173 - a development-box condition hiding a defect from every run.
+    # 19 Nov 26 - RELEASE_1.1 351 (Linux S.262): the Makefile's own rule only, against the clean-room library and the shipped
+    # header; the fallback that compiled against the GPL library in this folder went with it.
     $cmd = "cd '$sd64posix/gplsrc/sdclilib' && export PATH=/c/msys64/ucrt64/bin:`$PATH && " +
-           "make CC=/c/msys64/ucrt64/bin/gcc.exe localtest/remote-connect-test.exe 2>/dev/null || " +
-           "( mkdir -p localtest && /c/msys64/ucrt64/bin/gcc.exe -std=c11 -Wall -Wextra -Wpedantic " +
-           "-o localtest/remote-connect-test.exe tests/remote_connect_test.c -I. -L. -lsdclilib )"
+           "make CC=/c/msys64/ucrt64/bin/gcc.exe localtest/remote-connect-test.exe"
 
     # 06 Sep 26 Windows port - KEEP THE OUTPUT.  PRE_RELEASE 177.  This was
     # "| Out-Null", so a failure arrived as "expected True, got False" and

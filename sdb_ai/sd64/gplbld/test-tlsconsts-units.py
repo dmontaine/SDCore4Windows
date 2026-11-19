@@ -15,7 +15,10 @@ Linux S.19, which is the point of pinning them here rather than reading one of
 the files as the authority):
 
   gplsrc/sd_tls.h            server + BASIC-socket client (sd.exe)
-  gplsrc/sdclilib/sd_tls.h   native client DLLs
+      (gplsrc/sdclilib/sd_tls.h, the GPL client DLLs' copy, went with that
+      library on 19 Nov 26 - RELEASE_1.1 351, Linux S.262; the clean-room
+      client is binaries only, and the API verifiers' TLS + SCRAM logins
+      through it are what hold it to this contract)
       SD_TLS_BINDING_BYTES 32, LABEL EXPORTER-Channel-Binding,
       GS2 p=tls-exporter,, , HANDSHAKE_MS 10000
 
@@ -136,13 +139,11 @@ def expect(where, got, want, label):
 
 def main():
     server_h = read("gplsrc/sd_tls.h")
-    client_h = read("gplsrc/sdclilib/sd_tls.h")
     keys_h = read("gplsrc/keys.h")
     syscom_h = read("sdsys/syscom/keys.h")
 
     for name, want in C_CONSTS.items():
         expect("gplsrc/sd_tls.h", c_define(server_h, name), want, name)
-        expect("gplsrc/sdclilib/sd_tls.h", c_define(client_h, name), want, name)
 
     for name, want in KEY_CONSTS.items():
         expect("gplsrc/keys.h", c_define(keys_h, name), want, name)
@@ -178,7 +179,7 @@ def main():
            gs2_bare, "GS2 header literal (code, not comment)")
 
     print("\n%d checks, %d failed" % (checks, fails))
-    if checks < len(C_CONSTS) * 2 + len(KEY_CONSTS) + 3 + 4:
+    if checks < len(C_CONSTS) + len(KEY_CONSTS) + 3 + 4:    # 19 Nov 26: C_CONSTS once - the client's sd_tls.h is gone (RELEASE_1.1 351)
         print("  [FAIL] fewer checks ran than expected (null case)")
         sys.exit(2)
     sys.exit(1 if fails else 0)

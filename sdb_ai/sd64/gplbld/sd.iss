@@ -618,6 +618,20 @@ Source: "{#Stage}\ProgramFiles\make-shared.ps1"; Flags: dontcopy
 Source: "{code:SshMsiSource}"; DestDir: "{app}\ssh-server"; \
     Flags: external ignoreversion skipifsourcedoesntexist; Check: SshMsiFound
 
+; 19 Nov 26 - RELEASE_1.1 351 (Linux S.262).  THE CLIENT LIBRARIES COME FROM BESIDE THE INSTALLER.  The GPL client is no
+; longer built; the clean-room library is in the release package's clients\Windows64 and clients\Windows32 (gplbld\
+; stage-clients.ps1 puts them there, for a cycle too).  The DLLs go in usr\bin beside sd.exe, because SDConnectLocal starts
+; the sd.exe beside the DLL, and every file (DLLs and import libraries) in usr\clients\client64 and client32, where a person
+; building a client program finds them.  external + skipifsourcedoesntexist: nothing binary is compiled into the installer,
+; and an installer run with no clients folder beside it installs no client library (as Linux's from a clone).  stage.py's
+; PF_RETIRED deletes the old copies first, so an upgrade never keeps the GPL ones.
+Source: "{src}\clients\Windows64\*.dll"; DestDir: "{app}\usr\bin"; Flags: external ignoreversion skipifsourcedoesntexist
+Source: "{src}\clients\Windows32\*.dll"; DestDir: "{app}\usr\bin"; Flags: external ignoreversion skipifsourcedoesntexist
+Source: "{src}\clients\Windows64\*.dll"; DestDir: "{app}\usr\clients\client64"; Flags: external ignoreversion skipifsourcedoesntexist
+Source: "{src}\clients\Windows64\*.dll.a"; DestDir: "{app}\usr\clients\client64"; Flags: external ignoreversion skipifsourcedoesntexist
+Source: "{src}\clients\Windows32\*.dll"; DestDir: "{app}\usr\clients\client32"; Flags: external ignoreversion skipifsourcedoesntexist
+Source: "{src}\clients\Windows32\*.dll.a"; DestDir: "{app}\usr\clients\client32"; Flags: external ignoreversion skipifsourcedoesntexist
+
 ; --- C:\ProgramData\SD\ ----------------------------------------------------
 ; THE DATA TREE IS INSTALLED ONCE AND NEVER TOUCHED AGAIN.
 ;

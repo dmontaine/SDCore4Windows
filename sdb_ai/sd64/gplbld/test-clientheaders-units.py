@@ -14,10 +14,16 @@
 #               SDEvaluate, SDEvalConv, SDIConv, SDOConv, SDIConvs, SDOConvs) was found to have reached the C, Basic and
 #               PureBasic headers only; the owner's Gambas 3, Free Pascal and Python definitions were added to syscom the same
 #               day.  Six files now say the same thing in six languages, and nothing but this check ties them together.
+# 19 Nov 26 Windows port - RELEASE_1.1 351 (Linux S.262, c89f3864): the GPL client library (gplsrc/sdclilib/sdclilib.c and .h) is gone;
+#               the one SD ships is the clean-room library (binaries only).  The authority is now syscom/sdclilib.h, the C header SD ships,
+#               held against the functions the clean-room sdclilib.dll exports (objdump -p; SD_CLIENT_LIB, else the newest set under
+#               P:\git-private\sdclientlib-binaries, else --lib DIR; without one row 1 says it was skipped), and the SV_ status values
+#               against a fixed table of the eight.  The row that compared syscom/sdclilib.h with the GPL header, and the mutant that added
+#               a function to the GPL source, went with them.  Row 9 loads sdclient.py against the clean-room DLL.
 # END-HISTORY
 #
-# THE AUTHORITY is gplsrc/sdclilib/sdclilib.h, which this check holds against the DLLEntry functions of gplsrc/sdclilib/sdclilib.c.  Each of
-# the six headers under sdsys/syscom is then compared with it:
+# THE AUTHORITY is syscom/sdclilib.h, which this check holds against the functions the clean-room library exports.  Each of the
+# other headers under sdsys/syscom is then compared with it:
 #     sdclilib.h       the C header                       every function but the two package functions
 #     sdclient.bas     the Basic (VB) header              the same, but not SDCallx, SDGetArg, SDDebug and SDFree (the VB DLL has none)
 #     sdclient.pb      PureBasic                          every function but the two package functions and SDFree, which its
@@ -36,7 +42,7 @@
 # SDEnterPackage and SDExitPackage are not declared in any header: the owner ruled licensed packages out (15 Oct 2026) and the
 # server answers them as unsupported.  The parameter COUNT of each function is compared too (SDCall and SDCallx take a list
 # without end and are left out), with the two the Gambas header gives one more parameter, an ErrNo the library ignores.
-# If bin/sdclilib.so is newer than gplsrc/sdclilib/sdclilib.c the Python header is also loaded against it and must bind every function.
+# When the clean-room library is here the Python header is also loaded against it and must bind every function.
 
 import importlib.util
 import os
@@ -55,9 +61,31 @@ NOT_IN_VB = {"SDCallx", "SDGetArg", "SDDebug", "SDFree"}      # the VB DLL hands
 NOT_IN_PB = {"SDFree"}                                          # sdclient.pb frees what the library returns itself
 VARARGS = {"SDCall", "SDCallx"}
 GAMBAS_EXTRA = {"SDReadList": 1, "SDReadNext": 1}
-FILES = ["gplsrc/sdclilib/sdclilib.h", "gplsrc/sdclilib/sdclilib.c", "sdsys/syscom/sdclilib.h", "sdsys/syscom/sdclient.bas", "sdsys/syscom/sdclient.pb",
+FILES = ["sdsys/syscom/sdclilib.h", "sdsys/syscom/sdclient.bas", "sdsys/syscom/sdclient.pb",
          "sdsys/syscom/sdclient.module", "sdsys/syscom/sdclilibbind.pas", "sdsys/syscom/sdclient.py", "sdsys/syscom/sdclient.cs",
          "sdsys/syscom/sdclient.php"]
+# 19 Nov 26 RELEASE_1.1 351 (Linux S.262): the status values a reply can carry (the protocol's, gplsrc/sdclient.h, plus the client
+# library's two), fixed here now that the GPL client header that held all eight is gone.
+SV = {"SV_OK": 0, "SV_ON_ERROR": 1, "SV_ELSE": 2, "SV_ERROR": 3, "SV_LOCKED": 4, "SV_PROMPT": 5, "SV_EMSG_PAIR": 6, "SV_ECONTXT": 7}
+
+
+def cleanroom_lib():
+    """The clean-room sdclilib.dll: SD_CLIENT_LIB (the DLL or its folder), else the newest set under P:\\git-private."""
+    env = os.environ.get("SD_CLIENT_LIB")
+    if env:
+        return os.path.join(env, "sdclilib.dll") if os.path.isdir(env) else env
+    base = os.path.join("P:" + os.sep, "git-private", "sdclientlib-binaries")
+    sets = sorted(d for d in (os.listdir(base) if os.path.isdir(base) else []) if os.path.isfile(os.path.join(base, d, "win64", "sdclilib.dll")))
+    return os.path.join(base, sets[-1], "win64", "sdclilib.dll") if sets else os.path.join(base, "<none>", "win64", "sdclilib.dll")
+
+
+def dll_exports(lib):
+    """The names a PE DLL exports, read with objdump -p (MSYS2's, or one on PATH); None when there is no objdump."""
+    od = shutil.which("objdump") or next((p for p in (r"C:\msys64\ucrt64\bin\objdump.exe", r"C:\msys64\usr\bin\objdump.exe") if os.path.isfile(p)), None)
+    if not od:
+        return None
+    r = subprocess.run([od, "-p", lib], capture_output=True, text=True)
+    return {m.group(1) for m in re.finditer(r"^\s*\[\s*\d+\]\s+(?:\+base\[\s*\d+\]\s+[0-9a-f]+\s+)?(SD\w+)\s*$", r.stdout, re.M)}
 
 
 def top_count(params):
@@ -104,8 +132,10 @@ def parse_pascal(text):
 
 
 def norm_type(t):
-    """A C type without spaces: 'char *' -> 'char*', 'int16_t' -> 'int16_t'."""
-    return re.sub(r"\s+", "", t.strip())
+    """A C type without spaces: 'char *' -> 'char*', 'int16_t' -> 'int16_t'; 'short int' and 'short' are int16_t (the C header SD ships
+    writes them so, the bindings int16_t: the same 16 bits on every platform SD runs on; Linux S.262)."""
+    t = re.sub(r"\s+", "", t.strip())
+    return "int16_t" if t in ("shortint", "short") else t
 
 
 def split_top(params):
@@ -203,18 +233,19 @@ def run_checks(tree):
         miss, extra = sorted(want - got), sorted(got - want)
         row(name, not miss and not extra, "%s missing: %s; not in the library: %s" % (what, miss, extra) if (miss or extra) else "")
 
-    h = parse_c(read(tree, "gplsrc/sdclilib/sdclilib.h"), "SD_API")
-    # Windows port: the return type may stand before DLLEntry (char* DLLEntry SDRevision) or after it, even on its own line (DLLEntry  int / SDConnect)
-    c = set(re.findall(r"DLLEntry\s+(?:[\w*]+\s+)*?\**\s*(SD\w+)\s*\(", read(tree, "gplsrc/sdclilib/sdclilib.c")))
-    row("0 the authority has functions (not an empty parse)", len(h) > 40, "%d parsed from gplsrc/sdclilib/sdclilib.h" % len(h))
-    same("1 gplsrc/sdclilib/sdclilib.h declares every function gplsrc/sdclilib/sdclilib.c defines with DLLEntry, and no other", set(h), c, "header")
+    # 19 Nov 26 RELEASE_1.1 351 (Linux S.262): the authority is the C header SD ships, syscom/sdclilib.h; the library it describes is the
+    # clean-room one
+    h = parse_c(read(tree, "sdsys/syscom/sdclilib.h"), "DLLEntry")
+    row("0 the authority has functions (not an empty parse)", len(h) > 40, "%d parsed from syscom/sdclilib.h" % len(h))
     want = set(h) - NO_PACKAGES
-
-    sh = parse_c(read(tree, "sdsys/syscom/sdclilib.h"), "DLLEntry")
-    same("2 syscom/sdclilib.h (C)", set(sh), want, "names")
-    bad = sorted(n for n in sh if n in h and n not in VARARGS and sh[n] != h[n])
-    row("2 ... and each takes the number of parameters the library's header gives it", not bad,
-        "differs: %s" % [(n, sh[n], h[n]) for n in bad])
+    lib = os.path.join(LIB_DIR, "sdclilib.dll") if LIB_DIR else cleanroom_lib()
+    exp = dll_exports(lib) if os.path.isfile(lib) else None
+    if exp is not None:
+        row("1 ... the clean-room library's export table was read (not an empty parse)", len(exp) > 40, "%d SD names exported by %s" % (len(exp), lib))
+        same("1 the clean-room library (%s) exports every function syscom/sdclilib.h declares, and no other but the two package functions" % lib,
+             want, exp - NO_PACKAGES, "functions")
+    else:
+        row("1 (no clean-room library at %s, or no objdump: the header was not compared with its exports)" % lib, True, "skipped")
 
     bas = set(re.findall(r"^Declare (?:Sub|Function) (SD\w+) Lib ", read(tree, "sdsys/syscom/sdclient.bas"), re.M))
     same("3 syscom/sdclient.bas (Basic, the VB DLL)", bas, want - NOT_IN_VB, "names")
@@ -261,32 +292,29 @@ def run_checks(tree):
     # the two C headers must at least be C
     cc = shutil.which("gcc") or shutil.which("cc")
     if cc:
-        for rel in ("gplsrc/sdclilib/sdclilib.h", "sdsys/syscom/sdclilib.h"):
+        for rel in ("sdsys/syscom/sdclilib.h",):
             r = subprocess.run([cc, "-fsyntax-only", "-x", "c", os.path.join(tree, rel)], capture_output=True, text=True)
             row("8 %s is valid C" % rel, r.returncode == 0, r.stderr[:300])
     else:
-        row("8 the C headers are valid C (no C compiler here: not run)", True, "skipped")
+        row("8 the C header is valid C (no C compiler here: not run)", True, "skipped")
 
-    # the Python header against a library built from this source
-    # 11 Nov 26, Windows (RELEASE_1.1 224): the library is sdclilib.dll in bin/client64, which is what sdclient.py loads on win32 ('./sdclilib.dll').  Until now
-    # only sdclilib.so was looked for, which Windows never builds, so this row printed "skipped" and passed.
-    libname, libsub = ("sdclilib.dll", os.path.join("bin", "client64")) if sys.platform == "win32" else ("sdclilib.so", "bin")
-    lib = os.path.join(LIB_DIR or os.path.join(tree, libsub), libname)
-    src = os.path.join(tree, "gplsrc", "sdclilib", "sdclilib.c")
-    if os.path.isfile(lib) and os.path.isfile(src) and (LIB_DIR or os.path.getmtime(lib) >= os.path.getmtime(src)):
+    # the Python header against the clean-room library (RELEASE_1.1 351: the tree builds none).  sdclient.py loads './sdclilib.dll' on
+    # win32, so it is run from the library's folder.
+    libname = os.path.basename(lib)
+    if os.path.isfile(lib):
         code = ("import importlib.util, sys; s = importlib.util.spec_from_file_location('c', sys.argv[1]); m = importlib.util.module_from_spec(s);"
                 "s.loader.exec_module(m); print('BOUND', len([n for n in dir(m) if n.startswith('SD') and not n.endswith('_type')"
                 " and hasattr(getattr(m, n), 'argtypes')]))")
         r = subprocess.run([sys.executable, "-I", "-B", "-c", code, os.path.join(tree, "sdsys/syscom/sdclient.py")], cwd=os.path.dirname(lib),
                            capture_output=True, text=True)
         m = re.search(r"BOUND (\d+)", r.stdout)
-        row("9 sdclient.py loads against the built %s and binds every function in the header" % libname,
+        row("9 sdclient.py loads against the clean-room %s and binds every function in the header" % libname,
             m is not None and int(m.group(1)) == len(want), (r.stdout + r.stderr)[-300:])
     else:
-        row("9 (%s is missing or older than gplsrc/sdclilib/sdclilib.c: the Python header was not loaded against it)" % libname, True, "skipped")
+        row("9 (no clean-room library at %s: the Python header was not loaded against it)" % lib, True, "skipped")
 
     # C# (P/Invoke): names, SDCall / SDCallx for 0 to 20 arguments, and the C type each parameter and result stands for
-    hs = parse_c_sigs(read(tree, "gplsrc/sdclilib/sdclilib.h"), "SD_API")
+    hs = parse_c_sigs(read(tree, "sdsys/syscom/sdclilib.h"), "DLLEntry")
     cs_text = read(tree, "sdsys/syscom/sdclient.cs")
     cs_decls, cs_attrs, cs_cc, cs_lib, cs_consts = parse_csharp(cs_text)
     cs_by_entry = {}
@@ -310,8 +338,8 @@ def run_checks(tree):
         not bad, "differs: %s" % bad[:3])
     bad = [m for entry in VARARGS for m, r, pt in cs_by_entry.get(entry, []) if pt[:2] != ["char*", "int16_t"] or set(pt[2:]) - {"char*"} or len(pt) != int(re.sub(r"^SDCallx?", "", m)) + 2]
     row("10 ... and each SDCallN takes a name, a count and N char * arguments", not bad, "differs: %s" % bad[:3])
-    hc = {m.group(1): int(m.group(2)) for m in re.finditer(r"^#define (SV_\w+)\s+(\d+)", read(tree, "gplsrc/sdclilib/sdclilib.h"), re.M)}
-    row("10 ... the SV_ constants are the header's, and every one of the header's is there", cs_consts == hc and len(hc) == 8, "cs %s header %s" % (cs_consts, hc))
+    hc = SV
+    row("10 ... the SV_ constants are the eight status values, every one of them", cs_consts == hc, "cs %s want %s" % (cs_consts, hc))
 
     # PHP (FFI): the C declarations FFI reads
     php_text = read(tree, "sdsys/syscom/sdclient.php")
@@ -331,7 +359,7 @@ def run_checks(tree):
             try:
                 tu = os.path.join(tmp, "cdef.c")
                 with open(tu, "w") as f:
-                    f.write('#include <stdint.h>\n#define SD_API\n#include "%s"\n%s\n' % (os.path.join(tree, "gplsrc/sdclilib/sdclilib.h"), cdef))
+                    f.write('#include <stdint.h>\n#include "%s"\n%s\n' % (os.path.join(tree, "sdsys/syscom/sdclilib.h"), cdef))
                 r = subprocess.run([cc, "-fsyntax-only", "-x", "c", tu], capture_output=True, text=True)
                 row("11 ... a C compiler reads the CDEF after the library's own header and finds no conflicting type", r.returncode == 0, r.stderr[:400])
             finally:
@@ -374,8 +402,8 @@ def mutate_copy(tree, edits):
 
 def selftest():
     cases = [
-        ("a function taken out of the C header", [("sdsys/syscom/sdclilib.h", "DLLEntry char * SDRevision(void);\n", "")], "2 "),
-        ("a parameter added to a function in the C header", [("sdsys/syscom/sdclilib.h", "SDTxn(int mode)", "SDTxn(int mode, int extra)")], "2 "),
+        ("a function taken out of the C header", [("sdsys/syscom/sdclilib.h", "DLLEntry char * SDRevision(void);\n", "")], "3 "),
+        ("a parameter added to a function in the C header", [("sdsys/syscom/sdclilib.h", "SDTxn(int mode)", "SDTxn(int mode, int extra)")], "5 "),
         ("a function taken out of the Basic header", [("sdsys/syscom/sdclient.bas", "Declare Function SDRevision Lib \"SDClient.dll\" () As String\n", "")], "3 "),
         ("a Procedure taken out of the PureBasic header", [("sdsys/syscom/sdclient.pb", "Procedure.s SDRevision()", "Procedure.s SDRevisionX()")], "4 "),
         ("SDCallx19 taken out of PureBasic", [("sdsys/syscom/sdclient.pb", "Declare SDCallx19(", "Declare SDCallxZ(")], "4 "),
@@ -387,7 +415,6 @@ def selftest():
                                               "TSDTxnFn = procedure(Mode, Two: LongInt); cdecl;")], "6 "),
         ("a Python binding taken out", [("sdsys/syscom/sdclient.py", "SDRevision = _lib.SDRevision\n", "")], "7 "),
         ("a Python restype taken out", [("sdsys/syscom/sdclient.py", "SDTxn.restype = None\n", "")], "7 "),
-        ("a function added to the library and not to the headers", [("gplsrc/sdclilib/sdclilib.c", "SDRevision(void) {", "SDRevision(void) {}\nvoid DLLEntry SDNewThing(void) {")], "1 "),
         ("a C# declaration taken out", [("sdsys/syscom/sdclient.cs", "    [DllImport(Lib, CallingConvention = CC)] public static extern IntPtr SDRevision();\n", "")], "10 "),
         ("a C# parameter of the wrong type", [("sdsys/syscom/sdclient.cs", "public static extern void SDTxn(int mode);", "public static extern void SDTxn(short mode);")], "10 "),
         ("a C# int * parameter declared as an int", [("sdsys/syscom/sdclient.cs", "SDRead(int fno, byte[] id, out int err);", "SDRead(int fno, byte[] id, int err);")], "10 "),
@@ -420,9 +447,10 @@ def selftest():
         hit = [r for r in res if not r[1] and r[0].startswith(want)]
         print("  [%s] %s: %s" % ("PASS" if hit else "FAIL", name, "caught by row %s" % hit[0][0][:2] if hit else "NOT CAUGHT"))
         ok_all &= bool(hit)
-    # 11 Nov 26, Windows (RELEASE_1.1 224): row 9 needs the built library, whatever its age (as --lib), so it has its own case.  Only when one is there.
+    # 11 Nov 26, Windows (RELEASE_1.1 224): row 9 needs the library, so it has its own case.  Only when one is there.  19 Nov 26
+    # (RELEASE_1.1 351): the clean-room library, and a function added to the C header that it does not export (row 1).
     global LIB_DIR
-    wl = os.path.join(SD64, "bin", "client64", "sdclilib.dll") if sys.platform == "win32" else os.path.join(SD64, "bin", "sdclilib.so")
+    wl = cleanroom_lib()
     if os.path.isfile(wl):
         keep, LIB_DIR = LIB_DIR, os.path.dirname(wl)
         try:
@@ -432,12 +460,22 @@ def selftest():
             finally:
                 shutil.rmtree(d)
             hit = [r for r in res if not r[1] and r[0].startswith("9 ")]
-            print("  [%s] a binding for a function the BUILT library has not: %s" % ("PASS" if hit else "FAIL", "caught by row 9" if hit else "NOT CAUGHT"))
+            print("  [%s] a binding for a function the clean-room library has not: %s" % ("PASS" if hit else "FAIL", "caught by row 9" if hit else "NOT CAUGHT"))
+            ok_all &= bool(hit)
+            d = mutate_copy(SD64, [("sdsys/syscom/sdclilib.h", "DLLEntry char * SDRevision(void);\n",
+                                    "DLLEntry char * SDRevision(void);\nDLLEntry void SDNewThing(void);\n")])
+            try:
+                res = run_checks(d)
+            finally:
+                shutil.rmtree(d)
+            hit = [r for r in res if not r[1] and r[0].startswith("1 ")]
+            print("  [%s] a function in the C header the clean-room library does not export: %s" % ("PASS" if hit else "FAIL", "caught by row 1" if hit else "NOT CAUGHT"))
             ok_all &= bool(hit)
         finally:
             LIB_DIR = keep
     else:
-        print("  [skip] the row 9 case: no built library at %s" % wl)
+        print("  [FAIL] the row 1 and row 9 cases: no clean-room library at %s" % wl)
+        ok_all = False
     return 0 if ok_all else 1
 
 

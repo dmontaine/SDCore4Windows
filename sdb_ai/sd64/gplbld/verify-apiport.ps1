@@ -410,7 +410,14 @@ try {
         # search is broken and the result above says nothing.
         Note 'same search finds the user name' $true $wire.Contains($Prefix)
     } else {
-        Note 'packet log written' $true $false
+        # 19 Nov 26 - RELEASE_1.1 351 (Linux S.262).  The packet log was the GPL client's (SDDebug writing "Type <n>" and a
+        # hex dump); the clean-room library that replaced it keeps none (its DLL carries no such text, measured 19 Nov), so
+        # with it this step has nothing to read.  NOT MEASURED is said out loud and counted as neither a pass nor a fail:
+        # the server refuses the cleartext login 24 anyway (phase 5), the password check is the clean-room library's own
+        # test (test_scram), and verify-scramlogin.ps1 drives SCRAM with its own client.  Linux asked whether the
+        # clean-room library can log packets (mail 19 Nov); if it comes to write this file, the checks above run again.
+        Write-Host '   NOT MEASURED: no packet log - the clean-room client library keeps none, so which login it spoke'
+        Write-Host '   and that the password was absent from its bytes are not read here (not counted as a pass).'
     }
 }
 finally {

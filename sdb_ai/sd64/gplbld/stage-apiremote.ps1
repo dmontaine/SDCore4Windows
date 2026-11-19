@@ -102,31 +102,32 @@ Say ''
 Say '== the client kit'
 
 $exe = Join-Path $cliDir 'localtest\remote-connect-test.exe'
-$dll = Join-Path $cliDir 'sdclilib.dll'
 $srcExe = Join-Path $cliDir 'tests\remote_connect_test.c'
-$srcDll = Join-Path $cliDir 'sdclilib.c'
+# 19 Nov 26 - RELEASE_1.1 351 (Linux S.262): the DLL is the clean-room library, not built here; the newest set's win64 copy
+# (gplbld\stage-clients.ps1 checks the same sets against their COMMIT.txt).
+$sets = 'P:\git-private\sdclientlib-binaries'
+$set = @(Get-ChildItem -LiteralPath $sets -Directory -ErrorAction SilentlyContinue |
+         Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'win64\sdclilib.dll') } | Sort-Object Name)
+$dll = if ($set.Count) { Join-Path $set[-1].FullName 'win64\sdclilib.dll' } else { Join-Path $sets '<none>\win64\sdclilib.dll' }
+Say "  client DLL: $dll"
 
 foreach ($f in @($exe, $dll)) {
     if (-not (Test-Path -LiteralPath $f)) {
-        Bad ((Split-Path -Leaf $f) + ' has not been built')
-        Say '  Build it from an MSYS2 UCRT64 shell:'
-        Say '    cd gplsrc/sdclilib && make'
-        Say '  or run gplbld\verify-apiport.ps1, whose check-remote target builds the exe.'
+        Bad ((Split-Path -Leaf $f) + ' is not there: ' + $f)
+        Say '  The exe: run gplbld\verify-apiport.ps1, whose check-remote target builds it.'
+        Say '  The DLL: a clean-room set under P:\git-private\sdclientlib-binaries.'
         exit 2
     }
 }
 
-# A STALE KIT WOULD TEST OLD CODE AND SAY NOTHING.  These are build products in
+# A STALE KIT WOULD TEST OLD CODE AND SAY NOTHING.  The exe is a build product in
 # a tree assert-current does not compare, so nothing else would catch it.
-$stale = @()
-if ((Get-Item $exe).LastWriteTime -lt (Get-Item $srcExe).LastWriteTime) { $stale += 'remote-connect-test.exe is older than remote_connect_test.c' }
-if ((Get-Item $dll).LastWriteTime -lt (Get-Item $srcDll).LastWriteTime) { $stale += 'sdclilib.dll is older than sdclilib.c' }
-if ($stale.Count) {
-    foreach ($m in $stale) { Bad $m }
+if ((Get-Item $exe).LastWriteTime -lt (Get-Item $srcExe).LastWriteTime) {
+    Bad 'remote-connect-test.exe is older than remote_connect_test.c'
     Say '  Rebuild before staging - a stale kit measures code nobody is shipping.'
     exit 2
 }
-Good 'both build products are newer than their sources'
+Good 'the probe is newer than its source'
 
 # NO MSYS2 RUNTIME.  The guest has no toolchain; an import of msys-2.0.dll or of
 # the libgcc/libwinpthread pair turns into "unable to start correctly (0xc...)"

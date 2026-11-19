@@ -84,7 +84,10 @@ PROGRAM_FILES_BIN = [
     'sdidx.exe',
     'sdwind.exe',
     'sdtic.exe',
-    'sdclilib.dll',             # native UCRT64, needs no MSYS2 runtime
+    # 19 Nov 26 - RELEASE_1.1 351 (Linux S.262).  THE FOUR CLIENT DLLs ARE NO LONGER IN THIS LIST.  The GPL client is not
+    # built any more; sd.iss installs the clean-room DLLs into usr\bin (and usr\clients) from the clients folder beside the
+    # installer, which gplbld\stage-clients.ps1 fills.  The notes below on sdclient.dll and the 32-bit pair say where they
+    # go and why; they are kept for that, and the names are in PF_RETIRED so an upgrade drops the GPL copies first.
     # 04 Sep 26 - THE SECOND 64-BIT NAME, PRE_RELEASE_FIXES 161.  Same library,
     # same build, different -o name: sdclilib.dll is what anything already built
     # against this library asks for, sdclient.dll is the name to use from now
@@ -94,7 +97,6 @@ PROGRAM_FILES_BIN = [
     # HERE RATHER THAN IN A client64\ SUBDIRECTORY, and that is load-bearing -
     # see the note on CLIENT_DIRS below.  SDConnectLocal resolves sd.exe beside
     # the DLL, so only a copy in usr\bin can connect locally.
-    'sdclient.dll',             # the same library under the current name
     # 05 Sep 26 - THE IMPORT LIBRARIES ARE NO LONGER HERE.  PRE_RELEASE_FIXES
     # 171.  libsdclilib.dll.a and libsdclient.dll.a were in this list, with the
     # comment "for building clients", and they are now in CLIENT_DIRS' client64
@@ -120,8 +122,6 @@ PROGRAM_FILES_BIN = [
     # 32-bit MSYS2 runtime DLLs and try to ship them beside the 64-bit ones.
     # These two need no closure: they are built -static-libgcc against ws2_32
     # and bcrypt, which are Windows' own.
-    'qmclilib.dll',             # 32-bit, for older utility programs
-    'qmclient.dll',             # the same library under the current name
     'sdsvc.exe',                # native UCRT64, the service that starts SD
     # 16 Sep 26 - RELEASE_1.1 43.  The API's TLS relay, one process per
     # connection, started by sd as the bare account sdrelay at Low integrity.
@@ -236,11 +236,17 @@ PROGRAM_FILES_BIN_OPTIONAL = [
 # implib is a linker input and is never loaded, so it does not belong beside the
 # executables; and the ruling above sends anyone building a client HERE, where
 # they were not.  Headers are still not shipped - that half stays open.
-CLIENT_DIRS = [
-    ('client64', ['sdclilib.dll', 'sdclient.dll',
-                  'libsdclilib.dll.a', 'libsdclient.dll.a']),
-    ('client32', ['qmclilib.dll', 'qmclient.dll',
-                  'libqmclilib.dll.a', 'libqmclient.dll.a']),
+#
+# 19 Nov 26 - RELEASE_1.1 351 (Linux S.262).  EMPTY: nothing is staged into usr\clients any more.  The rulings above still
+# say where the files go; sd.iss now puts the clean-room DLLs and import libraries there from the clients folder beside
+# the installer (gplbld\stage-clients.ps1), and PF_RETIRED removes the GPL copies on an upgrade.
+CLIENT_DIRS = []
+CLIENT_FILES_RETIRED = [
+    'usr\\bin\\sdclilib.dll', 'usr\\bin\\sdclient.dll', 'usr\\bin\\qmclilib.dll', 'usr\\bin\\qmclient.dll',
+    'usr\\clients\\client64\\sdclilib.dll', 'usr\\clients\\client64\\sdclient.dll',
+    'usr\\clients\\client64\\libsdclilib.dll.a', 'usr\\clients\\client64\\libsdclient.dll.a',
+    'usr\\clients\\client32\\qmclilib.dll', 'usr\\clients\\client32\\qmclient.dll',
+    'usr\\clients\\client32\\libqmclilib.dll.a', 'usr\\clients\\client32\\libqmclient.dll.a',
 ]
 
 # Where those two directories sit inside C:\Program Files\SD\.  Beside usr\bin
@@ -675,6 +681,12 @@ PF_RETIRED = [
     # adopt-account.ps1 in {app} forever.
     ('adopt-account.ps1',
      'RELEASE_1.1 64 deleted ADOPT with the tier teardown; install-sdsys.ps1 replaced it'),
+] + [
+    # 19 Nov 26 - RELEASE_1.1 351 (Linux S.262).  The GPL client DLLs and import libraries an earlier version installed.
+    # Deleted before [Files] runs, so an upgrade keeps no GPL copy; sd.iss then installs the clean-room ones from the
+    # clients folder beside the installer when there is one.  CLIENT_FILES_RETIRED is defined above.
+    (_n, 'RELEASE_1.1 351: the client library is the clean-room one, from clients\\ beside the installer')
+    for _n in CLIENT_FILES_RETIRED
 ]
 
 SDSYS_PRESERVE = [
@@ -2269,6 +2281,8 @@ def main():
     for _d, _files in CLIENT_DIRS:
         print('  %s: %s' % (os.path.join('ProgramFiles', PF_CLIENTS_SUBDIR, _d),
                             ' '.join(_files)))
+    # 19 Nov 26 - RELEASE_1.1 351: say so, rather than print nothing.
+    print('  client libraries: none staged; sd.iss installs the clean-room ones from clients\\ beside the installer')
     print('  MSYS2 DLLs copied: %s'
           % ' '.join(sorted(os.path.basename(p) for p in dlls.values())))
     print('  supplied by Windows, not copied: %s' % ' '.join(sorted(system)))

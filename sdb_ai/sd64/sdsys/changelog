@@ -3,6 +3,20 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+19 Nov 26  THE CLIENT LIBRARY IS A NEW, CLEAN-ROOM ONE THAT ANY PROGRAM MAY LINK.
+
+             What        - The C client library (sdclilib.dll, sdclient.dll, and the 32-bit qmclilib.dll and
+                           qmclient.dll) is written new for SD Core under the Blue Oak Model License 1.0.0, so a
+                           program of any licence, commercial ones included, may link it.  It comes as binaries in
+                           the release package's clients folder, and the installer puts it in usr\bin and
+                           usr\clients from there, as before.  Its functions, names and protocol are unchanged.
+             Why         - The old library was GPL code, and a commercial program linking a GPL library is the
+                           licensing problem a client library exists to avoid.
+             Also        - The C header syscom\sdclilib.h declared six functions (SDMarkMapping, SDSelectIndex,
+                           SDSelectLeft, SDSelectRight, SDSetLeft, SDSetRight) with int where the library takes
+                           16-bit values; it now says short int.
+             Does NOT    - Change SD's own BASIC client (the sdclient class) or the language bindings in syscom.
+
 19 Nov 26  CONFIG GPL AND CONFIG CONTRIB WORK IN EVERY ACCOUNT.
 
              What        - The sign-on banner tells every session to type CONFIG GPL for the licence and CONFIG

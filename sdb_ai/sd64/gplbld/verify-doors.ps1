@@ -70,9 +70,15 @@ $ErrorActionPreference = 'Stop'
 # See the note on -SdConnect: this cannot be a param() default, because
 # $PSScriptRoot is empty during binding under -File.  $MyInvocation is
 # populated either way.
+#
+# 19 Nov 26 - RELEASE_1.1 351 (Linux S.262).  sd-connect.exe was a GPL tool linked to the GPL 32-bit client, and both are
+# gone.  The API door is now driven by remote-connect-test.exe (gplsrc/sdclilib/localtest, built by "make sd" against the
+# clean-room library and the shipped header), which loads the INSTALLED usr\bin\sdclilib.dll - the library a customer's
+# program gets.  Its exits: 0 connected (and its own wrong-password and SDSYS controls refused), 1 the right credentials
+# refused, 2-4 a control failed, 5 bad usage.  The parameter keeps its name so the runner's call does not change.
 if ($SdConnect -eq '') {
     $SdConnect = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) `
-                           '..\bin\client32\sd-connect.exe'
+                           '..\gplsrc\sdclilib\localtest\remote-connect-test.exe'
 }
 
 $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
@@ -450,22 +456,31 @@ Write-Output '=== door 3: the API - APISRVR:507 -> 10003 =======================
 
 $tcp = Test-NetConnection -ComputerName 127.0.0.1 -Port $Port -WarningAction SilentlyContinue -InformationLevel Quiet
 if (-not (Test-Path -LiteralPath $SdConnect)) {
-    Skip 'API door' ("sd-connect.exe not found at " + $SdConnect)
+    Skip 'API door' ("remote-connect-test.exe not found at " + $SdConnect)
 } elseif (-not $tcp) {
     Skip 'API door' ("nothing is listening on 127.0.0.1:" + $Port + " - APIPORT is off")
 } else {
-    # sd-connect exits 0 for a connect, 1 for a refusal, 2 for bad usage.  ***2
-    # IS A BROKEN CALL AND MUST NEVER BE READ AS A REFUSAL*** - that is
-    # verify-tierapi.ps1's rule and the same trap applies here, where a refusal
-    # is what the Refused phase is hoping to see.
-    $o  = & $SdConnect '127.0.0.1' "$Port" $acct $Password $acctU 2>&1
-    $rc = $LASTEXITCODE
-    Write-Output ("  sd-connect exit {0}" -f $rc)
+    # The probe exits 0 for a connect, 1 for a refusal, 5 for bad usage.  ***5
+    # IS A BROKEN CALL AND MUST NEVER BE READ AS A REFUSAL*** - the same trap as
+    # sd-connect's 2 before it, where a refusal is what the Refused phase is
+    # hoping to see.  The installed usr\bin goes first on PATH for the call, so
+    # the probe loads the installed client library (nothing else is on PATH).
+    $sdBinDir = Join-Path $env:ProgramFiles 'SD\usr\bin'
+    $keepPath = $env:PATH
+    $env:PATH = $sdBinDir + ';' + $env:PATH
+    Write-Output ("  probe: {0} 127.0.0.1 {1} {2} <password> {3}  (PATH starts {4})" -f $SdConnect, $Port, $acct, $acctU, $sdBinDir)
+    try {
+        $o  = & $SdConnect '127.0.0.1' "$Port" $acct $Password $acctU 2>&1
+        $rc = $LASTEXITCODE
+    } finally {
+        $env:PATH = $keepPath
+    }
+    Write-Output ("  remote-connect-test exit {0}" -f $rc)
     foreach ($line in (($o -join "`n") -split "`n")) { Write-Output ("  | " + $line.TrimEnd()) }
     Write-Output ''
 
-    if ($rc -eq 2) {
-        Skip 'API door' 'sd-connect rejected its arguments - a bug in this call, not a refusal'
+    if ($rc -eq 5) {
+        Skip 'API door' 'remote-connect-test rejected its arguments - a bug in this call, not a refusal'
     } elseif ($Phase -eq 'Control') {
         Note 'API: connected before suspension' 0 $rc $true
     } else {

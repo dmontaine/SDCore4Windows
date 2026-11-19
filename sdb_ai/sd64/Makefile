@@ -185,7 +185,7 @@ sd: BITSIZE := 64
 #           are carried (RELEASE_1.1 251).  No -march, as Linux.
 OPT_FLAGS := -O2 -fwrapv -fno-strict-aliasing -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -fstack-protector-strong
 sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) -DGPL -g $(OPT_FLAGS) $(ARCH)
-sd: $(SDOBJS) sdclilib sdsvc sdtlsrelay sd-ai sdpy sdtic sdfix sdconv sdidx sdwind terminfo
+sd: $(SDOBJS) clientprobes sdsvc sdtlsrelay sd-ai sdpy sdtic sdfix sdconv sdidx sdwind terminfo
 	@echo Linking $@
 	@cd $(GPLOBJ)
 # 13 Aug 26 Windows port - libraries must follow the objects that reference
@@ -215,77 +215,20 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # Neither target names a file that make should test for.  Without this, VPATH
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
-.PHONY: sdclilib sdsvc sdtlsrelay sd-ai sdpy terminfo check-local check-remote check-api-admin build-api-identity
+.PHONY: clientprobes sdsvc sdtlsrelay sd-ai sdpy terminfo check-local check-remote check-api-admin build-api-identity
 
-# 04 Sep 26 - ALL FOUR CLIENT DLLs, NOT ONE.  PRE_RELEASE_FIXES 161, the
-# owner's ruling: "let's get rid of the client installers all together and just
-# have sd build all four, the 32 bit ones stored in sd64\bin\client32 directory
-# and the 64 bit ones stored in sd64\bin\client64".
-#
-# WHAT IT REPLACED, AND WHY THE OLD SHAPE COULD NOT HOLD.  One source produces
-# five DLLs.  Until today this target built ONE of them and the other four were
-# hand-built in two sibling trees; they were FIFTEEN DAYS STALE when it was
-# measured, and the older copy won on PATH.  A build that cannot diverge beats
-# a check that reports divergence.
-#
-# WHERE EACH PAIR LANDS, AND THE 64-BIT ONE LANDS TWICE ON PURPOSE.  Owner,
-# 4 Sep 2026, in two steps:
-#
-#   "the 64 bit dlls should be in the usr\bin directory and only the 32 bit
-#    dlls should be in client32 - they are never needed on the server as it is
-#    64 bit, they are only provided for older utility programs that are 32 bit."
-#
-#   "it might be convenient for users if the 64 bit dlls were in both usr\bin
-#    and a client64 directory ... a new directory usr\clients is created that
-#    has client64 and client32 underneath it - that way users are not trying to
-#    copy anything out of the usr\bin directory."
-#
-# So bin\ FLAT is the server's pair, which stage.py's PROGRAM_FILES_BIN copies
-# into usr\bin beside sd.exe.  That copy is load-bearing rather than tidy:
-# sdclilib.dll resolves sd.exe BESIDE ITSELF, so a copy anywhere else can do
-# everything except connect locally.  bin\client64 and bin\client32 are the
-# USER's copies and become usr\clients\ in the install - a directory nobody has
-# to go rummaging in usr\bin to find.
-sdclilib:
-	@echo Building the four client DLLs
-	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC)
-	@cp $(CLILIBDIR)/sdclilib.dll $(CLILIBDIR)/sdclient.dll $(GPLBIN)
-	@cp $(CLILIBDIR)/libsdclilib.dll.a $(CLILIBDIR)/libsdclient.dll.a $(GPLBIN)
-# 05 Sep 26 - THE 32-BIT PAIR GOES BESIDE sd.exe TOO.  Owner's ruling, 5 Sep
-# 2026: "we need both the 32 bit and 64 bit dlls sitting next to the sd.exe
-# file.  Some utilities that the admin may run are 32 bit apps."  This reverses
-# the "THE 32-BIT PAIR HAS NO usr\bin COPY" note in stage.py, which reasoned
-# from the SERVER never loading it - true, and not the question: usr\bin is on
-# PATH, so it is where a 32-bit utility finds its client.  The names do not
-# collide - qmclilib/qmclient against sdclilib/sdclient - so both live there.
-	@cp $(CLILIBDIR)/qmclilib.dll $(CLILIBDIR)/qmclient.dll $(GPLBIN)
-	@mkdir -p $(GPLBIN)client64 $(GPLBIN)client32
-	@cp $(CLILIBDIR)/sdclilib.dll $(CLILIBDIR)/sdclient.dll $(GPLBIN)client64/
-	@cp $(CLILIBDIR)/qmclilib.dll $(CLILIBDIR)/qmclient.dll $(GPLBIN)client32/
-# 05 Sep 26 - AND THE IMPORT LIBRARIES GO WITH THE CLIENT COPIES, NOT INTO
-# usr\bin.  PRE_RELEASE_FIXES 171.  An implib is a LINKER INPUT and is never
-# loaded at runtime, so it has no business in the directory that goes on PATH;
-# the one audience that needs it is somebody BUILDING a client, and the ruling
-# above sends them to usr\clients.  They were in usr\bin and absent here, which
-# is exactly backwards, and it read as a broken install.
-	@cp $(CLILIBDIR)/libsdclilib.dll.a $(CLILIBDIR)/libsdclient.dll.a $(GPLBIN)client64/
-	@cp $(CLILIBDIR)/libqmclilib.dll.a $(CLILIBDIR)/libqmclient.dll.a $(GPLBIN)client32/
-# 04 Sep 26 - AND THE DIAGNOSTIC CLIENT, BESIDE THE DLL IT LOADS.  It is NOT
-# shipped: stage.py's CLIENT_DIRS names the two DLLs explicitly, so an extra
-# file here reaches no install.  verify-tierapi.ps1 and verify-doors.ps1 drive
-# it, and it lives beside qmclilib.dll because Windows searches an executable's
-# own directory first and nothing is on PATH any more.
-	@cp $(CLILIBDIR)/sd-connect.exe $(GPLBIN)client32/
-# Print what was produced rather than only that it succeeded - CLAUDE.md's
-# instrument rule.  "file" names the architecture, which is the one property a
-# 32-bit DLL under the right name can silently get wrong, and the failure it
-# produces names nothing: "%1 is not a valid Win32 application".
-	@echo "  bin (64-bit, the server's own, beside sd.exe):"
-	@file $(GPLBIN)sdclilib.dll $(GPLBIN)sdclient.dll | sed 's|^.*/|    |'
-	@echo "  bin/client64 (64-bit, the user's copy):"
-	@file $(GPLBIN)client64/*.dll | sed 's|^.*/|    |'
-	@echo "  bin/client32 (32-bit, for older utility programs):"
-	@file $(GPLBIN)client32/*.dll | sed 's|^.*/|    |'
+# 19 Nov 26 Windows port - RELEASE_1.1 351 (Linux S.262, c89f3864).  NO CLIENT LIBRARY IS BUILT HERE ANY MORE.  The owner,
+# 17 and 19 Nov 2026: the clean-room library (written without the GPL source, so commercial programs may link to it) is
+# what ships; gplbld\stage-clients.ps1 puts its binaries beside the installer and sd.iss installs them into usr\bin and
+# usr\clients, where the "sdclilib" target below used to copy the GPL build (its rulings on WHERE are kept in stage.py and
+# sd.iss).  What is left in gplsrc/sdclilib is this project's API probes, built against the shipped header and the
+# clean-room import library.  A machine without a clean-room set builds no probe and says so; it does not stop "make sd",
+# because sd itself never linked the client - the API verifiers then refuse for want of a probe.
+clientprobes:
+	@echo Building the API probes against the clean-room client library
+	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC) || \
+	  echo "  (API probes NOT built - see the line above; sd builds without them)"
+
 
 # 17 Aug 26 - REACHABLE FROM HERE, because reaching it the other way built the
 # wrong thing.  "cd gplsrc/sdclilib && make check-local" was what this file's

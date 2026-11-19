@@ -137,7 +137,7 @@ if ($elevated) {
 
 if (-not (Test-Path -LiteralPath $Exe)) {
     Refuse ("the test binary is not at $Exe.  Build it: run 'make sd' (or " +
-            "'make sdclilib') from sdb_ai\sd64.")
+            "'make clientprobes') from sdb_ai\sd64; it needs a clean-room client set under P:\git-private.")
 }
 if (-not (Test-Path -LiteralPath (Join-Path $sdBin 'sd.exe'))) {
     Refuse ("no sd.exe at $sdBin - SDConnectLocal starts the server by looking " +
