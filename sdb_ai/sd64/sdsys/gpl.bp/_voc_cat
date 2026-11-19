@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 18 Nov 26 Windows port - RELEASE_1.1 338, from Linux S.265 (mail T0730; the commit id not yet sent): no VOC open, no local catalogue -
+*           return before the read, so the kernel goes on to the global catalogue.  A trigger on an account's VOC is loaded while LOGIN's
+*           openpath "voc" runs, and @voc is assigned only when that open returns, so the read aborted ("Requires file variable").
 * 14 Sep 26 Windows port - an old upper-case local catalogue entry is found
 *           for a lower-case call name (RELEASE_1.1 5 stage 3a)
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -37,9 +40,16 @@ $recursive
 
 subroutine voc_cat(voc.id, pathname)
 $include int$keys.h
+$include keys.h
 
    pathname = ""
    saved.status = status()
+
+*  18 Nov 26 - RELEASE_1.1 338 (Linux S.265): no VOC open = no local catalogue to look in; load_object goes on to the global catalogue.
+   if not(fileinfo(@voc, FL$OPEN)) then
+      set.status saved.status
+      return
+   end
 
 *  14 Sep 26 - RELEASE_1.1 5 stage 3a.  voc.id arrives lower case - the kernel
 *  lowers every call name - but an entry catalogued before that is under the
