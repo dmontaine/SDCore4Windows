@@ -16,6 +16,10 @@
  * 18 Nov 26 Windows port - written for RELEASE_1.1 339.  win32localsdsys.h describes it; .claude/localsdsys/DESIGN.md has the
  *           measurements it rests on (M1-M13) and what would falsify each step (F1-F8).  NOT RUN ON AN INSTALL: the ancestry, sshd's
  *           event and the TCP row are read as DESIGN.md section 4.2 plans them, and the VM witness (W0 first) is what measures them.
+ * 19 Nov 26 Windows port - RELEASE_1.1 339: the ssh chain rule follows W0's measurement on OpenSSH 10 (sit5): conhost.exe and
+ *           sshd-session.exe join cmd.exe and sshd.exe, every one by full path (system directory, or the sshd service's own image
+ *           folder), and A may be sshd-session.exe from that folder.  base_name() went with the name tests.  The TCP row's owner is
+ *           NOT changed: W0 listed no port-22 row (the session was ::1), so whose the connection is stays to be measured.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -427,12 +431,6 @@ static DWORD parent_of(HANDLE snap, DWORD pid) {
       return pe.th32ParentProcessID;
   } while (Process32NextW(snap, &pe));
   return 0;
-}
-
-/* The last component of an image path, for "is it cmd.exe" questions; the full path is compared where it matters. */
-static const WCHAR* base_name(const WCHAR* p) {
-  const WCHAR* s = wcsrchr(p, L'\\');
-  return s ? s + 1 : p;
 }
 
 /* A service's process: its pid and image, from the Service Control Manager.  1 or 0. */
@@ -850,8 +848,13 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
     return -1;
   }
 
-  /* S7: the process is SD's own sd.exe, and its ancestry runs only through cmd.exe and the user's sshd.exe, in that logon, each
-     parent made before its child, up to the first SYSTEM process. */
+  /* S7: the process is SD's own sd.exe, and its ancestry runs only through sshd's own chain for that logon, each parent made
+     before its child, up to the first SYSTEM process.
+     19 Nov 26 - RELEASE_1.1 339 (VM sit5 W0, F1 FALSIFIED on OpenSSH 10): the chain measured was sd.exe <- cmd.exe <- conhost.exe <-
+     sshd-session.exe (the user) <- sshd-session.exe (SYSTEM: A) <- sshd.exe (the service), every OpenSSH image in the service's own
+     folder (C:\Program Files\OpenSSH from the MSI, not System32).  So the user's part may hold cmd.exe and conhost.exe from the
+     system directory and sshd.exe or sshd-session.exe from the sshd SERVICE's image folder - each compared by FULL path, never by
+     name alone - and nothing else (a second sd.exe, a shell, a debugger stays session-unsafe). */
   if (!own_dir_file(L"sd.exe", sdexe, MAX_PATH) || lstrcmpiW(p.image, sdexe) != 0) {
     CloseHandle(snap);
     *why = "session-unsafe";
@@ -862,6 +865,27 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
     *why = "no-session";
     return -1;
   }
+  /* The sshd service, read first now: its image's folder is where sshd's own processes must come from. */
+  if (!service_proc(SDL_SSHD_SVC, &svc)) {
+    CloseHandle(snap);
+    *why = "not-ssh";
+    return -1;
+  }
+  WCHAR sshdir[MAX_PATH], want_cmd[MAX_PATH], want_con[MAX_PATH], want_sshd[MAX_PATH], want_sess[MAX_PATH];
+  lstrcpynW(sshdir, svc.image, MAX_PATH);
+  {
+    WCHAR* slash = wcsrchr(sshdir, L'\\');
+    if (slash == NULL) {
+      CloseHandle(snap);
+      *why = "not-ssh";
+      return -1;
+    }
+    *slash = L'\0';
+  }
+  swprintf(want_cmd, MAX_PATH, L"%ls\\cmd.exe", sys);
+  swprintf(want_con, MAX_PATH, L"%ls\\conhost.exe", sys);
+  swprintf(want_sshd, MAX_PATH, L"%ls\\sshd.exe", sshdir);
+  swprintf(want_sess, MAX_PATH, L"%ls\\sshd-session.exe", sshdir);
   cur = p;
   for (hops = 0;; hops++) {
     ppid = cur.ppid;
@@ -877,24 +901,19 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
       *why = "session-unsafe";
       return -1;
     }
-    if (lstrcmpiW(base_name(a.image), L"cmd.exe") == 0) {
-      WCHAR want[MAX_PATH];
-      swprintf(want, MAX_PATH, L"%ls\\cmd.exe", sys);
-      if (lstrcmpiW(a.image, want) != 0) {
-        CloseHandle(snap);
-        *why = "session-unsafe";
-        return -1;
-      }
-    } else if (lstrcmpiW(base_name(a.image), L"sshd.exe") != 0) {
+    if (lstrcmpiW(a.image, want_cmd) != 0 && lstrcmpiW(a.image, want_con) != 0 && lstrcmpiW(a.image, want_sshd) != 0 &&
+        lstrcmpiW(a.image, want_sess) != 0) {
       CloseHandle(snap);
-      *why = "session-unsafe";   /* a second sd.exe, a shell, a debugger: not sshd's own chain */
+      *why = "session-unsafe";   /* a second sd.exe, a shell, a debugger, an image from elsewhere: not sshd's own chain */
       return -1;
     }
     cur = a;
   }
 
-  /* S8: A is sshd itself - the sshd service's image, SYSTEM, a child of the running sshd service, made after it. */
-  if (!service_proc(SDL_SSHD_SVC, &svc) || lstrcmpiW(a.image, svc.image) != 0 || a.ppid != svc.pid || !ft_before(&svc.created, &a.created)) {
+  /* S8: A is sshd itself - the sshd service's image or (OpenSSH 10) sshd-session.exe from the service's folder, SYSTEM, a child of
+     the running sshd service, made after it. */
+  if ((lstrcmpiW(a.image, svc.image) != 0 && lstrcmpiW(a.image, want_sess) != 0) || a.ppid != svc.pid ||
+      !ft_before(&svc.created, &a.created)) {
     CloseHandle(snap);
     *why = "not-ssh";
     return -1;

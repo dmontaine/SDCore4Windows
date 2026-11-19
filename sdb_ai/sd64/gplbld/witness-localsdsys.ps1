@@ -903,7 +903,9 @@ if ($Run -contains 'w0' -and (Test-Ready 'W0')) {
                     if ($f.UserSid -eq $UserSid) {
                         $chain = Get-Chain $r.Pid $snap $sshdSvc
                         Say ('  seen at ' + (Get-Date).ToString('HH:mm:ss.fff') + ': sd.exe pid ' + $r.Pid + ' of ' + $User)
-                        $tcpAt = @(Get-NetTCPConnection -LocalPort 22 -State Established -ErrorAction SilentlyContinue)
+                        # 19 Nov 26 (RELEASE_1.1 339): any state, v4 and v6 - sit5's W0 saw none with -State Established
+                        # (the refused session closed 0.2 s after the asker appeared), so whose the row is was never read.
+                        $tcpAt = @(Get-NetTCPConnection -LocalPort 22 -ErrorAction SilentlyContinue)
                         $childUntil = (Get-Date).AddSeconds(8)
                         break
                     }
@@ -934,13 +936,20 @@ if ($Run -contains 'w0' -and (Test-Ready 'W0')) {
             Say '  THE CHAIN, from the asker up (each read when the asker was first seen):'
             Show-Chain $chain
             Say '  TCP rows on port 22 when the asker was first seen:'
-            foreach ($t in $tcpAt) { Say ('    tcp  local ' + $t.LocalAddress + ':' + $t.LocalPort + '  remote ' + $t.RemoteAddress + ':' + $t.RemotePort + '  owner ' + $t.OwningProcess + '  created ' + $t.CreationTime.ToString('o')) }
+            if ($tcpAt.Count -eq 0) { Say '    (none, in any state)' }
+            foreach ($t in $tcpAt) {
+                $own = [SdLsw.Native]::Proc([uint32]$t.OwningProcess)
+                Say ('    tcp  local ' + $t.LocalAddress + ':' + $t.LocalPort + '  remote ' + $t.RemoteAddress + ':' + $t.RemotePort + '  state ' + $t.State + '  owner ' + $t.OwningProcess + ' ' + $own.Image + '  created ' + $t.CreationTime.ToString('o'))
+            }
             Say '  OpenSSH/Operational event 4 since the mark:'
             $evs = Get-SshdAccepted $t0.AddSeconds(-2)
             $since = Read-Since $marks
 
-            # F1: P is SD's sd.exe; only cmd.exe and sshd.exe of the same user and logon up to the first SYSTEM process A; A is the sshd
-            # service's image and its direct child; every parent made before its child.
+            # F1: P is SD's sd.exe; up to the first SYSTEM process A only cmd.exe and conhost.exe from the system directory and sshd.exe
+            # and sshd-session.exe from the sshd service's own folder, each by full path, of the same user and logon; A is the service's
+            # image or that folder's sshd-session.exe, and the service's direct child; every parent made before its child.
+            # 19 Nov 26 (RELEASE_1.1 339): the door's rule as sit5's W0 measured OpenSSH 10's chain (conhost, sshd-session).
+            $sshDir = Split-Path -Parent $sshdF.Image
             $p0 = $chain[0]
             $why = @()
             if ($p0.F.Image -ine $SdExe) { $why += ('the asker''s image is ' + $p0.F.Image + ', not ' + $SdExe) }
@@ -952,18 +961,18 @@ if ($Run -contains 'w0' -and (Test-Ready 'W0')) {
             else {
                 for ($i = 1; $i -lt $aIdx; $i++) {
                     $c = $chain[$i]
-                    $base = [IO.Path]::GetFileName($c.F.Image)
-                    if ($base -ieq 'cmd.exe') { if ($c.F.Image -ine (Join-Path $SysDir 'cmd.exe')) { $why += ('cmd.exe from ' + $c.F.Image) } }
-                    elseif ($base -ine 'sshd.exe') { $why += ('step ' + $i + ' is ' + $c.F.Image + ' (only cmd.exe and sshd.exe are taken: session-unsafe)') }
+                    $okImg = @((Join-Path $SysDir 'cmd.exe'), (Join-Path $SysDir 'conhost.exe'), (Join-Path $sshDir 'sshd.exe'), (Join-Path $sshDir 'sshd-session.exe'))
+                    if (-not ($okImg | Where-Object { $_ -ieq $c.F.Image })) { $why += ('step ' + $i + ' is ' + $c.F.Image + ' (only ' + ($okImg -join ', ') + ' are taken: session-unsafe)') }
                     if ($c.F.UserSid -ne $p0.F.UserSid -or $c.F.LogonLow -ne $p0.F.LogonLow -or $c.F.LogonHigh -ne $p0.F.LogonHigh) { $why += ('step ' + $i + ' (pid ' + $c.Pid + ') is another user or logon') }
                 }
                 $a = $chain[$aIdx]
-                if ($a.F.Image -ine $sshdF.Image) { $why += ('A (pid ' + $a.Pid + ') image ' + $a.F.Image + ' is not the sshd service''s ' + $sshdF.Image) }
+                if ($a.F.Image -ine $sshdF.Image -and $a.F.Image -ine (Join-Path $sshDir 'sshd-session.exe')) { $why += ('A (pid ' + $a.Pid + ') image ' + $a.F.Image + ' is neither the sshd service''s ' + $sshdF.Image + ' nor its sshd-session.exe') }
                 if ($a.Ppid -ne $sshdSvc) { $why += ('A''s parent is ' + $a.Ppid + ', not the sshd service ' + $sshdSvc) }
             }
             for ($i = 1; $i -lt $chain.Count; $i++) { if ($chain[$i].F.Created -ge $chain[$i - 1].F.Created) { $why += ('pid ' + $chain[$i].Pid + ' was not made before its child ' + $chain[$i - 1].Pid) } }
-            if ($why.Count -eq 0) { Add-Row 'W0' 'F1: the chain is sd.exe <- only cmd.exe/sshd.exe of that logon <- A (sshd, SYSTEM) <- the sshd service, oldest first' 'PASS' ('A = pid ' + $chain[$aIdx].Pid + '; ' + $chain.Count + ' steps read') }
-            else { Add-Row 'W0' 'F1: the chain is sd.exe <- only cmd.exe/sshd.exe of that logon <- A (sshd, SYSTEM) <- the sshd service, oldest first' 'FAIL' ('F1 FALSIFIED: ' + ($why -join '; ')) }
+            $f1 = 'F1: the chain is sd.exe <- only cmd/conhost (system) and sshd/sshd-session (sshd''s folder) of that logon <- A (sshd or sshd-session, SYSTEM) <- the sshd service, oldest first'
+            if ($why.Count -eq 0) { Add-Row 'W0' $f1 'PASS' ('A = pid ' + $chain[$aIdx].Pid + '; ' + $chain.Count + ' steps read') }
+            else { Add-Row 'W0' $f1 'FAIL' ('F1 FALSIFIED: ' + ($why -join '; ')) }
 
             # F2: the asker's logon is Network (3) or NetworkCleartext (8), and its SID is the user's own.
             if ($null -eq $p0.L -or $p0.L.Status -ne 0) { Add-Row 'W0' 'F2: the asker''s logon type is 3 or 8 and the logon is the user''s own' 'NOT RUN' 'the asker''s logon session could not be read (printed above)' }

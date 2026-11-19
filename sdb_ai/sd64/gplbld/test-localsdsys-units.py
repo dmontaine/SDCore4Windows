@@ -256,6 +256,35 @@ row(all(os.path.isfile(os.path.join(SD64, "sdsys", "messages", str(m))) for m in
     "messages 15175-15184 and 12992 exist")
 row("sdl_peer_record(" in read(os.path.join(SRC, "linuxio.c")), "the API front records the loopback peer (linuxio.c)")
 
+
+# 19 Nov 26 - RELEASE_1.1 339 (VM sit5 W0: OpenSSH 10's chain is sd.exe <- cmd.exe <- conhost.exe <- sshd-session.exe (user) <-
+# sshd-session.exe (SYSTEM: A) <- sshd.exe (the service), all of OpenSSH in the service's own folder).  The door's S7/S8 rule, read
+# off the source: the four images it takes are built from the system directory and the sshd SERVICE's image folder, the chain loop
+# takes those four by FULL path and nothing else, and A is the service's image or that folder's sshd-session.exe AND the service's
+# own child.
+def chain_problems(c):
+    bad = []
+    for want in ('swprintf(want_cmd, MAX_PATH, L"%ls\\\\cmd.exe", sys);', 'swprintf(want_con, MAX_PATH, L"%ls\\\\conhost.exe", sys);',
+                 'swprintf(want_sshd, MAX_PATH, L"%ls\\\\sshd.exe", sshdir);', 'swprintf(want_sess, MAX_PATH, L"%ls\\\\sshd-session.exe", sshdir);',
+                 'lstrcpynW(sshdir, svc.image, MAX_PATH);'):
+        if want not in c:
+            bad.append("missing: " + want)
+    loop = ("if (lstrcmpiW(a.image, want_cmd) != 0 && lstrcmpiW(a.image, want_con) != 0 && lstrcmpiW(a.image, want_sshd) != 0 &&\n"
+            "        lstrcmpiW(a.image, want_sess) != 0) {")
+    if loop not in c:
+        bad.append("the chain loop does not take exactly the four full paths")
+    if "base_name(a.image" in c:
+        bad.append("an image is tested by its name alone (base_name)")
+    s8 = "if ((lstrcmpiW(a.image, svc.image) != 0 && lstrcmpiW(a.image, want_sess) != 0) || a.ppid != svc.pid ||"
+    if s8 not in c:
+        bad.append("A is not held to the service's image or its sshd-session.exe AND the service's child")
+    return bad
+
+
+lc = read(os.path.join(SRC, "win32localsdsys.c"))
+cp = chain_problems(lc)
+row(not cp, "the ssh chain (S7, S8): cmd/conhost from the system directory, sshd/sshd-session from the service's folder, by full path; A the service's child", "; ".join(cp))
+
 # ------------------------------------------------------------------ mutants
 print("== mutants (copies only)")
 MUT = [
@@ -274,6 +303,18 @@ for name, which, old, new in MUT:
         continue
     src[which] = src[which].replace(old, new, 1)
     row(len(text_problems(src["login"], src["apisrvr"], src["opk"], keys, ikeys)) > 0, "MUTANT: %s is caught" % name)
+
+# 19 Nov 26 - RELEASE_1.1 339: the chain rule's mutants (text only, on a copy of the string).
+for name, old, new in (
+        ("the chain loop takes any image", "if (lstrcmpiW(a.image, want_cmd) != 0 && lstrcmpiW(a.image, want_con) != 0 && lstrcmpiW(a.image, want_sshd) != 0 &&\n"
+         "        lstrcmpiW(a.image, want_sess) != 0) {", "if (0) {"),
+        ("A need not be the service's child", " || a.ppid != svc.pid ||", " ||"),
+        ("sshd-session.exe taken from the system directory", 'swprintf(want_sess, MAX_PATH, L"%ls\\\\sshd-session.exe", sshdir);',
+         'swprintf(want_sess, MAX_PATH, L"%ls\\\\sshd-session.exe", sys);')):
+    if old not in lc:
+        row(False, "MUTANT control: the text the mutant changes is in the live win32localsdsys.c (%s)" % name)
+        continue
+    row(len(chain_problems(lc.replace(old, new, 1))) > 0, "MUTANT: %s is caught" % name)
 
 if live_c:
     mc = read(os.path.join(SRC, "win32localsdsys.c"))
