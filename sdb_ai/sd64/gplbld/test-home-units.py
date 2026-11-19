@@ -32,7 +32,7 @@ SDSYS = os.path.abspath(os.path.join(HERE, os.pardir, "sdsys"))
 GPL = os.path.join(SDSYS, "gpl.bp")
 PROGS = ("tool_home", "home_entry", "home_off", "home_pins", "home_recent", "mymenu", "tool_menus", "exit", "setstart", "settile", "cproc", "modifya", "sl_theme")
 MSGS = tuple(str(n) for n in range(12868, 12892) if n != 12884) + tuple(str(n) for n in range(12961, 12967))       # 12884 was "tiles off for every account": there is no such setting (per account only); 12961-12966 are the sub-menus and the Recent group (26 Oct 26)
-STANDARD = "editor ide terminal keys switch signout files voc dict query bulk catalog test recent".split()        # the ids SET.TILE and the menu management page know: the tiles the page draws, and recent (the group)
+STANDARD = "editor ide examples terminal keys switch signout files voc dict query bulk catalog test recent".split()   # 19 Nov 26: examples (load.examples, RELEASE_1.1 346)        # the ids SET.TILE and the menu management page know: the tiles the page draws, and recent (the group)
 
 
 def strip(src):
@@ -130,7 +130,7 @@ def checks(s):
     PENDING_VERBS = set()               # 14 Nov 26 Windows: empty - tool.audit landed with RELEASE_1.1 247 (tool.ai with 246); a tile whose verb is owed goes here
     DEV_TILES = {"files": "tool.files", "voc": "tool.voc", "dict": "tool.dict", "query": "tool.query", "bulk": "tool.bulk", "catalog": "tool.catalog", "test": "tool.test"}            # the development apps (DV), for every account; each adds its tile in the commit that builds it (plan 13.2)
     ck("H4 tool_home: every tile of the table has a fixed action (cmd:sed, ide, tool.keys, my.menu, the development apps and the eleven administrator pages), terminal, switch, signout or back (the Back tile of a sub-menu page); the ONLY other action is a person's own program (H25); and no tile of the delivered page opens a sub-menu (no menu:<name>)",
-       sorted(cmds) == sorted(["cmd:sed", "cmd:ide", "terminal", "cmd:tool.keys", "switch", "signout", "back", "cmd:my.menu", "cmd:receive"] + ["cmd:" + v for v in ADMIN_TILES.values()] + ["cmd:" + v for v in DEV_TILES.values()]), repr(cmds))   # 15 Nov 26: cmd:receive (Linux b9e63f17, S.242 stage 6)
+       sorted(cmds) == sorted(["cmd:sed", "cmd:ide", "cmd:load.examples", "terminal", "cmd:tool.keys", "switch", "signout", "back", "cmd:my.menu", "cmd:receive"] + ["cmd:" + v for v in ADMIN_TILES.values()] + ["cmd:" + v for v in DEV_TILES.values()]), repr(cmds))   # 15 Nov 26: cmd:receive (Linux b9e63f17, S.242 stage 6)
     ck("H4b ...execute is given only a sentence from that table, 'quit', or the logto of an account picked from the register list",
        sorted(re.findall(r"execute ([^\n]+)", th)) == sorted(["sentence trapping aborts", "'quit'", "'quit'", "'logto ' : acct trapping aborts"]), repr(re.findall(r"execute ([^\n]+)", th)))     # 'quit' twice: sign out, and the confined account; the two that run what is not HOME's own are trapped (28 Oct 26, S.88 phase 2)
     fin = between(th, "\nfinish:\n", "\nreturn")

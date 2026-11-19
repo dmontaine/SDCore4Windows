@@ -1,9 +1,12 @@
 * REMOVEEXAMPLES
-* REMOVE.EXAMPLES verb: take the shipped example programs out of the file examples.bp of every account (or of the accounts named).
+* REMOVE.EXAMPLES verb: take the shipped example programs out of the file examples.bp of this account (or of the accounts named).
 * Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 346, from Linux ce649c1a: as LOAD.EXAMPLES - with no account named, this account, for anybody with
+*               bp.edit (12413 otherwise, Linux's 11408); naming accounts is the administrator's, a suspended one named is said and skipped;
+*               no form for every account.  In every account's VOC.
 * 16 Nov 26 Windows port - from Linux 657da3de (S.261): new.  NO LOGTO, as LOAD.EXAMPLES here: each account's examples.bp and examples.bp.out are reached by
 *               the pathname the register holds (on this port LOGTO out of SDSYS gives up the administrator right).  An emptied file is deleted with
 *               OSPATH(OS$DELETE), as DELETE.FILE deletes a data part, and the account's VOC pointer to it goes with it.  Messages 14127-14131 are
@@ -14,17 +17,18 @@
 *
 * START-DESCRIPTION:
 *
-*   REMOVE.EXAMPLES                     every registered account
-*   REMOVE.EXAMPLES account ...         the accounts named, a list; a name that is not registered is said and skipped, and the others go on
+*   REMOVE.EXAMPLES                     the account this session is in - anybody whose account has bp.edit (the administrator always may)
+*   REMOVE.EXAMPLES account ...         the administrator's: the accounts named, a list; a name that is not registered is said and skipped, and
+*                                       the others go on
 *
-*   The administrator's verb, the companion of LOAD.EXAMPLES.  In each account it deletes from examples.bp every program the system ships (the files of
+*   The companion of LOAD.EXAMPLES.  In each account it deletes from examples.bp every program the system ships (the files of
 *   the examples directory of the SD system directory, the same list LOAD.EXAMPLES writes) together with its compiled object in examples.bp.out.
 *   A program the administrator or the account's person added under another name is KEPT, and so are its object and the file; examples.bp and
 *   examples.bp.out are deleted only when nothing is left in examples.bp.  An account with no examples.bp is counted and left alone.
 *
-*   THE EXAMPLES COME BACK: the installer and an upgrade run LOAD.EXAMPLES for every account, and create.account runs it for a new one, so what this
-*   verb removes is put back by the next of those, or by LOAD.EXAMPLES by hand.  It does not LOGTO (on Windows a LOGTO out of SDSYS ends the
-*   administrator right): it reaches each account's directory by the pathname in the register and never leaves SDSYS.  An account it cannot reach,
+*   NOTHING PUTS THEM BACK BY ITSELF (19 Nov 26: the installer and create.account no longer run LOAD.EXAMPLES); LOAD.EXAMPLES does, when someone
+*   runs it.  It does not LOGTO (on Windows a LOGTO out of SDSYS ends the administrator right): it reaches each account's directory by the
+*   pathname in the register and never leaves the account it runs in.  An account it cannot reach,
 *   and a program that cannot be deleted, is named and counted; the command goes on with the others.
 *
 * END-DESCRIPTION
@@ -40,8 +44,16 @@ $include keys.h
 $include err.h
 
    @system.return.code = -ER$ARGS
-   if not(kernel(K$ADMINISTRATOR, -1)) then
+*  19 Nov 26 Windows port - RELEASE_1.1 346 (Linux ce649c1a), as LOAD.EXAMPLES (the owner, 19 Nov 2026: the person loads their own; "respect the
+*  gate"): with no account named this account, for anybody whose account has bp.edit (12413 otherwise, before anything is deleted); naming
+*  accounts is the administrator's.
+   is.admin = kernel(K$ADMINISTRATOR, -1)
+   if dcount(trim(@sentence), ' ') > 1 and not(is.admin) then
       stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+   if not(is.admin) and not(kernel(K$BP.EDIT, -1)) then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12413) ;* Programs can only be compiled or cataloged by an account that has bp.edit (SDSYS can give it: modify.account <account> bp-on)
    end
 
    keychars = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
@@ -68,11 +80,14 @@ $include err.h
    next i
    if names = '' then stop sysmsg(15121, src)
 
-*  The accounts: those named (a list, each once), or every one in the register.  A name that is not registered is said and skipped.
+*  The accounts: those named (a list, each once; the administrator's), or the account this session is in.  A name that is not registered is said
+*  and skipped.
    want = downcase(trim(@sentence))                              ;* the verb, then the account names
    openpath @sdsys : @ds : 'accounts' to acc.f else stop sysmsg(6003)
    accts = ''
-   if dcount(want, ' ') > 1 then
+   if dcount(want, ' ') = 1 then
+      accts = downcase(@who)
+   end else
       for w = 2 to dcount(want, ' ')
          aid = field(want, ' ', w)
          read arec from acc.f, aid else
@@ -80,16 +95,14 @@ $include err.h
             n.bad += 1
             continue
          end
+*        19 Nov 26 (Linux ce649c1a): a SUSPENDED account named is said and skipped, whatever the session is
+         if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then
+            display sysmsg(15131, aid)                           ;* Could not enter the account %1; its example programs were left as they are
+            n.bad += 1
+            continue
+         end
          locate aid in accts<1> by 'AL' setting ap else ins aid before accts<ap>
       next w
-   end else
-      select acc.f to 11
-      loop
-         readnext aid from 11 else exit
-         read arec from acc.f, aid else continue
-         if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then continue     ;* a suspended account is skipped, as LOAD.EXAMPLES skips it
-         locate aid in accts<1> by 'AL' setting ap else ins aid before accts<ap>
-      repeat
    end
 
    n.acc = 0 ; n.removed = 0 ; n.files = 0 ; n.none = 0 ; n.kept = 0

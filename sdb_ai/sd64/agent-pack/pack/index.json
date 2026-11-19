@@ -8776,7 +8776,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 28
+"words": 30
 },
 "msg:12414": {
 "kind": "message",
@@ -14153,13 +14153,6 @@
 "since": "-",
 "tier": "reference",
 "words": 49
-},
-"msg:15185": {
-"kind": "message",
-"part": "reference/messages.md",
-"since": "-",
-"tier": "reference",
-"words": 28
 },
 "msg:15995": {
 "kind": "message",
@@ -28026,7 +28019,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 53
+"words": 55
 },
 "tcl:load.help": {
 "kind": "tcl.verb",
@@ -28719,7 +28712,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 59
+"words": 61
 },
 "tcl:repeating": {
 "kind": "tcl.keyword",
@@ -29706,7 +29699,7 @@
 "part": "reference/voc.md",
 "since": "-",
 "tier": "reference",
-"words": 105
+"words": 103
 },
 "voc:type:F": {
 "kind": "voc.type",

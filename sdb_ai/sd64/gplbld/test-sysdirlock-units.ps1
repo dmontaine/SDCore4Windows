@@ -33,7 +33,8 @@
 #   L11 (17 Nov 26, found on the fresh install with icacls) SDSYS's own
 #       examples.bp and examples.bp.out, which LOAD.EXAMPLES makes AFTER
 #       SecureSysdirs, are locked by LockSdsysExamples, each only when it exists,
-#       called after LoadExamples - start.default's pattern (L8)
+#       start.default's pattern (L8); since 19 Nov 26 (RELEASE_1.1 346) the
+#       installer runs no LOAD.EXAMPLES, so it is called after SharedDocs alone
 # Then MUTANTS: each is a changed copy of the text IN MEMORY (the live files
 # are never written), and the matching check must go red on it.
 
@@ -133,13 +134,14 @@ function Test-All([string]$issT, [string]$scrT) {
                   elseif ($ab.Groups[1].Value -match 'sdusers') { 'the -AdminOnly grants name sdusers: ' + $ab.Groups[1].Value }
                   elseif (($ab.Groups[1].Value -notmatch [regex]::Escape("'*S-1-5-18:(OI)(CI)(F)'")) -or ($ab.Groups[1].Value -notmatch [regex]::Escape("'*S-1-5-32-544:(OI)(CI)(F)'"))) { 'the -AdminOnly grants lack SYSTEM or Administrators' }
                   else { '' })
-    # L11: SDSYS's examples.bp and examples.bp.out, locked after LoadExamples, each only when it exists.
+    # L11: SDSYS's examples.bp and examples.bp.out locked, each only when it exists.  19 Nov 26 (RELEASE_1.1 346): the installer no
+    # longer runs LOAD.EXAMPLES, so the lock is called on its own, after SharedDocs, for a tree an earlier release or SDSYS gave them to.
     $ex = Get-Body $issT 'function LockSdsysExamples: String;'
-    $iLe = $issT.IndexOf('ExamplesMsg := LoadExamples;')
-    $iLx = $issT.IndexOf('ExamplesMsg := ExamplesMsg + LockSdsysExamples;')
+    $iLe = $issT.IndexOf('DocsMsg := SharedDocs;')
+    $iLx = $issT.IndexOf('ExamplesMsg := LockSdsysExamples;')
     $r['L11'] = $(if ($ex -eq '') { 'there is no LockSdsysExamples' }
                   elseif (($ex -notmatch "'examples\.bp/examples\.bp\.out'") -or ($ex -notmatch 'if DirExists\(Target\) then') -or ($ex -notmatch 'LockOsUsersPath\(Ps, Script, Target, Code\)')) { 'LockSdsysExamples does not lock examples.bp and examples.bp.out only when each exists' }
-                  elseif (($iLe -lt 0) -or ($iLx -le $iLe)) { 'LockSdsysExamples is not called after LoadExamples' } else { '' })
+                  elseif (($iLe -lt 0) -or ($iLx -le $iLe)) { 'LockSdsysExamples is not called after SharedDocs' } else { '' })
     return $r
 }
 
@@ -180,7 +182,7 @@ $mutants = @(
     @{ n='admin-only lock without the switch'; k='L10'; t='iss'; a="'"" -AdminOnly'"; b="'""'" }
     @{ n='admin-only grants sdusers read';    k='L10'; t='scr'; a="'*S-1-5-32-544:(OI)(CI)(F)')"; b="'*S-1-5-32-544:(OI)(CI)(F)', 'sdusers:(OI)(CI)(RX)')" }
     @{ n='examples.bp in the early list';     k='L8'; t='iss'; a="'examples/' +"; b="'examples/examples.bp/' +" }
-    @{ n='examples never locked after LoadExamples'; k='L11'; t='iss'; a='ExamplesMsg := ExamplesMsg + LockSdsysExamples;'; b='ExamplesMsg := ExamplesMsg + LockSdsysExamplesX;' }
+    @{ n='SDSYS examples never locked'; k='L11'; t='iss'; a='ExamplesMsg := LockSdsysExamples;'; b='ExamplesMsg := LockSdsysExamplesX;' }
     @{ n='examples locked even when absent';  k='L11'; t='iss'; a='    if DirExists(Target) then'; b='    if True then' }
     @{ n='examples.bp.out left out';          k='L11'; t='iss'; a="'examples.bp/examples.bp.out'"; b="'examples.bp'" }
     @{ n='drop the whole list call';          k='L1'; t='iss'; a='LockSysdirNames(Ps, Script,'; b='LockSysdirNamesX(Ps, Script,' }

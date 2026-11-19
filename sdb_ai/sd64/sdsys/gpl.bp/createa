@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 346 (Linux ce649c1a): the new account gets no example programs from here (the owner: the person loads their
+*           own with load.examples); 15185 is retired.
 * 18 Nov 26 Windows port - from Linux c657b4de / ac4e08fb (S.269, S.270; RELEASE_1.1 342): load.examples runs trapping aborts and NOT captured
 *           (capturing around a command whose own EXECUTE traps an abort crashed the process, S.270), is judged by its return code, and a
 *           load that did not happen says 15185 (Linux 14185).  No LOGTO back: here load.examples never leaves SDSYS (it reaches each
@@ -738,14 +740,10 @@ $include createacc.h
    if settings<CA$START> # '' then start.audit = ' start=' : downcase(settings<CA$START>)
    void kernel(K$AUDIT, 'create.account account=' : acc.name : ' type=' : downcase(acc.type) : ' gates=' : gates : start.audit)   ;* 15 Nov 26 (RELEASE_1.1 315): the name as given, as Linux; it was upcased (account=ZZWITPU beside zzwitpu everywhere else)
 
-* 16 Nov 26 Windows port - from Linux cc7e41c6 (S.261).  THE EXAMPLE PROGRAMS (owner, 17 Nov 2026: "there should be a examples.bp file available to all
-*   users", asked how, "A copy in every account"): the new account gets its own examples.bp, compiled, from LOAD.EXAMPLES; its two summary lines are
-*   shown.  A failure there does not undo the account (it is made and audited above); the administrator runs load.examples <name> again.
-*   18 Nov 26 (Linux ac4e08fb, S.270): NOT CAPTURED - capturing around a command whose own EXECUTE traps an abort crashed the process - so
-*   load.examples prints its own lines and is judged by its return code (-ER$FAILED when anything failed).  It never leaves SDSYS here, so no LOGTO back.
-   execute 'load.examples ' : downcase(acc.name) trapping aborts
-   ex.code = @system.return.code
-   if ex.code # 0 then crt sysmsg(15185, downcase(acc.name))
+* 19 Nov 26 Windows port - RELEASE_1.1 346, from Linux ce649c1a.  NO EXAMPLE PROGRAMS ARE LOADED HERE (owner, 19 Nov 2026: "wouldnt it be easier to
+*   just have the user load the examples rather than do it for every account.  most accounts will not need the examples").  The person types
+*   load.examples in their own account (or uses the home screen's tile), which needs bp.edit; the administrator may name accounts.  15185 is
+*   retired with Linux's 14185, never reused.
 
    @system.return.code = 0
    return      ;* 18 Nov 26 (audit round 2, P-5472): return, as Linux's; the same end of the verb

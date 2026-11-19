@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 346 (Linux ce649c1a): examples (the home screen's Example programs tile, load.examples) is a standard tile.
 * 22 Oct 26 dm  New (S.75; the owner: "if defined by the admin or the system, it should be able to be turned off by the admin", then "disabling tiles should be on a
 *               per account basis, by default they are on").
 * 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: the standard ids gain recent, the Recent group of the home screen (the development tiles Linux adds are not in this tree).
@@ -17,7 +18,7 @@
 *   SET.TILE account tile on | off    turns the tile off or on for that account (field 17 of its register record)
 *
 *   The administrator's verb.  Tiles are ON as delivered and are turned off one account at a time; there is no setting for every account.  A tile that is off is
-*   not on the account's home screen, and its menu entry cannot be chosen.  The standard tiles are editor, ide, ced, terminal, keys, switch and signout and RECENT, which
+*   not on the account's home screen, and its menu entry cannot be chosen.  The standard tiles are editor, ide, examples, ced, terminal, keys, switch and signout and RECENT, which
 *   is not a tile but the group of the tiles the person started last: off, the group is not on the page and nothing is read or written for it (the person cannot turn it on in the View
 *   menu either).  Any other id is accepted (it applies to a tile of that name in a page record) and said not to be standard.
 *   SIGN OUT CANNOT BE TURNED OFF: a person must always be able to leave.  With TERMINAL off, an account that starts in the home screen is never given the
@@ -43,7 +44,7 @@ $include err.h
       stop sysmsg(2001) ;* Command requires administrator privileges
    end
 
-   standard = 'editor ide terminal keys switch signout files voc dict query bulk catalog test recent'
+   standard = 'editor ide examples terminal keys switch signout files voc dict query bulk catalog test recent'   ;* 19 Nov 26: examples (load.examples)
 
    words = trim(@sentence)
    n.words = dcount(words, ' ')

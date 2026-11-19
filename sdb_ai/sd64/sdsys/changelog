@@ -3,6 +3,20 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+19 Nov 26  YOU LOAD THE EXAMPLE PROGRAMS INTO YOUR OWN ACCOUNT; NO ACCOUNT GETS THEM BY ITSELF.
+
+             What        - LOAD.EXAMPLES with no account name puts SD's example programs into examples.bp of the account you
+                           are in and compiles them, for any account that has bp.edit; without it the command is refused
+                           before anything is written ("Programs can only be compiled or cataloged by an account that has
+                           bp.edit").  REMOVE.EXAMPLES takes them out again, with the same rule.  Both are in every account.
+                         - Naming accounts (LOAD.EXAMPLES ann bob) is the administrator's; a suspended account named is said
+                           and skipped.  No form loads every account.
+                         - The installer and CREATE.ACCOUNT no longer put the example programs into any account.  An
+                           upgrade leaves the examples.bp an account already has as it is.
+                         - The home screen has an Example programs tile in Tools, after IDE.  It runs LOAD.EXAMPLES and
+                           waits for Enter; without bp.edit it is dimmed and says why.  SET.TILE knows it as examples.
+             Why         - Most accounts do not need the examples.
+
 18 Nov 26  A FILE OR FOLDER SDSYS MAKES IN ITS OWN DIRECTORY IS READ-ONLY TO SD USERS.
 
              What        - The SD system directory no longer hands write access to everything made in it later: what an SDSYS
@@ -12,8 +26,6 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                          - The client of a remote file names operation 1 analyze.file (it said analyse.file), as the server.
                          - A program that runs EXECUTE ... CAPTURING around a command whose own EXECUTE ... TRAPPING ABORTS
                            catches an abort no longer ends the session: the program carries on with the captured output.
-                         - create.account shows everything load.examples prints for the new account, and says what to type
-                           when the example programs could not be put there.
                          - LOGTO SDSYS brings back any session that started in SDSYS - at SDSYS's desktop, through the SDSYS
                            door from your own login, or as a scheduled administrator job - after it has gone to another
                            account, as SD Core for Linux.  It was the desktop sign-in's only.  SDSYS is still never first

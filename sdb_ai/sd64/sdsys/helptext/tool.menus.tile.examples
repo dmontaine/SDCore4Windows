@@ -1,0 +1,4 @@
+The Example programs tile
+user-29a-sd-tcl-the-home-screen
+Runs load.examples, which puts SD's example programs into the account's own examples.bp and compiles them, then waits for Enter so the summary can be read. It needs the account's bp.edit: without it the tile is dimmed and says why, and load.examples refuses before anything is written.
+Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen. The person can still type load.examples at a prompt they have; this setting only changes the home screen.

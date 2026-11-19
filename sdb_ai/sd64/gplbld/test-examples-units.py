@@ -10,16 +10,19 @@ it, "A copy in every account".  What it holds:
       chapter of the SD Text User Interface - Programmer's Guide in the docs checkout beside this one, SDCore4WindowsDocs (exit 2 when it is missing)
   X2  every shipped file has a name LOAD.EXAMPLES takes, begins "* <name> -", and each training program (cs..) is "program <name>" ... "end"
   X3  no shipped program writes a doubled quote inside a string (SD BASIC has no '' escape: test-sqescape-units.py's rule, for gpl.bp)
-  X4  LOAD.EXAMPLES asks for the administrator before it reads anything, skips a SUSPENDED account, makes examples.bp and examples.bp.out DIRECTORY files
-      by the account's pathname, judges each compile on the compiler's own success line, NEVER LOGTOs (on Windows a LOGTO out of SDSYS ends the
-      administrator right), removes SDSYS's two compiler pointers when it is done, and writes one audit line
-  X5  create.account runs load.examples for the account it made, after its audit line
-  X6  the installer runs it: sd.iss LoadExamples after SharedDocs, its message in the closing box; load-examples.ps1 starts LOAD.EXAMPLES internally with
-      the marker and judges it on message 15124's success wording; stage.py ships sdsys\\examples and the script; SecureSysdirs locks examples
-  X7  load.examples is the administrator's verb: in voc_template, not in newvoc; the messages it cites exist
-  X8, X9  LOAD.EXAMPLES and REMOVE.EXAMPLES take a LIST of accounts (owner, 17 Nov 2026), an unregistered name said and skipped
-  X10, X11  REMOVE.EXAMPLES, the companion: only the shipped names deleted with their objects, the files only when nothing is left (judged on a reopen),
-      no LOGTO, one audit line; its VOC record in voc_template only and its messages exist
+  19 Nov 26 (RELEASE_1.1 346, Linux ce649c1a; the owner: the person loads the examples, "respect the gate"): X4-X12 follow it.
+  X4  LOAD.EXAMPLES, before it reads anything: naming accounts is the administrator's (2001), and anybody else without bp.edit is refused 12413;
+      with no name the account the session is in; a SUSPENDED account named is said and skipped; examples.bp and examples.bp.out DIRECTORY files made by
+      the account's pathname, each compile judged on the compiler's own success line, NEVER a LOGTO (on Windows a LOGTO out of SDSYS ends the
+      administrator right), the compiler pointers dropped when it is done, one audit line
+  X5  create.account loads no example programs and cites no 15185 (retired)
+  X6  the installer loads none: no LoadExamples in sd.iss, no load-examples.ps1 (in the tree or in stage.py); stage.py still ships sdsys\\examples;
+      SecureSysdirs locks examples; the closing box keeps LockSdsysExamples' line
+  X7  load.examples is in every account's VOC (voc_template and newvoc); the messages it cites exist
+  X8, X9  LOAD.EXAMPLES and REMOVE.EXAMPLES take a LIST of accounts (owner, 17 Nov 2026), an unregistered name said and skipped; with no name the
+      session's own account, never a walk of the register
+  X10, X11  REMOVE.EXAMPLES, the companion: the same gate as X4; only the shipped names deleted with their objects, the files only when nothing is left
+      (judged on a reopen), no LOGTO, one audit line; its VOC record in voc_template and newvoc and its messages exist
 It cannot say a program runs or what it prints: that needs an installed system.
 """
 import importlib.util
@@ -110,55 +113,55 @@ def checks(raw):
     dq = [n for n, t in files.items() for l in (t or "").split("\n") if not SQ.COMMENT_LINE.match(l) and SQ.doubled(l)]     # test-sqescape-units.py's own reading
     ck("X3", "no shipped program writes a doubled quote inside a string ('it''s' is two strings in SD BASIC)", not dq, repr(dq))
     ld = code(raw["load"])
-    ck("X4", "LOAD.EXAMPLES: the administrator first, a SUSPENDED account skipped, examples.bp and its .out DIRECTORY files made by pathname, the compile "
-             "judged on its success line, no LOGTO, SDSYS's compiler pointers dropped at the end, one audit line",
-       raw["load"] is not None and 0 <= ld.find("if not(kernel(K$ADMINISTRATOR, -1)) then") < ld.find("dir(src)")
-       and "if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then continue" in ld
+    GATE = ("   is.admin = kernel(K$ADMINISTRATOR, -1)\n   if dcount(trim(@sentence), ' ') > 1 and not(is.admin) then\n      stop sysmsg(2001)\n   end\n"
+            "   if not(is.admin) and not(kernel(K$BP.EDIT, -1)) then\n      @system.return.code = -ER$FAILED\n      stop sysmsg(12413)\n   end\n")
+    SUSP = "if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then\n            display sysmsg(%s, aid)\n            n.bad += 1\n            continue\n         end"
+    ck("X4", "LOAD.EXAMPLES: names are the administrator's (2001), no bp.edit is 12413, both before anything is read; no name is this account; a "
+             "SUSPENDED account named is said and skipped; examples.bp and its .out DIRECTORY files made by pathname, the compile judged on its success "
+             "line, no LOGTO, the compiler pointers dropped at the end, one audit line",
+       raw["load"] is not None and 0 <= ld.find(GATE) < ld.find("dir(src)")
+       and "if dcount(want, ' ') = 1 then\n      accts = downcase(@who)\n   end else" in ld and (SUSP % "15123") in ld
        and "create.file x.path directory on error" in ld and "create.file o.path directory on error" in ld
        and "if index(out, 'Compiled 1 program(s) with no errors', 1) then" in ld and "execute 'basic ' : src.voc : ' ' : todo<p> capturing out" in ld
        and "logto" not in ld.lower() and 0 < ld.find("   next a\n   gosub drop.pointers") < ld.find("void kernel(K$AUDIT")
        and "read drec from sv, did then delete sv, did" in ld and ld.count("kernel(K$AUDIT") == 1)
     ca = code(raw["createa"])
-    i_aud = ca.find("void kernel(K$AUDIT, 'create.account account='")
-    i_ld = ca.find("execute 'load.examples ' : downcase(acc.name) trapping aborts\n")
-    ck("X5", "create.account runs load.examples for the account it made, after its audit line, trapping aborts and NOT capturing (S.270: capturing "
-             "around a trapped abort crashed the process), and says 15185 when its return code is not 0 (Linux ac4e08fb)", 0 < i_aud < i_ld
-       and i_ld < ca.find("ex.code = @system.return.code") < ca.find("if ex.code # 0 then crt sysmsg(15185")
-       and not re.search(r"execute 'load\.examples[^\n]*capturing", ca))
+    ck("X5", "create.account loads no example programs (19 Nov 26, the person loads their own) and cites no 15185 (retired)",
+       raw["createa"] is not None and "load.examples" not in ca.lower() and "15185" not in ca
+       and not os.path.exists(os.path.join(SDSYS, "messages", "15185")))
     iss = iss_code(raw["iss"])
-    ps1 = "\n".join(l for l in (raw["ps1"] or "").split("\n") if not l.lstrip().startswith("#"))
     st = raw["stage"] or ""
     lock = re.search(r"LockSysdirNames\(Ps, Script,(.*?), Code\);", iss, re.S)
-    ck("X6", "the installer: sd.iss runs LoadExamples once, after SharedDocs, and puts its message in the closing box; load-examples.ps1 starts LOAD.EXAMPLES "
-             "internally with the marker and judges it on 15124's wording; stage.py ships examples and the script; SecureSysdirs locks examples",
-       iss.count("ExamplesMsg := LoadExamples;") == 1 and 0 < iss.find("DocsMsg := SharedDocs;") < iss.find("ExamplesMsg := LoadExamples;")
-       and re.search(r"(?m)^\s+ExamplesMsg \+\s*$", iss) is not None and "load-examples.ps1" in iss      # 17 Nov 26: the closing box's own line (":= ExamplesMsg + LockSdsysExamples" also holds the words)
-       and "Invoke-Sd @('-internal', 'LOAD.EXAMPLES')" in ps1 and "Set-SdInternalMarker" in ps1
-       and "'(?m)^Example programs in examples\\.bp of [1-9][0-9]* account\\(s\\)'" in ps1
-       and "('examples'," in py_list(st, "SDSYS_SHIP") and "('examples'," in py_list(st, "SDSYS_MIRROR") and "'load-examples.ps1'," in st
+    ck("X6", "the installer loads none: no LoadExamples in sd.iss, no load-examples.ps1 in the tree or in stage.py; stage.py ships examples; SecureSysdirs "
+             "locks examples; the closing box keeps LockSdsysExamples' line",
+       "LoadExamples" not in iss and "load-examples" not in iss and raw["ps1"] is None and "'load-examples.ps1'" not in st
+       and iss.count("ExamplesMsg := LockSdsysExamples;") == 1 and re.search(r"(?m)^\s+ExamplesMsg \+\s*$", iss) is not None
+       and "('examples'," in py_list(st, "SDSYS_SHIP") and "('examples'," in py_list(st, "SDSYS_MIRROR")
        and lock is not None and "examples" in "".join(re.findall(r"'([^']*)'", lock.group(1))).split("/"))
     cited = set(re.findall(r"sysmsg\((\d+)", ld))
     gone = sorted(n for n in cited if not os.path.exists(os.path.join(SDSYS, "messages", n)))
-    ck("X7", "load.examples is in voc_template (V CA $loadexamples) and not in newvoc; the %d messages it cites exist" % len(cited),
-       (raw["vt"] or "").split("\n")[:3] == ["V", "CA", "$loadexamples"] and raw["nv"] is None and cited and not gone, repr(gone))
+    ck("X7", "load.examples is in every account's VOC (V CA $loadexamples in voc_template and newvoc); the %d messages it cites exist" % len(cited),
+       all((raw[k] or "").split("\n")[:3] == ["V", "CA", "$loadexamples"] for k in ("vt", "nv")) and cited and not gone, repr(gone))
     # THE LIST (owner, 17 Nov 2026: "both load.examples and remove.examples should take a list of accounts") and the companion verb
     rm = code(raw["rm"])
     for who, t in (("LOAD.EXAMPLES", ld), ("REMOVE.EXAMPLES", rm)):
-        ck("X8" if who[0] == "L" else "X9", "%s takes a LIST of accounts: each word after the verb, each once, an unregistered name said and skipped, the others go on" % who,
-           t and "for w = 2 to dcount(want, ' ')" in t and t.count("locate aid in accts<1> by 'AL' setting ap else ins aid before accts<ap>") == 2     # the list and the register
+        ck("X8" if who[0] == "L" else "X9", "%s takes a LIST of accounts: each word after the verb, each once, an unregistered name said and skipped, the others go on; "
+                                            "no name is the session's own account, never the register" % who,
+           t and "for w = 2 to dcount(want, ' ')" in t and t.count("locate aid in accts<1> by 'AL' setting ap else ins aid before accts<ap>") == 1     # the list only
+           and "accts = downcase(@who)" in t and "select acc.f" not in t
            and "stop sysmsg(15122, want)" not in t and "n.bad += 1\n            continue" in t)
-    ck("X10", "REMOVE.EXAMPLES: the administrator first, only the SHIPPED names deleted (each read first), the compiled object with its program, examples.bp and its .out "
-              "deleted only when nothing is left (left = 0) and judged on a reopen, no LOGTO, one audit line, a SUSPENDED account skipped",
-       raw["rm"] is not None and 0 <= rm.find("if not(kernel(K$ADMINISTRATOR, -1)) then") < rm.find("dir(src)")
+    ck("X10", "REMOVE.EXAMPLES: X4's gate, only the SHIPPED names deleted (each read first), the compiled object with its program, examples.bp and its .out "
+              "deleted only when nothing is left (left = 0) and judged on a reopen, no LOGTO, one audit line, a SUSPENDED account named said and skipped",
+       raw["rm"] is not None and 0 <= rm.find(GATE) < rm.find("dir(src)") and (SUSP % "15131") in rm
        and "read old from xf, names<p> then" in rm and "delete xf, names<p> on error dok = @false" in rm and "delete of, names<p> on error dok = @false" in rm
        and 0 < rm.find("if left = 0 then") < rm.find("dummy = ospath(x.path, OS$DELETE)") < rm.find("dummy = ospath(o.path, OS$DELETE)")
        and rm.find("dummy = ospath(x.path, OS$DELETE)") < rm.find("openpath x.path to xf then\n         close xf\n         display sysmsg(15129")
        and "select xf to 12" in rm and rm.count("OS$DELETE") == 2 and "logto" not in rm.lower() and rm.count("kernel(K$AUDIT") == 1
-       and "if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then continue" in rm and "clear.file" not in rm)
+       and "clear.file" not in rm)
     cited_r = set(re.findall(r"sysmsg\((\d+)", rm))
     gone_r = sorted(n for n in cited_r if not os.path.exists(os.path.join(SDSYS, "messages", n)))
-    ck("X11", "remove.examples is in voc_template (V CA $removeexamples) and not in newvoc; the %d messages it cites exist" % len(cited_r),
-       (raw["vtr"] or "").split("\n")[:3] == ["V", "CA", "$removeexamples"] and raw["nvr"] is None and cited_r and not gone_r, repr(gone_r))
+    ck("X11", "remove.examples is in every account's VOC (V CA $removeexamples in voc_template and newvoc); the %d messages it cites exist" % len(cited_r),
+       all((raw[k] or "").split("\n")[:3] == ["V", "CA", "$removeexamples"] for k in ("vtr", "nvr")) and cited_r and not gone_r, repr(gone_r))
     # 17 Nov 26 (Linux 1557e270's reply, "close it in the verb"): SDSYS's two files get bp.out's rights from the verb itself, with the grants
     # secure-sysdirs.ps1 gives a directory, and the installer still locks them after its own LOAD.EXAMPLES (LockSdsysExamples).
     sec = raw.get("sec") or ""
@@ -167,11 +170,11 @@ def checks(raw):
     lk = ld[ld.find("\nlock.sdsys:"):]
     want = " ".join('/grant "%s"' % g for g in dgr)
     ck("X12", "LOAD.EXAMPLES run for SDSYS gives its examples.bp and examples.bp.out secure-sysdirs.ps1's directory grants (SYSTEM and Administrators full, "
-              "sdusers read), /inheritance:r, through !ps_script, both files, a failure said; the installer's LockSdsysExamples locks both after its own run",
+              "sdusers read), /inheritance:r, through !ps_script, both files, a failure said; the installer's LockSdsysExamples still locks both (an upgrade)",
        len(dgr) == 3 and "sdusers:(OI)(CI)(RX)" in dgr and "if acct = 'sdsys' then gosub lock.sdsys" in ld and lk.startswith("\nlock.sdsys:")
        and want in lk and "/inheritance:r" in lk and "ls.rc = ps_script(ls.ps)" in lk and "for li = 1 to 2" in lk and "x.path else o.path" in lk
        and "display sysmsg(10055, lp, ls.rc)" in lk
-       and "ExamplesMsg := ExamplesMsg + LockSdsysExamples;" in iss and "Rest := 'examples.bp/examples.bp.out';" in iss, repr(dgr))
+       and "ExamplesMsg := LockSdsysExamples;" in iss and "Rest := 'examples.bp/examples.bp.out';" in iss, repr(dgr))
     return rows
 
 
@@ -202,29 +205,29 @@ MUTANTS = [
     ("a training program loses its program line", "X2", subfile("cs06.fizzbuzz", "program cs06.fizzbuzz", "program fizz")),
     ("a shipped program is copied with CR LF line ends", "X2", subfile("cs01.hello", "\n", "\r\n")),
     ("a doubled quote in a string", "X3", subfile("cs09.subroutines", "\"the main program's i\"", "'the main program''s i'")),
-    ("load.examples does not ask for the administrator", "X4", sub("load", "   if not(kernel(K$ADMINISTRATOR, -1)) then\n      stop sysmsg(2001)", "   if 0 then\n      stop sysmsg(2001)")),
-    ("a suspended account is entered", "X4", sub("load", "if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then continue", "null")),
+    ("anybody may name accounts", "X4", sub("load", "   if dcount(trim(@sentence), ' ') > 1 and not(is.admin) then", "   if 0 then")),
+    ("the edit gate is not asked", "X4", sub("load", "   if not(is.admin) and not(kernel(K$BP.EDIT, -1)) then", "   if 0 then")),
+    ("no name walks every account again", "X4", sub("load", "      accts = downcase(@who)\n", "      accts = ''\n")),
+    ("a suspended account named is entered", "X4", sub("load", "         if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then\n", "         if 0 then\n")),
     ("the compile is not judged", "X4", sub("load", "if index(out, 'Compiled 1 program(s) with no errors', 1) then", "if 1 then")),
     ("load.examples enters the account with LOGTO, as on Linux", "X4", sub("load", "   x.path = acct.dir : '/examples.bp'", "   execute 'logto ' : acct capturing lt\n   x.path = acct.dir : '/examples.bp'")),
     ("SDSYS's compiler pointers are left behind", "X4", sub("load", "   next a\n   gosub drop.pointers", "   next a")),
-    ("create.account does not load the examples", "X5", sub("createa", "   execute 'load.examples ' : downcase(acc.name) trapping aborts\n", "   null\n")),
-    ("create.account captures load.examples again (S.270 crash)", "X5", sub("createa", "   execute 'load.examples ' : downcase(acc.name) trapping aborts\n",
-                                                                           "   execute 'load.examples ' : downcase(acc.name) trapping aborts capturing ex.out\n")),
-    ("create.account does not say a failed load", "X5", sub("createa", "   if ex.code # 0 then crt sysmsg(15185, downcase(acc.name))\n", "")),
-    ("the installer does not run load-examples", "X6", sub("iss", "    ExamplesMsg := LoadExamples;", "    ExamplesMsg := '';")),
-    ("the installer's failure line is not in the closing box", "X6", sub("iss", "           ExamplesMsg +\n", "")),
-    ("load-examples.ps1 starts LOAD.EXAMPLES as an ordinary session", "X6", sub("ps1", "Invoke-Sd @('-internal', 'LOAD.EXAMPLES')", "Invoke-Sd @('LOAD.EXAMPLES')")),
-    ("load-examples.ps1 judges on any text", "X6", sub("ps1", "'(?m)^Example programs in examples\\.bp of [1-9][0-9]* account\\(s\\)'", "'examples\\.bp'")),
+    ("create.account loads the examples again", "X5", sub("createa", "   @system.return.code = 0\n   return",
+                                                          "   execute 'load.examples ' : downcase(acc.name) trapping aborts\n   @system.return.code = 0\n   return")),
+    ("the installer loads the examples again", "X6", sub("iss", "    ExamplesMsg := LockSdsysExamples;", "    ExamplesMsg := LoadExamples + LockSdsysExamples;")),
+    ("the installer's line is not in the closing box", "X6", sub("iss", "           ExamplesMsg +\n", "")),
+    ("load-examples.ps1 comes back", "X6", lambda raw: dict(raw, ps1="Invoke-Sd @('-internal', 'LOAD.EXAMPLES')\n")),
     ("stage.py does not ship sdsys\\examples", "X6", sub("stage", "    ('examples',      'the example programs LOAD.EXAMPLES", "    ('examplez',      'the example programs LOAD.EXAMPLES")),
     ("SecureSysdirs does not lock examples", "X6", sub("iss", "      'examples/' +\n", "")),
-    ("load.examples is given to every account", "X7", lambda raw: dict(raw, nv="V\nCA\n$loadexamples\n")),
+    ("load.examples is the administrator's VOC record only again", "X7", lambda raw: dict(raw, nv=None)),
     ("load.examples takes one account again", "X8", sub("load", "for w = 2 to dcount(want, ' ')", "for w = 2 to 2")),
     ("load.examples stops at an unregistered name", "X8", sub("load", "            display sysmsg(15122, aid)                           ;* No account is registered as %1 ...\n            n.bad += 1\n            continue",
                                                               "            stop sysmsg(15122, want)")),
     ("remove.examples takes one account only", "X9", sub("rm", "for w = 2 to dcount(want, ' ')", "for w = 2 to 2")),
     ("remove.examples lists a name twice", "X9", sub("rm", "locate aid in accts<1> by 'AL' setting ap else ins aid before accts<ap>\n      next w",
                                                      "ins aid before accts<1>\n      next w")),
-    ("remove.examples does not ask for the administrator", "X10", sub("rm", "   if not(kernel(K$ADMINISTRATOR, -1)) then\n      stop sysmsg(2001)", "   if 0 then\n      stop sysmsg(2001)")),
+    ("remove.examples skips the edit gate", "X10", sub("rm", "   if not(is.admin) and not(kernel(K$BP.EDIT, -1)) then", "   if 0 then")),
+    ("remove.examples walks every account with no name", "X9", sub("rm", "      accts = downcase(@who)\n", "      select acc.f to 11\n")),
     ("remove.examples deletes a program the system does not ship (clears the file)", "X10", sub("rm", "   for p = 1 to dcount(names, @fm)\n      read old from xf, names<p> then",
                                                                                                 "   execute 'clear.file examples.bp' capturing out\n   for p = 1 to dcount(names, @fm)\n      read old from xf, names<p> then")),
     ("remove.examples deletes the file although programs are left", "X10", sub("rm", "   if left = 0 then", "   if 1 then")),
@@ -232,12 +235,12 @@ MUTANTS = [
     ("remove.examples is not judged on a reopen", "X10", sub("rm", "      openpath x.path to xf then\n         close xf\n         display sysmsg(15129, acct : ' examples.bp', 'the file could not be deleted')",
                                                              "      if 0 then\n         display sysmsg(15129, acct : ' examples.bp', 'the file could not be deleted')")),
     ("remove.examples enters the account with LOGTO, as on Linux", "X10", sub("rm", "   x.path = acct.dir : '/examples.bp'", "   execute 'logto ' : acct capturing lt\n   x.path = acct.dir : '/examples.bp'")),
-    ("remove.examples is given to every account", "X11", lambda raw: dict(raw, nvr="V\nCA\n$removeexamples\n")),
+    ("remove.examples is the administrator's VOC record only again", "X11", lambda raw: dict(raw, nvr=None)),
     ("SDSYS's examples are not locked by the verb", "X12", sub("load", "   if acct = 'sdsys' then gosub lock.sdsys\n", "")),
     ("the verb leaves sdusers Modify on them", "X12", sub("load", '/grant "sdusers:(OI)(CI)(RX)"', '/grant "sdusers:(OI)(CI)(M)"')),
     ("the verb keeps the inherited rights", "X12", sub("load", "' /inheritance:r'", "''")),
     ("only examples.bp is locked", "X12", sub("load", "for li = 1 to 2", "for li = 1 to 1")),
-    ("the installer no longer locks them", "X12", sub("iss", "    ExamplesMsg := ExamplesMsg + LockSdsysExamples;", "    ExamplesMsg := ExamplesMsg;")),
+    ("the installer no longer locks them", "X12", sub("iss", "    ExamplesMsg := LockSdsysExamples;", "    ExamplesMsg := '';")),
 ]
 
 

@@ -180,7 +180,17 @@ if (-not (Test-Path -LiteralPath $startDefault)) {
     Write-Output "verify-sysdiracl: $startDefault is absent (the home screen is the start; nothing to lock) - not measured."
     $readOnly = @($readOnly | Where-Object { $_ -ne $startDefault })
 }
-$absent = @(@($readOnly + $adminOnly + $ipc + $moreControls) | Where-Object { -not (Test-Path -LiteralPath $_) })
+# 19 Nov 26 - RELEASE_1.1 346 (Linux ce649c1a): the installer no longer runs LOAD.EXAMPLES, so on a fresh install SDSYS has no
+# examples.bp until the administrator types load.examples there.  Each is dropped from the list when absent, said so out loud,
+# as start.default is above; on an upgrade over a tree that has them, or after load.examples in SDSYS, they are measured.
+foreach ($exName in @('examples.bp', 'examples.bp.out')) {
+    $exPath = Join-Path $sysDir $exName
+    if (-not (Test-Path -LiteralPath $exPath)) {
+        Write-Output "verify-sysdiracl: $exPath is absent (SDSYS has not loaded the example programs) - not measured."
+        $readOnly = @($readOnly | Where-Object { $_ -ne $exPath })
+    }
+}
+$absent =@(@($readOnly + $adminOnly + $ipc + $moreControls) | Where-Object { -not (Test-Path -LiteralPath $_) })
 if ($absent.Count -gt 0) {
     Write-Output 'verify-sysdiracl: these paths do not exist, so nothing could be measured:'
     $absent | ForEach-Object { Write-Output "    $_" }

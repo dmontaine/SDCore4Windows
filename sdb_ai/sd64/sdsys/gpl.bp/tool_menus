@@ -5,6 +5,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 346 (Linux ce649c1a): the Example programs tile (examples) has its row in the Menu box, after IDE as on the home screen.
 * 28 Oct 26 dm  S.88 L2: the five boxes are panes of the layout service ($tk_layout), in two columns: drawn exactly as before at 140 by 43, and in a larger window the Accounts box takes the extra
 *               rows (it shows more accounts) and What this means takes them on the right, both columns are as wide as the window allows, and the explanation wraps at its box's width.
 *               The rows, widths, hit tests and the [?] buttons are counted from the pane rectangles.
@@ -89,8 +90,8 @@ $include tk.h
    call $tk_keys('ai', keys, 'refresh', '', '', '', '')
    call $tk_aipage('init', ctx, keys, '', '', aout)
 
-   tids = 'editor' : @fm : 'ide' : @fm : 'terminal' : @fm : 'keys' : @fm : 'switch' : @fm : 'signout' : @fm : 'files' : @fm : 'voc' : @fm : 'dict' : @fm : 'query' : @fm : 'bulk' : @fm : 'catalog' : @fm : 'test' : @fm : 'recent'
-   tlabs = 'Editor' : @fm : 'IDE' : @fm : 'Terminal' : @fm : 'Keys' : @fm : 'Switch account' : @fm : 'Sign out' : @fm : 'Files' : @fm : 'Vocabulary' : @fm : 'Dictionary' : @fm : 'Queries' : @fm : 'Bulk update' : @fm : 'Programs' : @fm : 'Tests' : @fm : 'Recent group'
+   tids = 'editor' : @fm : 'ide' : @fm : 'examples' : @fm : 'terminal' : @fm : 'keys' : @fm : 'switch' : @fm : 'signout' : @fm : 'files' : @fm : 'voc' : @fm : 'dict' : @fm : 'query' : @fm : 'bulk' : @fm : 'catalog' : @fm : 'test' : @fm : 'recent'
+   tlabs = 'Editor' : @fm : 'IDE' : @fm : 'Example programs' : @fm : 'Terminal' : @fm : 'Keys' : @fm : 'Switch account' : @fm : 'Sign out' : @fm : 'Files' : @fm : 'Vocabulary' : @fm : 'Dictionary' : @fm : 'Queries' : @fm : 'Bulk update' : @fm : 'Programs' : @fm : 'Tests' : @fm : 'Recent group'
    pnames = 'Accounts' : @fm : 'Menu' : @fm : 'Default'
    nmenu = 2 + dcount(tids, @fm)                                 ;* the rows of the Menu box: where the account starts, its own programs, then a row for each standard tile
 

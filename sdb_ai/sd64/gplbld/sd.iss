@@ -3867,30 +3867,12 @@ begin
             ExpandConstant('{#DataDir}') + '\shared-docs.log' + #13#10#13#10;
 end;
 
-(* 16 Nov 26 - THE EXAMPLE PROGRAMS, from Linux cc7e41c6 (S.261; owner, 17 Nov 2026: "there should be a examples.bp file available to all users",
-   asked how, "A copy in every account").  Linux's EXAMPLES block: load-examples.ps1 runs LOAD.EXAMPLES, which gives every registered account in
-   service its own examples.bp from sdsys\examples, compiled.  At install and at upgrade, after SharedDocs: an upgrade refreshes the shipped programs
-   in every kept account and keeps any other program in the file (create.account does the same for each account made later).  No gate changes.
-   NEVER STOPS THE INSTALL.  Codes: 0 done, 2 nothing to load, 3 SD would not start, 1 anything else; 1 and 3 put one line in the closing box. *)
-function LoadExamples: String;
-var
-  Code: Integer;
-  Ps: String;
-begin
-  Result := '';
-  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
-                  ExpandConstant('{app}\load-examples.ps1') + '" -AppDir "' +
-                  ExpandConstant('{app}') + '" -DataDir "' +
-                  ExpandConstant('{#DataDir}') + '"',
-              '', SW_HIDE, ewWaitUntilTerminated, Code) then
-    Code := -1;
-  Log('SD: load-examples.ps1 exited ' + IntToStr(Code) + '; see ' + ExpandConstant('{#DataDir}') + '\load-examples.log');
-  if (Code = 0) or (Code = 2) then
-    Exit;
-  Result := 'The example programs were not put into the accounts (code ' + IntToStr(Code) + '). As SDSYS, run: load.examples' + #13#10 +
-            'See ' + ExpandConstant('{#DataDir}') + '\load-examples.log' + #13#10#13#10;
-end;
+(* 19 Nov 26 - RELEASE_1.1 346, from Linux ce649c1a: THE EXAMPLE PROGRAMS ARE NOT PUT INTO ANY ACCOUNT HERE (owner, 19 Nov 2026: "wouldnt it
+   be easier to just have the user load the examples rather than do it for every account.  most accounts will not need the examples"; of bp.edit,
+   "respect the gate").  They are installed under sdsys\examples with the system, and a person types load.examples in their own account (or uses
+   the home screen's Example programs tile) when the account has bp.edit; the administrator may name accounts.  An upgrade leaves the examples.bp
+   an account already has as it is.  LoadExamples and load-examples.ps1 (16 Nov 26, Linux's EXAMPLES block) are gone; test-examples-units.py
+   holds that they stay gone. *)
 
 { 18 Sep 26 - THE PASSWORD STEP IS GONE, RELEASE_1.1 64, AND WHAT FOLLOWS IS
   HISTORY IN FRONT OF LIVE CODE.  No SD session is opened at the end of an
@@ -4618,7 +4600,9 @@ end;
   inherit-only sdusers Modify, while bp.out beside them reads sdusers (RX).  Linux's sdsys is the sdsys user's, 755, so no other user can
   write them there.  Locked HERE, after LoadExamples, as bp.out is (sdusers read, administrators write), on every install and upgrade,
   each only when it exists (LOAD.EXAMPLES may have failed; secure-sysdirs.ps1 refuses a missing path), as LockStartDefault does.
-  SDSYS's own LOAD.EXAMPLES and REMOVE.EXAMPLES run elevated and keep their write through Administrators. }
+  SDSYS's own LOAD.EXAMPLES and REMOVE.EXAMPLES run elevated and keep their write through Administrators.
+  19 Nov 26 - RELEASE_1.1 346: the installer no longer runs LOAD.EXAMPLES, so on a fresh install neither file exists and this does nothing;
+  it stays for an upgrade over a tree an earlier release (or the administrator) gave them to. }
 function LockSdsysExamples: String;
 var
   Code: Integer;
@@ -5366,10 +5350,9 @@ begin
     { 13 Nov 26 - the shared account's documentation, RELEASE_1.1 252 / 265.  After SecureAccountDirs, which stamps the shared
       directory itself and not what is under it, so the pdf directory's own access list stands.  See SharedDocs. }
     DocsMsg := SharedDocs;
-    { 16 Nov 26 - the example programs (Linux cc7e41c6, S.261): every account's examples.bp, after the shared account's content as on Linux.
-      See LoadExamples. }
-    ExamplesMsg := LoadExamples;
-    ExamplesMsg := ExamplesMsg + LockSdsysExamples;   { 17 Nov 26 - after the files exist, see LockSdsysExamples }
+    { 19 Nov 26 - RELEASE_1.1 346: no account is given the example programs here (the person loads their own).  SDSYS's own examples.bp, if an
+      earlier release or the administrator made it, is still locked on every install and upgrade: see LockSdsysExamples. }
+    ExamplesMsg := LockSdsysExamples;
 
     case SdsysCode of
       0: begin
@@ -5651,7 +5634,7 @@ begin
            SharedMsg +
            { Empty unless shared-docs.ps1 could not set up the shared account's documentation. }
            DocsMsg +
-           { 16 Nov 26 - S.261: empty unless load-examples.ps1 could not put the example programs into the accounts. }
+           { 19 Nov 26 - RELEASE_1.1 346: empty unless SDSYS's examples.bp could not be locked (LockSdsysExamples). }
            ExamplesMsg +
            { 13 Nov 26 - RELEASE_1.1 246: empty unless install-aihelper.ps1 could not set up the AI helper service. }
            AiMsg +

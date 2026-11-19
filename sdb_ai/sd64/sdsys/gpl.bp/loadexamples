@@ -1,9 +1,14 @@
 * LOADEXAMPLES
-* LOAD.EXAMPLES verb: put the shipped example programs into the file examples.bp of every account (or of the accounts named) and compile them there.
+* LOAD.EXAMPLES verb: put the shipped example programs into the file examples.bp of this account (or of the accounts named) and compile them there.
 * Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 346, from Linux ce649c1a: THE PERSON LOADS THEIR OWN (owner, 19 Nov 2026).  With no account named the
+*               examples go into the account the session is in, for anybody who has bp.edit (12413 otherwise, before anything is written); naming
+*               accounts is the administrator's, and a suspended one named is said and skipped.  No longer run by the installer or by create.account,
+*               and no form loads every account.  In every account's VOC.  Run in a person's own account, the compiler's two pointers go into that
+*               account's VOC (the session's own) for the length of the compile, as they go into SDSYS's for the administrator's.
 * 17 Nov 26 Windows port - Linux 1557e270's reply ("close it in the verb"): when it runs for SDSYS, its examples.bp and examples.bp.out are given bp.out's
 *               rights (SYSTEM and Administrators full, sdusers read; secure-sysdirs.ps1's directory grants) through !ps_script (lock.sdsys); they inherited
 *               sdsys's sdusers Modify.  A failure is said with 10055.
@@ -22,11 +27,12 @@
 *
 * START-DESCRIPTION:
 *
-*   LOAD.EXAMPLES                       every registered account
-*   LOAD.EXAMPLES account ...           the accounts named, a list (create.account runs it for the account it made); a name that is not
-*                                       registered is said and skipped, and the others go on
+*   LOAD.EXAMPLES                       the account this session is in - anybody whose account has bp.edit (the administrator always may)
+*   LOAD.EXAMPLES account ...           the administrator's: the accounts named, a list; a name that is not registered is said and skipped,
+*                                       and the others go on
 *
-*   The administrator's verb, run by the installer, by create.account, and by hand after the programs under examples change.  Every file of the
+*   Run by a person for their own account (the command, or the home screen's Example programs tile), or by the administrator for accounts
+*   named, and again after the programs under examples change.  Nothing loads them into an account by itself.  Every file of the
 *   examples directory of the SD system directory (C:\ProgramData\SD\sdsys\examples) is one program, the FILE NAME its record id (a lower case
 *   letter first, then a-z 0-9 dot dash underscore, up to 80 characters): the five programs of the SD Text User Interface - Programmer's Guide
 *   (hello, menus, notes, browse, stock) and the training programs cs01 to cs23.  In each account they go into examples.bp, a directory file of the
@@ -36,8 +42,8 @@
 *   "Compiled N of M" counts those M.
 *
 *   NO GATE IS TOUCHED: examples.bp is an ordinary program file of the account (a name ending .bp), so the edit gate bp.edit decides whether its
-*   person may change it - off as delivered, so it is read-only to them.  It does not LOGTO (on Windows a LOGTO out of SDSYS ends the administrator
-*   right): it reaches each account's directory by the pathname in the register and never leaves SDSYS.  An account it cannot reach or make the file
+*   person may load or change it - off as delivered.  It does not LOGTO (on Windows a LOGTO out of SDSYS ends the administrator
+*   right): it reaches each account's directory by the pathname in the register and never leaves the account it runs in.  An account it cannot reach or make the file
 *   in is named and skipped; a program that does not compile is named.
 *
 * END-DESCRIPTION
@@ -55,8 +61,19 @@ $include err.h
 deffun ps_script(script) calling '!ps_script'
 
    @system.return.code = -ER$ARGS
-   if not(kernel(K$ADMINISTRATOR, -1)) then
+*  19 Nov 26 Windows port - RELEASE_1.1 346, from Linux ce649c1a (S.269 follow-up).  THE PERSON LOADS THEIR OWN (owner, 19 Nov 2026: "wouldnt
+*  it be easier to just have the user load the examples rather than do it for every account.  most accounts will not need the examples", then
+*  of the edit gate, "respect the gate").  With no account named the examples go into the account this session is in, for anybody; naming
+*  accounts is the administrator's.  THE EDIT GATE IS ASKED HERE, BEFORE ANYTHING IS WRITTEN: this program is $internal, so the kernel would
+*  let its writes into examples.bp through, and the compile would then be refused by BASIC half way; so an account without bp.edit is refused
+*  at once in BASIC's own words (12413, Linux's 11408) and nothing changes.
+   is.admin = kernel(K$ADMINISTRATOR, -1)
+   if dcount(trim(@sentence), ' ') > 1 and not(is.admin) then
       stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+   if not(is.admin) and not(kernel(K$BP.EDIT, -1)) then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12413) ;* Programs can only be compiled or cataloged by an account that has bp.edit (SDSYS can give it: modify.account <account> bp-on)
    end
 
    keychars = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
@@ -75,11 +92,14 @@ deffun ps_script(script) calling '!ps_script'
    next i
    if names = '' then stop sysmsg(15121, src)
 
-*  The accounts: those named (a list, each once), or every one in the register.  A name that is not registered is said and skipped.
+*  The accounts: those named (a list, each once; the administrator's), or the account this session is in.  A name that is not registered is said
+*  and skipped.  19 Nov 26: with no name it is no longer every account in the register (the owner: "most accounts will not need the examples").
    want = downcase(trim(@sentence))                              ;* the verb, then the account names
    openpath @sdsys : @ds : 'accounts' to acc.f else stop sysmsg(6003)
    accts = ''
-   if dcount(want, ' ') > 1 then
+   if dcount(want, ' ') = 1 then
+      accts = downcase(@who)
+   end else
       for w = 2 to dcount(want, ' ')
          aid = field(want, ' ', w)
          read arec from acc.f, aid else
@@ -87,19 +107,17 @@ deffun ps_script(script) calling '!ps_script'
             n.bad += 1
             continue
          end
+*        19 Nov 26 (Linux ce649c1a): a SUSPENDED account named is said and skipped, whatever the session is
+         if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then
+            display sysmsg(15123, aid)                           ;* Could not enter the account %1, or make the file examples.bp there ...
+            n.bad += 1
+            continue
+         end
          locate aid in accts<1> by 'AL' setting ap else ins aid before accts<ap>
       next w
-   end else
-      select acc.f to 11
-      loop
-         readnext aid from 11 else exit
-         read arec from acc.f, aid else continue
-         if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then continue     ;* a suspended account is skipped (LOGTO refuses it); it is given them when it is back
-         locate aid in accts<1> by 'AL' setting ap else ins aid before accts<ap>
-      repeat
    end
 
-*  SDSYS's own VOC holds, for the length of each account's compile, two pointers to that account's examples.bp and examples.bp.out: the compiler opens
+*  The session's own VOC (SDSYS's for the administrator, the account's own for a person) holds, for the length of each account's compile, two pointers to that account's examples.bp and examples.bp.out: the compiler opens
 *  its source and object files by VOC name, and this session never leaves SDSYS.
    open 'VOC' to sv else stop sysmsg(2026)                       ;* Cannot open VOC
    src.voc = 'load.examples.src'

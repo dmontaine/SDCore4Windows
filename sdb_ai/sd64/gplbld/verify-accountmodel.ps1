@@ -88,7 +88,10 @@ $KnownUnlisted = 0
 # examples.bp.out - CREATEA runs LOAD.EXAMPLES for it (gpl.bp/createa, the EXAMPLE PROGRAMS block;
 # gpl.bp/loadexamples writes the two VOC pointers); b341 measured 386 NEWVOC ids + these 6 = 392.  The comparison is an
 # exact string match of the sorted set, so any OTHER extra still fails the row.
-$ExpectedExtras = @('$command.stack', '$hold', '$savedlists', 'bp', 'examples.bp', 'examples.bp.out')
+# 19 Nov 2026 (RELEASE_1.1 346, Linux ce649c1a): CREATEA loads no example programs any more (the person runs
+# load.examples in their own account), so examples.bp and examples.bp.out are no longer extras of a new account;
+# load.examples and remove.examples are in NEWVOC now, so they count among the listed ids, not here.  Not yet measured.
+$ExpectedExtras = @('$command.stack', '$hold', '$savedlists', 'bp')
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }

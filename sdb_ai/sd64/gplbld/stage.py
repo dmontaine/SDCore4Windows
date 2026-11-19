@@ -347,10 +347,11 @@ SDSYS_SHIP = [
     # VM install: 14 source files "not in the install at all".
     ('helptext',      'context help text for the [?] buttons; LOAD.HELP reads it'),
     # 16 Nov 26 - S.261 (from Linux cc7e41c6).  The example programs, one file to a
-    # program, that LOAD.EXAMPLES copies into every account's examples.bp and compiles
-    # there (load-examples.ps1 at install and upgrade, create.account for a new account).
+    # program, that LOAD.EXAMPLES copies into an account's examples.bp and compiles
+    # there - 19 Nov 26 (RELEASE_1.1 346): when a person runs it in their own account,
+    # or the administrator names accounts; nothing loads them by itself.
     # Replaced on upgrade; locked to administrators by sd.iss SecureSysdirs.
-    ('examples',      'the example programs LOAD.EXAMPLES puts into every account (S.261)'),
+    ('examples',      'the example programs LOAD.EXAMPLES puts into an account (S.261)'),
     # 10 Nov 26 - RELEASE_1.1 218 (from Linux S.75 A6).  What each sd.conf parameter
     # is, for TOOL.CONFIG; a file, replaced on upgrade.  Display only: the helper
     # (sd-confset.ps1) holds its own list and ranges, and test-confset-units.ps1
@@ -1795,10 +1796,8 @@ def main():
                    # called from sd.iss after LoadContextHelp, at install and at
                    # upgrade.
                    'shared-docs.ps1',
-                   # 16 Nov 26 - S.261 (from Linux cc7e41c6).  Every account's
-                   # examples.bp (LOAD.EXAMPLES, from sdsys\examples); called from
-                   # sd.iss after SharedDocs, at install and at upgrade.
-                   'load-examples.ps1',
+                   # 19 Nov 26 - RELEASE_1.1 346: load-examples.ps1 is gone (the
+                   # installer loads no example programs; the person does).
                    # 20 Sep 26 - RELEASE_1.1 82 (D2').  DOT-SOURCED by
                    # attach-account, finish-install and the three upgrade-*
                    # scripts, which write LOGIN's one-shot "sd -internal"
