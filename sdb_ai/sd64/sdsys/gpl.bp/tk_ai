@@ -6,6 +6,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 354 (Linux S.275): the helper's truncated flag is read; a cut-off reply says 12637, an empty one 12637 alone (not 12656).
 * 18 Nov 26 Windows port - four-version audit round 2 (P-1290, P-5497, P-5498): the answer's paragraph loop is Linux's form (n.para, pa, para).
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3474, P-3475): entry.cursor stands before on.key, as Linux's; no change in effect.
 * 15 Nov 26 Windows port - RELEASE_1.1 326 (the owner: follow set.ai limit max-tokens): a request asks for 100000 tokens, the kernel's ceiling, so
@@ -758,6 +759,17 @@ run.ask:
    tok.in = hj{'in'}
    tok.out = hj{'out'}
    gosub read.proposal
+   * 19 Nov 26 (RELEASE_1.1 354, Linux S.275 a886f5ba): a reply the provider cut at the length limit is said (12637), as the ai verb says it.
+   *   With no words at all, 12637 alone: the model spent its tokens before a visible word, and "its words follow" (12656) over an empty
+   *   box said the opposite.
+   if hj{'truncated'} then
+      if trim(atext) = '' then
+         note.p = sysmsg(12637)                       ;* The answer was cut off at the length limit
+      end else
+         if note.p # '' then note.p := @fm
+         note.p := sysmsg(12637)
+      end
+   end
 
    * the popup: what the AI said, the proposal if there is one, and Accept / Reject
    *   15 Nov 26 (RELEASE_1.1 325): each paragraph wrapped on its own; a blank line stays a blank line.  18 Nov 26 (audit round 2, P-1290,

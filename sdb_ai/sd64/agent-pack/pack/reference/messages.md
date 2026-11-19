@@ -6511,7 +6511,7 @@ cited by: `ai`
 The answer was cut off at the length limit.
 ```
 
-cited by: `ai`
+cited by: `ai`, `tk_ai`
 
 ### msg:12638
 > kind=message tier=reference since=- src=sdsys/messages/12638:1#ae818345
@@ -11885,7 +11885,7 @@ User is not an administrator
 Command requires administrator privileges
 ```
 
-cited by: `apndpath`, `audit_read`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat` and 28 more
+cited by: `apndpath`, `audit_read`, `backupa`, `catalog`, `config`, `cproc`, `createa`, `delacc` and 29 more
 
 ### msg:2002
 > kind=message tier=reference since=- src=sdsys/messages/2002:1#b8493524
