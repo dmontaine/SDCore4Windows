@@ -1768,15 +1768,6 @@ Internal session admitted (opened by %1)
 
 cited by: `login`
 
-### msg:12001
-> kind=message tier=reference since=- src=sdsys/messages/12001:1#20e4c930
-
-```
-Remote access is never available to SDSYS; it is administered at this computer
-```
-
-cited by: `modifya`
-
 ### msg:12002
 > kind=message tier=reference since=- src=sdsys/messages/12002:1#73b31d6a
 
@@ -11545,6 +11536,15 @@ cited by: `localsdsys`
 ```
 
 cited by: `localsdsys`, `tool_remote`
+
+### msg:15189
+> kind=message tier=reference since=- src=sdsys/messages/15189:1#6274f664
+
+```
+modify.account does not change sdsys, the administrator; its remote access is opened and shut with remote.sdsys
+```
+
+cited by: `modifya`
 
 ### msg:15995
 > kind=message tier=reference since=- src=sdsys/messages/15995:1#32ac8f74

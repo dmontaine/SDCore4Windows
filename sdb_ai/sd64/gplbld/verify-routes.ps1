@@ -465,9 +465,11 @@ try {
     # its own wording ("remote access is never available to SDSYS") because 2202
     # said the NAME was wrong.  The refusal itself is the same one, in the same
     # place, and this row is unchanged in what it asserts.
-    Note 'SDSYS refused: message 12001'    $true  (Shown $out 12001)
+    # 19 Nov 26 - RELEASE_1.1 336 (Linux 8a300f04's 14189): 15189, which names remote.sdsys; 12001's "never available" became
+    # false with remote.sdsys (RELEASE_1.1 202, 331).  The same refusal, in the same place.
+    Note 'SDSYS refused: message 15189'    $true  (Shown $out 15189)
     $out = Invoke-SD @('MODIFY.ACCOUNT SDSYS SSH')
-    Note 'SDSYS SSH refused too: 12001'    $true  (Shown $out 12001)
+    Note 'SDSYS SSH refused too: 15189'    $true  (Shown $out 15189)
     Note 'SDSYS STILL has no route (ssh)'  'none' (Routes 'SDSYS')
     Note 'SDSYS STILL has no route'        'none' (Routes 'SDSYS')
     Note 'SDSYS still NOT in sdsshonly'    $false (InGroup 'sdsshonly' 'SDSYS')

@@ -19,6 +19,7 @@
 * 
 *
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 336 (S.62 item 8, Linux 8a300f04): sdsys is refused with 15189, which names remote.sdsys, not 12001.
 * 18 Nov 26 Windows port - four-version audit round 6, D3 (RELEASE_1.1 336): the program takes the shape of Linux's modifya.  The action word is read
 *           before the group test, upcased once, and the multi-word arm ends in stop; the group test (10024) guards only ADD / DELETE (add.delete.arm).
 *           do.action is Linux's case list in Linux's order, each case ending in return, and an unknown word is refused there with 12795 (it printed
@@ -321,8 +322,11 @@ deffun is_sd_user(username) calling '!is_sd_user'
 *   IT COVERS EVERY ACTION, NOT JUST THE TWO HE NAMED, and that is deliberate:
 *   the refusal is reached before the action token is parsed, so there is no
 *   action to name here, and SDSYS is outside this verb's reach for all of them.
+* 19 Nov 26 Windows port - RELEASE_1.1 336 (four-version audit S.62 item 8; Linux 8a300f04's 14189, here 15189 - 14xxx + 1000): 12001 said remote
+*   access is "never available" to SDSYS, false since remote.sdsys opens ssh and the API for it (RELEASE_1.1 202, 331).  The message
+*   now names the verb that does; the refusal and its place are unchanged.
    if acc.name = 'sdsys' then
-      stop sysmsg(12001) ;* Remote access is never available to SDSYS
+      stop sysmsg(15189) ;* modify.account does not change sdsys, the administrator; its remote access is opened and shut with remote.sdsys
    end
 * 13 Nov 26 Windows port - RELEASE_1.1 202: SDRADMIN, the remote administration account, is remote.sdsys's alone (a route, a gate or a
 *   member here would widen what a network password reaches).

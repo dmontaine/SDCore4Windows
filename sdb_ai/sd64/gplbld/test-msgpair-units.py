@@ -39,6 +39,10 @@ ALLOWED = {
     # where Linux's stops; the two programs' lines then align with our syntax refusal (12928) beside Linux's count refusal (14119), which is
     # our 15119 a few lines on.  Text against text: 15119 equals Linux's 14119 byte for byte (test-sdsysapi-units.py M1 and the carry).
     ('14119', '12928'): 'OS: remotesdsys api.request returns rather than stops (it runs in the SDRADMIN broker\'s job too); the line our syntax refusal 12928 sits on aligns with Linux\'s 14119, which is our 15119 (RELEASE_1.1 331)',
+    # 19 Nov 2026 (RELEASE_1.1 336, Linux 8a300f04): modifya's sdsys refusal is a message id on both sides now (Linux 14189, ours 15189,
+    # the same text), and Windows' SDRADMIN refusal (12704) follows it with no Linux counterpart, so the aligner pairs Linux's sdsys line
+    # with our SDRADMIN line.  Text against text: 15189 equals Linux's 14189 (this commit).
+    ('14189', '12704'): 'OS: Windows refuses SDRADMIN, remote.sdsys\'s separate account, right after sdsys (RELEASE_1.1 202); the line aligns with Linux\'s sdsys refusal 14189, which is our 15189 (RELEASE_1.1 336)',
     ('10002', '10002'): 'OS: Linux enters SDSYS as the sdsys OS user; on Windows by a Windows sign-in as SDSYS (RELEASE_1.1 64)',
     ('10024', '10024'): 'OS: a Windows group, not a Linux group',
     ('10003', '10051'): 'OS: two different refusals that sit on the same LOGIN line; ours names LOGTO (RELEASE_1.1 64)',
