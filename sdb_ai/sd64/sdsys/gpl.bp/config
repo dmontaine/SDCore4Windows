@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 353: show.doc opens the file READONLY; an ordinary account got "Cannot open" (read-only to sdusers).
 * 19 Nov 26 Windows port - RELEASE_1.1 353 (Linux S.273): CONFIG goes into newvoc; every form but GPL and CONTRIB asks for
 *           the administrator first (Solo's rule).
 * 17 Nov 26 Windows port - four-version audit round 1: CONFIG GPL and CONFIG CONTRIB show the shipped files @sdsys/licence and
@@ -251,7 +252,9 @@ show.doc:
 *  17 Nov 26 - the shipped file @sdsys/<doc.name>, a line at a time (see show.contrib).  doc.rec starts with 'X' in field 1 so the
 *  loop below, written for an X record whose text started at field 2, is unchanged.
    doc.path = @sdsys : @ds : doc.name
-   openseq doc.path to doc.f else
+*  19 Nov 26 - RELEASE_1.1 353: READONLY, as audit_read opens the same folder.  Without it an ordinary account was told "Cannot open"
+*  (owner's host, 10:43 install): the file is read-only to sdusers, and the read-write open failed; this program never writes it.
+   openseq doc.path readonly to doc.f else
       display 'Cannot open ' : doc.path : ', so it cannot be shown.'
       return
    end
