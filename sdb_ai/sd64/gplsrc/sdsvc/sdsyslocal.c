@@ -17,6 +17,8 @@
  *           .claude/localsdsys/DESIGN.md section 4.2.  NOT RUN: compiled and linked only; the VM witness (W0 first) measures it.
  * 19 Nov 26 Windows port - RELEASE_1.1 339 (VM sit7): a refusal from sdl_ssh_evidence logs the step that refused
  *           ("sdl_ssh_evidence: S9 ..."), since S2, S7, S9 and S10 all answer no-session and sit7's could not be told apart.
+ * 19 Nov 26 Windows port - RELEASE_1.1 339 (VM sit7 W1): the relayed screen drops ESC[?9001h/l and ESC[?1004h/l (sl_strip_modes):
+ *           relayed, they switched the asker's own console to win32-input-mode and no typed key reached the SDSYS session.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -411,21 +413,74 @@ static WCHAR* sl_env(const void* src, const char* term) {
 }
 
 /* The screen: everything the pseudo console writes, to the asker while it is there, read to the end whatever happens. */
+/* 19 Nov 26 - RELEASE_1.1 339 (VM sit7 W1).  The pseudo console's screen opens with ESC[?9001h ESC[?1004h: requests to ITS terminal
+   for win32-input-mode and focus reports.  Relayed as they stood, the asker's sd.exe wrote them to its own console (sshd's), which
+   then handed the asker every key as a win32-input sequence, and no typed key reached the SDSYS session (sit7: "SD password of
+   sdsys:" took nothing, a resize changed nothing; measured on this machine with an MSYS2 program in a ConPTY: GOT[p]..GOT[-] before,
+   nothing after printing the two).  They are not screen content, so they are dropped here; a sequence split across two reads is held
+   back (at most SL_MODE_LEN - 1 bytes) until the next read decides it, and given out as it stood when the screen ends. */
+#define SL_MODE_LEN 8
+static const char* const sl_modes[] = {"\x1b[?9001h", "\x1b[?9001l", "\x1b[?1004h", "\x1b[?1004l"};
+
+static DWORD sl_strip_modes(const char* in, DWORD n, char* out, char* held, DWORD* nheld) {
+  char work[SL_MODE_LEN + SL_IO];
+  DWORD total = *nheld + n;
+  DWORD i = 0, o = 0, rest, k;
+  int matched, partial;
+
+  memcpy(work, held, *nheld);
+  memcpy(work + *nheld, in, n);
+  *nheld = 0;
+  while (i < total) {
+    if (work[i] == '\x1b') {
+      rest = total - i;
+      matched = 0;
+      partial = 0;
+      for (k = 0; k < sizeof(sl_modes) / sizeof(sl_modes[0]); k++) {
+        if (rest >= SL_MODE_LEN) {
+          if (memcmp(work + i, sl_modes[k], SL_MODE_LEN) == 0)
+            matched = 1;
+        } else if (memcmp(work + i, sl_modes[k], rest) == 0) {
+          partial = 1;
+        }
+      }
+      if (matched) {
+        i += SL_MODE_LEN;
+        continue;
+      }
+      if (partial) {
+        memcpy(held, work + i, rest);
+        *nheld = rest;
+        return o;
+      }
+    }
+    out[o++] = work[i++];
+  }
+  return o;
+}
+
 static DWORD WINAPI sl_out_thread(LPVOID arg) {
   SL_SESSION* s = (SL_SESSION*)arg;
   HANDLE ev = CreateEventA(NULL, TRUE, FALSE, NULL);
   char buf[SL_IO];
+  char clean[SL_MODE_LEN + SL_IO];
+  char held[SL_MODE_LEN];
+  DWORD nheld = 0;
   DWORD n;
+  DWORD m;
 
   for (;;) {
     n = 0;
     if (!ReadFile(s->out_read, buf, sizeof(buf), &n, NULL) || (n == 0))
       break; /* the pseudo console is closed */
-    if ((ev == NULL) || InterlockedCompareExchange(&s->asker_gone, 0, 0))
+    m = sl_strip_modes(buf, n, clean, held, &nheld);
+    if ((ev == NULL) || (m == 0) || InterlockedCompareExchange(&s->asker_gone, 0, 0))
       continue;
-    if (!sl_write_all(s->pipe, ev, buf, n, SL_WRITE_MS))
+    if (!sl_write_all(s->pipe, ev, clean, m, SL_WRITE_MS))
       InterlockedExchange(&s->asker_gone, 1);
   }
+  if ((ev != NULL) && (nheld > 0) && !InterlockedCompareExchange(&s->asker_gone, 0, 0))
+    (void)sl_write_all(s->pipe, ev, held, nheld, SL_WRITE_MS); /* a tail that never became one of the four */
   if (ev != NULL)
     CloseHandle(ev);
   return 0;
