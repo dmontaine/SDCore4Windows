@@ -216,7 +216,9 @@ if ($Clients) {
         if (-not (Test-Path -LiteralPath $ct)) { Die "$($s.FullName) has no COMMIT.txt" }
         if (@(Get-ChildItem -LiteralPath $s.FullName -Directory).Count) { Die "$($s.FullName) holds a folder; a client folder holds files only" }
         $listed = @{}
-        foreach ($l in (Get-Content -LiteralPath $ct)) { if ($l -match '^([0-9a-f]{64})\s+(\S+)\s*$') { $listed[$Matches[2]] = $Matches[1] } }
+        # 19 Nov 26: a name may carry sha256sum's "./" (the clean-room set's COMMIT.txt and stage-clients.ps1's copy of it do); it is
+        # taken off, so ./sdclilib.dll and sdclilib.dll name the same file.
+        foreach ($l in (Get-Content -LiteralPath $ct)) { if ($l -match '^([0-9a-f]{64})\s+(\S+)\s*$') { $listed[($Matches[2] -replace '^\./', '')] = $Matches[1] } }
         $files = @(Get-ChildItem -LiteralPath $s.FullName -File | Where-Object { $_.Name -ne 'COMMIT.txt' })
         if ($files.Count -eq 0) { Die "$($s.FullName) holds no client file" }
         foreach ($f in $files) {
