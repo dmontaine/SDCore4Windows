@@ -6,6 +6,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 20 Nov 26 Windows port - RELEASE_1.1 365 (Linux fc54d055, S.277): the N / C form's schedule label is "Schedule" (it was cut at 28 cells) and its entry 20 cells,
+*           so "default: daily 02:30" fits beside it; the forms of a schedule are said under the entries when the form opens (SCHED.FORMS; Linux 14114 is 15114).
 * 14 Nov 26 Windows port - from Linux c4ce87e9 (RELEASE_1.1 307): the help line and the Selected line say F6 changes box, not Tab.
 * 14 Nov 26 Windows port - RELEASE_1.1 243: the status line says 12950 while SET.JOB reads (as tool.remote), and the verb's wait lines are
 *            dropped from what it printed, so they are never read as job lines or shown as its result.
@@ -84,6 +86,7 @@ $include tk.h
    JOBIDS = 'backup-all' : @fm : 'update-accounts'                ;* the job helper's job ids (sd-jobs.ps1)
    JOBCMDS = 'backup.account all' : @fm : 'update.accounts all'
    DAYS = 'mon' : @fm : 'tue' : @fm : 'wed' : @fm : 'thu' : @fm : 'fri' : @fm : 'sat' : @fm : 'sun'
+   SCHED.FORMS = 'Schedule: every 5|10|15|20|30 minutes, hourly, daily hh:mm, weekly mon..sun hh:mm or monthly 1..28 hh:mm (hh:mm as 09:30).'
 
    call $tk_open('tool.jobs', 'admin', ctx, err)
    if err # '' then
@@ -964,7 +967,10 @@ job.fields:
    jw = JOBIDS
    convert @fm to @sm in jw
    spec<-1> = 'job' : @vm : 'Job' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : jw
-   spec<-1> = 'sched' : @vm : 'Schedule: every 15 minutes, hourly, daily 02:30, weekly sun 03:00, monthly 1 04:00' : @vm : 24 : @vm : 24 : @vm : '' : @vm : 1 : @vm : '' : @vm : (if spec<1>[1, 3] = 'New' then 'default' else 'now')
+* 20 Nov 26 (RELEASE_1.1 365, Linux fc54d055): the label is one word and the entry 20 cells - the form cuts a label at 28 cells and the shown value at
+*   the cells the entry leaves, so the forms were cut after "every 15 minutes," and "default: daily 02:30" to "default: dail...".  The forms are said under
+*   the entries when the form opens (job.form).
+   spec<-1> = 'sched' : @vm : 'Schedule' : @vm : 20 : @vm : 24 : @vm : '' : @vm : 1 : @vm : '' : @vm : (if spec<1>[1, 3] = 'New' then 'default' else 'now')
    return
 
 * N: one form, the name, the job and the schedule; the page checks all three before it shows the box (set.job and the job helper check them again)
@@ -1014,6 +1020,8 @@ job.form:
       msg = 'the form does not fit this window'
       return
    end
+   ftext = SCHED.FORMS : ' ' : sysmsg(15114)
+   call $tk_form('say', ctx, ftext, '', '')    ;* the schedule's forms, under the entries until a refusal replaces them
    loop
       call $tk_form('run', ctx, fans, fv, fid)
       if fans # 'ok' then

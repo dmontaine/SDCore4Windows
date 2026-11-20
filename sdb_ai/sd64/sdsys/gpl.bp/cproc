@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 20 Nov 26 Windows port - RELEASE_1.1 364 (Linux fc54d055, S.277): int.update.accounts no longer says 5200 before $LOGIN; LOGIN says it
+*           after the mode 4 refusal test.
 * 17 Nov 26 Windows port - four-version audit round 4 (P-5468, P-7691 to P-7693), layout as Linux: .S reads a sentence's name once and
 *           lowers a new one in the ELSE branch; ri.narrow and ri.plain.word sit after ri.trigger.found.  No change in effect.
 * 18 Nov 26 Windows port - from Linux 48161ccf (S.62, P-6632; four-version audit cycle 3): RUN.IN's two refusals are Linux's 14173 / 14174 in this tree's
@@ -4220,8 +4222,7 @@ int.update.accounts:
          return
    end case
 
-   display sysmsg(5200) ;* Copying records from NEWVOC to VOC...
-   i = '$LOGIN'
+   i = '$LOGIN'                ;* 20 Nov 26 - $LOGIN says 5200 once its refusal test has passed (RELEASE_1.1 364)
    call @i(j,upd.mode)
    i = ''
    display

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 20 Nov 26 Windows port - RELEASE_1.1 364 (Linux fc54d055, S.277): update.accounts all refused (10172) before any VOC is touched; 5200 is
+*           said here, after that test, not by cproc.
 * 20 Nov 26 Windows port - RELEASE_1.1 266 (Solo's sit8): path.key makes a POSIX path the Windows one first (kernel(K$WINPATH)), as
 *           Solo's login does; on Core the key is unchanged.
 * 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): an SDSYS session that would be refused because it is not elevated at a desktop is
@@ -408,7 +410,19 @@ deffun radmin_open(arg) calling '!radmin_open'
    end
 
    if mode = 2 or mode = 3 or mode = 4 then  ;* Just doing a VOC upgrade or install
+* 04 Sep 26 Windows port - THE NULL CASE, REFUSED OUT LOUD.  PRE_RELEASE_FIXES 70.  Mode 4 is only ever asked for by something that
+*   wants every registered account refreshed, so a session that is not SDSYS under an administrator says the walk did NOT run.  Modes
+*   2 and 3 stay silent there - the normal case for them.
+* 20 Nov 26 Windows port - RELEASE_1.1 364 (Linux fc54d055, S.277): the refusal comes BEFORE anything is updated, and is the only line.
+*   It used to follow 5200 (printed by cproc) and this account's own VOC update, so "NOTHING has been updated" was false.
+      if mode = 4 and not(@who = 'sdsys' and kernel(K$ADMINISTRATOR,-1)) then
+         display sysmsg(10172) ;* Cannot update every account from here
+         ok = @true
+         return
+      end
+
       if mode = 2 or mode = 4 then           ;* VOC update
+         display sysmsg(5200) ;* Copying records from NEWVOC to VOC...
 * 17 Aug 26 Windows port - this is UPDATE.ACCOUNTS (CPROC internal verb 15),
 *   which is ungated.  PROJECT_STATUS.md section 8.
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  EVERY ACCOUNT'S VOC IS THE WHOLE OF
@@ -431,14 +445,6 @@ deffun radmin_open(arg) calling '!radmin_open'
          gosub update.voc
          if upd.denied then display sysmsg(12988, @path : @ds : 'voc')
          close update.voc.f
-      end
-
-* 04 Sep 26 Windows port - THE NULL CASE, REFUSED OUT LOUD.  PRE_RELEASE_FIXES 70.  Mode 4 is only ever asked for by something that
-*   wants every registered account refreshed, so a session that is not SDSYS under an administrator says the walk did NOT run.  Modes
-*   2 and 3 stay silent there - the normal case for them.  17 Nov 26 (four-version audit round 1, P-3360, P-3371): asked here, before
-*   the walk, as Linux's login asks it; it was the else of the walk's own test, the same condition.
-      if mode = 4 and not(@who = 'sdsys' and kernel(K$ADMINISTRATOR,-1)) then
-         display sysmsg(10172) ;* Cannot update every account from here
       end
 
       if @who = 'sdsys' and kernel(K$ADMINISTRATOR,-1) then

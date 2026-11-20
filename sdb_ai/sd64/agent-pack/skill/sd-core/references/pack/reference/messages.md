@@ -11247,7 +11247,7 @@ cited by: `xfer`
 Ctrl-R puts the value shown beside a field into it
 ```
 
-cited by: `tk_form`
+cited by: `tk_form`, `tool_jobs`
 
 ### msg:15115
 > kind=message tier=reference since=- src=sdsys/messages/15115:1#61b82d7a
@@ -17509,7 +17509,7 @@ cited by: `cproc`
 Copying records from NEWVOC to VOC...
 ```
 
-cited by: `cproc`
+cited by: `login`
 
 ### msg:5210
 > kind=message tier=reference since=- src=sdsys/messages/5210:1#7e88f783
