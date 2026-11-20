@@ -3,6 +3,17 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+19 Nov 26  REMOTE.API NAMES A WINDOWS FIREWALL RULE THAT BLOCKS THE API.
+
+             What        - With the API on, remote.api on, remote.api with no word and the tool.remote page say
+                           so when an enabled Windows firewall Block rule covers SD's API (sdwind.exe, or TCP port
+                           4247), and give the rule's name.
+             Why         - A Block rule beats SD's own rule, and Windows makes one when somebody presses Cancel
+                           at its firewall alert for sdwind.exe: other computers could not connect while SD said
+                           they could.
+             Does NOT    - Remove or change the rule: it may be somebody's deliberate choice.  The administrator
+                           decides (Administrator guide, "Remote access and the machine").
+
 19 Nov 26  IF SD STOPS ON ITS OWN, THE SERVICE STARTS IT AGAIN.
 
              What        - When SD's background program ends without being asked to, the SD service starts SD

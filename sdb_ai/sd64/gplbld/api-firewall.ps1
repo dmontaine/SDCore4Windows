@@ -110,6 +110,51 @@ function Test-RuleOpen($rule) {
     return ($addrs -contains 'Any')
 }
 
+# 19 Nov 26 - RELEASE_1.1 317 (VM sit7; owner, asked whether SD should remove such a rule or only report it: "warn only").
+# AN INBOUND BLOCK RULE WINS OVER OUR ALLOW RULE, and Windows makes one when somebody presses Cancel at its "allow sdwind
+# through?" prompt.  Measured on sit7: with an enabled Block rule for sdwind.exe, remote.api on left the listener on 0.0.0.0:4247
+# and SD-API-In-TCP at Any, a TLS handshake from another computer timed out, and -Show said "other computers ... may reach the
+# API".  This NEVER removes the rule: it may be the administrator's own (tight as delivered, loosening is theirs); it names it.
+# Two kinds are reported: enabled inbound Block rules for SD's sdwind.exe (the program the API listens in), and ones that name
+# TCP port 4247.  Returns the rules, possibly none; a failure to read the firewall returns none and says so.
+# The query asks for the enabled inbound Block rules only and then reads each one's program and port: listing every filter on
+# the machine (Get-NetFirewall*Filter -All) is refused unelevated ("Access is denied", measured on the host 19 Nov 26), and -Show
+# is meant for an ordinary window too.
+function Get-ApiBlockRules {
+    $found = @()
+    try {
+        $sdwind = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'usr\bin\sdwind.exe'))
+        foreach ($r in @(Get-NetFirewallRule -Direction Inbound -Action Block -Enabled True -ErrorAction Stop)) {
+            $hit = $false
+            foreach ($af in @($r | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue)) {
+                if ($af.Program -and $af.Program -ne 'Any' -and
+                    [Environment]::ExpandEnvironmentVariables($af.Program) -ieq $sdwind) { $hit = $true }
+            }
+            foreach ($pf in @($r | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue)) {
+                if (($pf.Protocol -eq 'TCP' -or $pf.Protocol -eq 'Any') -and (@($pf.LocalPort) -contains [string]$Port)) { $hit = $true }
+            }
+            if ($hit) { $found += $r }
+        }
+    }
+    catch {
+        # Get-NetFirewallRule with filters THROWS when there is no Block rule at all: "No matching MSFT_NetFirewallRule objects
+        # found by CIM query ..." (measured on the host 19 Nov 26).  That is the answer "none", not a failure.
+        if ($_.Exception.Message -match 'No (matching )?MSFT_NetFirewallRule objects found') { return }
+        # A failure is RETURNED as an object, never printed here: a function that prints and returns folds the line into its value
+        # (memory ps-function-output-trap; test-outputtrap-units and test-psreturn-units hold the rule).  The caller prints it.
+        return [pscustomobject]@{ Error = $_.Exception.Message }
+    }
+    return $found
+}
+
+function Write-BlockWarning {
+    foreach ($b in @(Get-ApiBlockRules)) {
+        if ($b.PSObject.Properties['Error']) { Write-Output ('api-firewall: could not read the other firewall rules (' + $b.Error + ')'); continue }
+        Write-Output ('api-firewall: WARNING - the Windows firewall rule "' + $b.DisplayName + '" (' + $b.Name +
+                      ') BLOCKS the API, so other computers cannot connect until it is disabled or removed')
+    }
+}
+
 function Write-State($rule) {
     if ($null -eq $rule) {
         Write-Output '  rule: not present'
@@ -163,6 +208,7 @@ try {
                           ', so only this computer may reach the API')
         } elseif (Test-RuleOpen $rule) {
             Write-Output 'api-firewall: state is ON - other computers on your network may reach the API'
+            Write-BlockWarning   # 19 Nov 26 - RELEASE_1.1 317: unless a Block rule says otherwise, and then it is named
         } else {
             Write-Output 'api-firewall: state is LOCAL - only this computer may reach the API'
         }
@@ -318,6 +364,7 @@ try {
 
     if ($Open) {
         Write-Output "api-firewall: other computers MAY reach the SD API on port $Port"
+        Write-BlockWarning   # 19 Nov 26 - RELEASE_1.1 317: reported, never removed (owner: "warn only")
     } else {
         Write-Output "api-firewall: the SD API is reachable FROM THIS MACHINE ONLY"
     }
