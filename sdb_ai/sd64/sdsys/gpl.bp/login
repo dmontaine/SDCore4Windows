@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 20 Nov 26 Windows port - RELEASE_1.1 266 (Solo's sit8): path.key makes a POSIX path the Windows one first (kernel(K$WINPATH)), as
+*           Solo's login does; on Core the key is unchanged.
 * 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): an SDSYS session that would be refused because it is not elevated at a desktop is
 *           first asked whether the SD service started it for a listed user's ssh login (kernel(K$SDSYS.LOCAL)); if so the SD password of
 *           sdsys is asked once and the SDSYS case grants (audit "elevation granted reason=sdsys local ssh user=<name>", notice 15177) or it
@@ -2067,10 +2069,21 @@ batch.permitted:
 * comparison matches and the walk updated SDSYS's VOC a second time, from
 * NEWVOC.  Both are put into accountpath's form: forward slashes, a drive
 * letter as /cygdrive/<letter>, then lower case (NTFS ignores case).
+* 20 Nov 26 (266, Solo's sit8): a POSIX path that is not under /cygdrive is
+* first made the Windows one (kernel(K$WINPATH)).  SD Core Solo's @PATH is
+* relative to its own root (/sdsys, /user_accounts/sduser - measured, WHERE),
+* which no folding of the register's C:\Users\...\SDCoreSolo\sdsys equals, so
+* Solo's upgrade walked SDSYS twice.  Here it changes nothing: /cygdrive/c/...
+* comes back C:\... and is put into the same form as before.
 *  pk.in  ->  pk.out
 
 path.key:
-   pk.out = convert(char(92), '/', pk.in)
+   pk.out = pk.in
+   if pk.out[2, 1] # ':' then
+      pk.out = kernel(K$WINPATH, pk.in)
+      if pk.out = '' then pk.out = pk.in
+   end
+   pk.out = convert(char(92), '/', pk.out)
    if pk.out[2, 1] = ':' then pk.out = '/cygdrive/' : pk.out[1, 1] : pk.out[3, 99999]
    pk.out = downcase(pk.out)
    return

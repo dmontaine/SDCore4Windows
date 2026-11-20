@@ -108,8 +108,11 @@ def checks(login, tg_new, tg_tpl):
     # later that night, @path is /cygdrive/c/ProgramData/SD/sdsys.  Both sides go through path.key (accountpath's form: '/', /cygdrive/<letter>, lower case).
     vp = [l.strip() for i, l in code_lines(login) if re.search(r"\bvoc\.paths\s*=", l)]
     pk = login[login.find("\npath.key:\n"):login.find("\n   return\n", login.find("\npath.key:\n")) + 1] if "\npath.key:\n" in login else ""
-    pk_ok = ("pk.out = convert(char(92), '/', pk.in)" in pk and "if pk.out[2, 1] = ':' then pk.out = '/cygdrive/' : pk.out[1, 1] : pk.out[3, 99999]" in pk
-             and "pk.out = downcase(pk.out)" in pk and pk.find("convert(") < pk.find("/cygdrive/") < pk.find("downcase("))
+    # 20 Nov 26 (266, Solo's sit8): Solo's @path is /sdsys (relative to its root), so path.key first makes a path with no drive letter the Windows one
+    # (kernel(K$WINPATH), falling back to the path itself when it answers ''); the same text in both products.
+    pk_ok = ("if pk.out[2, 1] # ':' then" in pk and "pk.out = kernel(K$WINPATH, pk.in)" in pk and "if pk.out = '' then pk.out = pk.in" in pk
+             and "pk.out = convert(char(92), '/', pk.out)" in pk and "if pk.out[2, 1] = ':' then pk.out = '/cygdrive/' : pk.out[1, 1] : pk.out[3, 99999]" in pk
+             and "pk.out = downcase(pk.out)" in pk and pk.find("K$WINPATH") < pk.find("convert(") < pk.find("/cygdrive/") < pk.find("downcase("))
     row("V8 the walk compares account paths in one form: voc.paths starts as path.key of @path, each register path becomes acc.key through path.key, located and "
         "added as acc.key; path.key turns slashes, a drive letter into /cygdrive/<letter>, then lower case",
         len(vp) == 1 and vp[0].startswith("pk.in = @path ; gosub path.key ; voc.paths = pk.out") and "pk.in = acc.path ; gosub path.key ; acc.key = pk.out" in walk_text(login)
@@ -199,6 +202,7 @@ def selftest():
     mutant("summary-gone", "V6", lambda s: re.sub(r"\n               if acc\.denied then display sysmsg\(12989, acc\.denied\)[^\n]*", "", s, count=1))
     mutant("walk-starts-from-the-raw-path", "V8", lambda s: s.replace("pk.in = @path ; gosub path.key ; voc.paths = pk.out", "voc.paths = @path", 1))
     mutant("path-key-keeps-the-drive-letter", "V8", lambda s: s.replace("   if pk.out[2, 1] = ':' then pk.out = '/cygdrive/' : pk.out[1, 1] : pk.out[3, 99999]\n", "", 1))
+    mutant("path-key-skips-winpath", "V8", lambda s: s.replace("      pk.out = kernel(K$WINPATH, pk.in)\n", "", 1))
     mutant("walk-locates-the-raw-path", "V8", lambda s: s.replace("locate acc.key in voc.paths<1> setting s else", "locate acc.path in voc.paths<1> setting s else", 1))
     mutant("premise-gone-newvoc", "V1", lambda s: s.replace("$tool_mygates", "$tool_gates"), which="new")
     mutant("premise-gone-template", "V1", lambda s: s.replace("$tool_gates", "$tool_mygates"), which="tpl")
