@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 361: run.restart takes restart-sd.ps1's lines (ps_script_out) and shows them when it exits non-zero;
+*           -Detach now waits for the task's result, so a restart that did not happen says so instead of "ran (status 0)".
 * 18 Nov 26 Windows port - RELEASE_1.1 340: the restart is restart-sd.ps1 -Detach, a one-shot SYSTEM task, not a child of this session.
 * 15 Nov 26 Windows port - RELEASE_1.1 317: LOCAL runs api-listener.ps1 -Local (APILOCAL=1, the listener on 127.0.0.1 only, as Linux's
 *           LOCAL); a move between ON and LOCAL therefore moves the listener and is offered the restart.
@@ -350,7 +352,16 @@ run.firewall:
 run.restart:
    ps  =       '& ' : char(39) : kernel(K$WINPATH, '/restart-sd.ps1') : char(39) : ' -Detach'   ;* 18 Nov 26: RELEASE_1.1 340
    ps := @fm : 'exit $LASTEXITCODE'
-   rc = ps_script(ps)
+*  19 Nov 26 - RELEASE_1.1 361: when the restart works this session is ended before the script returns; when it does not, the script's
+*  own lines (the task's, then its verdict) are the only report there is, so they are shown.
+   rs.res = ps_script_out(ps, @true)
+   rc = rs.res<1>
+   if rc # 0 then
+      rs.n = dcount(rs.res, @fm)
+      for rs.i = 2 to rs.n
+         display rs.res<rs.i>
+      next rs.i
+   end
    return
 
 end

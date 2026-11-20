@@ -52,6 +52,8 @@
 # returns at once.  The task runs this script with -FromTask, which does the
 # same stop, wait and start as a direct call, writing its lines to
 # <ProgramData>\SD\restart-sd.log because nobody is left to read them.
+# 19 Nov 26 - RELEASE_1.1 361: -Detach then WAITS (180 s at most) for the task's result, and on a failure gives back the task's own
+# lines and exits 1; on success SD's stop ends the calling session first.
 #   restart-sd.ps1 -Detach      (from inside SD: remote.api's restart)
 #   restart-sd.ps1 -FromTask    (run by that task only)
 
@@ -76,6 +78,9 @@ if ($Detach) {
     . (Join-Path $PSScriptRoot 'sd-taskfolder.ps1')
     $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $me = $PSCommandPath
+    $log = Join-Path $env:ProgramData 'SD\restart-sd.log'
+    $logBefore = 0
+    try { if (Test-Path -LiteralPath $log) { $logBefore = @(Get-Content -LiteralPath $log).Count } } catch { }
     Say ("handing the restart to Task Scheduler: \SD\sdcore-restart, as SYSTEM, running " + $me + " -FromTask")
     try {
         $tsSvc = New-Object -ComObject Schedule.Service
@@ -111,7 +116,35 @@ if ($Detach) {
         Say 'the restart task did not start within 10 seconds - SD was NOT restarted'
         exit 1
     }
-    Say ("the restart is running as SYSTEM; this session ends when SD stops; its lines go to " + (Join-Path $env:ProgramData 'SD\restart-sd.log'))
+    # 19 Nov 26 - RELEASE_1.1 361 (VM sit7): "restart now" said "remote.api on restart ran (status 0)" twice while sdwind kept its pid and
+    # LOCAL never bound 127.0.0.1.  Status 0 meant only that the task had STARTED; how it ENDED went to the log nobody read.  So this
+    # waits for the task: when the restart works, SD's stop ends the session that called this and nothing more is read; when the task
+    # ends with a failure (this script's exit 1 or 2), its own lines are given back and this exits 1.  At most 180 s, the task's own
+    # worst case (45 s to settle, 45 s to stop, 20 s for sd -stop, 45 s to start, with room).
+    Say ("the restart is running as SYSTEM; this session ends when SD stops; waiting up to 180 s for the task's result (its lines go to " + $log + ")")
+    $deadline = (Get-Date).AddSeconds(180)
+    $result = $null
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 2
+        try {
+            $t = $folder.GetTask('sdcore-restart')
+            $r = [int]$t.LastTaskResult
+            if ($t.State -ne 4 -and $r -ne 267009 -and $r -ne 267011) { $result = $r; break }   # 0x41301 running, 0x41303 not yet run
+        } catch { }
+    }
+    $new = @()
+    try { if (Test-Path -LiteralPath $log) { $new = @(Get-Content -LiteralPath $log | Select-Object -Skip $logBefore | Where-Object { $_ -like 'restart-sd: *' }) } } catch { }
+    # The task's lines first and the verdict LAST: tool.remote shows a command's last line.
+    $new | ForEach-Object { Write-Output ('  ' + $_) }
+    if ($null -eq $result) {
+        Say 'the restart task was still running after 180 s - SD may not have been restarted (the lines above are its own so far)'
+        exit 1
+    }
+    if ($result -ne 0) {
+        Say ('the restart task FAILED (result ' + $result + ') - SD was NOT restarted (the lines above are its own)')
+        exit 1
+    }
+    Say 'the restart task ended with result 0, and this session was not ended by it'
     exit 0
 }
 

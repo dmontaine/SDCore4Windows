@@ -5,6 +5,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 19 Nov 26 Windows port - RELEASE_1.1 361 (VM sit7): A's restart label is "Restart SD if needed"; the old one was 34 characters and
+*              $tk_form cuts a label at 28 ("...listener c").
 * 18 Nov 26 Windows port - RELEASE_1.1 339, from Linux 38cfb301 (S.267): the remote admin view shows two fields, Local ssh users and Local API
 *              users (the two lists of LOCAL.SDSYS, read by running the verb with no keyword and parsing sd-sdsyslocal.ps1's fixed status words);
 *              Up and Down choose a list, U adds a name (after a box showing 15179 / 15180 that wants the name typed again), X removes one chosen
@@ -813,7 +815,7 @@ do.api:
    * REMOTE.API is run with RESTART or NO.RESTART through the routine and the terminal is never given to it.  Linux has no restart to ask about.
    spec = 'The API door (REMOTE.API)' : @fm : '&Next' : @fm : 'Left, Right or the space bar choose.'
    spec<-1> = 'door' : @vm : 'API' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'on' : @sm : 'local' : @sm : 'off'
-   spec<-1> = 'restart' : @vm : 'Restart SD if the listener changes' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'later' : @sm : 'now'
+   spec<-1> = 'restart' : @vm : 'Restart SD if needed' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'later' : @sm : 'now'
    fv = 'off' : @fm : 'later'
    call $tk_form('open', ctx, spec, fv, fo)
    if fo = 'no' then

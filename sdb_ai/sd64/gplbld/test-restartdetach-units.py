@@ -10,6 +10,7 @@ to) the session its own stop ends.  FREE: reads two files.  Exit 0 every check p
       (S-1-5-18, service account, highest), one action: this script with -FromTask; it is started, and success is anchored on the task
       seen running or just run; a failure says SD was NOT restarted and exits 1
   D3  -Detach returns before any stop; -FromTask writes its lines to <ProgramData>\\SD\\restart-sd.log and then does the ordinary restart
+  D4  (RELEASE_1.1 361) -Detach waits for the task's result; a failure exits 1 after the task's own lines, and run.restart shows them
 """
 import os
 import sys
@@ -48,7 +49,15 @@ def checks(raw):
                  and "try { $folder.DeleteTask('sdcore-restart', 0) } catch { }" in d and "$def.Principal.UserId = 'S-1-5-18'" in d
                  and "$def.Principal.LogonType = 5" in d and "$def.Principal.RunLevel = 1" in d
                  and "'\" -FromTask'" in d and "$task.Run($null)" in d and "$t.State -eq 4" in d
-                 and d.count("SD was NOT restarted") == 2 and d.count("exit 1") == 2 and "exit 0" in d))
+                 and d.count("SD was NOT restarted") == 3 and d.count("exit 1") == 4 and "exit 0" in d))   # 19 Nov 26 (361): + the task's failure, + still running
+    # D4, 19 Nov 26 - RELEASE_1.1 361 (VM sit7: "ran (status 0)" twice and no restart): -Detach waits for the task's own result and a
+    # failure exits 1 with the task's lines before its verdict; run.restart takes those lines (ps_script_out) and shows them on a non-zero exit.
+    w = d[d.find("$deadline = (Get-Date).AddSeconds(180)"):]
+    rows.append(("D4", "-Detach waits up to 180 s for the task's LastTaskResult (not 0x41301/0x41303), a non-zero result exits 1 after the task's "
+                 "lines; run.restart shows the lines when the exit is not 0",
+                 "$deadline = (Get-Date).AddSeconds(180)" in d and "$r = [int]$t.LastTaskResult" in w and "$r -ne 267009 -and $r -ne 267011" in w
+                 and 0 < w.find("$new | ForEach-Object") < w.find("if ($result -ne 0) {") < w.find("the restart task FAILED")
+                 and "rs.res = ps_script_out(ps, @true)" in rr and "if rc # 0 then" in rr and "display rs.res<rs.i>" in rr))
     stop = rs.find("sc.exe\" stop $SvcName")
     ft = rs.find("if ($FromTask) {")
     rows.append(("D3", "-Detach returns before any stop; -FromTask logs to ProgramData\\SD\\restart-sd.log, before the ordinary restart",
@@ -63,6 +72,8 @@ MUTANTS = [
     ("success is not anchored", "rs", "if ($t.State -eq 4 -or", "if ($true -or"),
     ("the task does not run -FromTask", "rs", "'\" -FromTask'", "'\"'"),
     ("-FromTask writes no log", "rs", "try { Start-Transcript -Path (Join-Path $env:ProgramData 'SD\\restart-sd.log') -Append | Out-Null } catch { }", "$null = 0"),
+    ("-Detach reports success without the task's result (361)", "rs", "$r -ne 267009 -and $r -ne 267011", "$true"),
+    ("remote.api drops the script's lines again (361)", "ra", "rs.res = ps_script_out(ps, @true)", "rs.res = ps_script(ps)"),
 ]
 
 
