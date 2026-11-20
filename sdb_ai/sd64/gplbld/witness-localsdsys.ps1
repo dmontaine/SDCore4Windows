@@ -771,10 +771,19 @@ Say ('  ' + $User + ' SID ''' + $UserSid + '''   ' + $Unlisted + ' SID ''' + $Un
 Show-Lists 'now'
 
 # A row that needs SD installed and the test users made.  $true when it may go on; otherwise it records NOT RUN.
-function Test-Ready([string]$Row, [switch]$NeedUnlisted) {
+# 19 Nov 26: -NeedAccount for the rows that sign in as the user over ssh and run sd-sdsys (W5, W10, W12).  Without an SD account SD's
+# login refuses first ("not in the register", sit5 23:48) and the door is never asked, which W5 then scored NOT RUN with no reason.
+function Test-Ready([string]$Row, [switch]$NeedUnlisted, [switch]$NeedAccount) {
     if (-not $installed) { Add-Row $Row 'the row' 'NOT RUN' ('SD is not installed here (' + $SdExe + ' is absent)'); return $false }
     if ($Script:Helper -eq '') { Add-Row $Row 'the row' 'NOT RUN' 'sd-sdsyslocal.ps1 is not under C:\Program Files\SD'; return $false }
     if ($UserSid -eq '') { Add-Row $Row 'the row' 'NOT RUN' ('there is no local user ' + $User + ': run -Only setup first'); return $false }
+    if ($NeedAccount) {
+        $acctDir = Join-Path $DataDir ('user_accounts\' + $User)
+        if (-not (Test-Path -LiteralPath $acctDir)) {
+            Add-Row $Row 'the row' 'NOT RUN' ($User + ' has no SD account (' + $acctDir + ' is absent): as SDSYS, create.account for it and modify.account ' + $User + ' sh-on - see the step sheet')
+            return $false
+        }
+    }
     if ($NeedUnlisted -and $UnlistedSid -eq '') { Add-Row $Row 'the row' 'NOT RUN' ('there is no local user ' + $Unlisted + ': run -Only setup first'); return $false }
     return $true
 }
@@ -1040,8 +1049,10 @@ foreach ($rowName in @('w1', 'w2', 'w3')) {
     Say ('=== ' + $R + ': ' + $sshCmdLocal + ' with ' + $what)
     if (-not (Set-Listed 'ssh' $User)) { Add-Row $R 'the row' 'NOT RUN' ($User + ' could not be put on the ssh list'); continue }
     $marks = New-Marks
-    $lines = @('In WINDOW B (the VM, an ORDINARY PowerShell, not elevated) type:   ' + $sshCmdLocal,
-               'At "' + $User + '@localhost''s password:" type ' + $User + '''s Windows password.')
+    # 19 Nov 26: each line in its own parentheses - the comma binds tighter than +, so 'a' + $x, 'b' + $y made ONE line of an array
+    # (sit5's W5 prompt read "...sd-sdsys Type sdlocalw's ...").
+    $lines = @(('In WINDOW B (the VM, an ORDINARY PowerShell, not elevated) type:   ' + $sshCmdLocal),
+               ('At "' + $User + '@localhost''s password:" type ' + $User + '''s Windows password.'))
     if ($R -eq 'W1') { $lines += @('At "SD password of sdsys:" type SDSYS''s SD password (the right one).', 'At the SD prompt type:   WHO', 'then type:   OFF') }
     if ($R -eq 'W2') { $lines += @('At "SD password of sdsys:" type a WRONG password (for example: wrong).', 'Watch whether the window waits a few seconds before the session ends.') }
     if ($R -eq 'W3') { $lines += @('Type nothing more.  If "SD password of sdsys:" IS asked, sdsys has an SD password: type a wrong one, and answer n below.') }
@@ -1090,7 +1101,7 @@ if ($Run -contains 'w4' -and (Test-Ready 'W4' -NeedUnlisted)) {
 }
 
 # ================================================================================================================ W5
-if ($Run -contains 'w5' -and (Test-Ready 'W5')) {
+if ($Run -contains 'w5' -and (Test-Ready 'W5' -NeedAccount)) {
     Say ''
     Say '=== W5: the ssh list EMPTY (as delivered): list-empty, and nothing in the audit trail'
     $before = @(Get-ListNames $SshList)
@@ -1100,7 +1111,7 @@ if ($Run -contains 'w5' -and (Test-Ready 'W5')) {
     if (Test-Path -LiteralPath $SshList) { Add-Row 'W5' 'the row' 'NOT RUN' 'the ssh list could not be emptied' }
     else {
         $marks = New-Marks
-        if (Wait-Person 'W5' @('In WINDOW B type:   ' + $sshCmdLocal, ('Type ' + $User + '''s Windows password.  It should end at once with "sd-sdsys refused: list-empty".'))) {
+        if (Wait-Person 'W5' @(('In WINDOW B type:   ' + $sshCmdLocal), ('Type' + $User + '''s Windows password.  It should end at once with "sd-sdsys refused: list-empty".'))) {
             $since = Read-Since $marks
             Set-DoorRefusal 'W5' $User 'list-empty' $since
             $why = @($since.Audit | Where-Object { $_ -match 'why=|sdsys local' })
@@ -1182,13 +1193,13 @@ if ($Run -contains 'w9' -and (Test-Ready 'W9')) {
 }
 
 # ================================================================================================================ W10
-if ($Run -contains 'w10' -and (Test-Ready 'W10')) {
+if ($Run -contains 'w10' -and (Test-Ready 'W10' -NeedAccount)) {
     Say ''
     Say '=== W10: a PHANTOM from the granted SDSYS session is refused by LOGIN'
     if (-not (Set-Listed 'ssh' $User)) { Add-Row 'W10' 'the row' 'NOT RUN' 'the list could not be given the name' }
     else {
         $marks = New-Marks
-        if (Wait-Person 'W10' @('In WINDOW B type:   ' + $sshCmdLocal, ('Type ' + $User + '''s Windows password, then at "SD password of sdsys:" the RIGHT SD password of sdsys.'),
+        if (Wait-Person 'W10' @(('In WINDOW B type:   ' + $sshCmdLocal), ('Type' + $User + '''s Windows password, then at "SD password of sdsys:" the RIGHT SD password of sdsys.'),
                                 'At the SD prompt type:   PHANTOM WHO', 'Wait 10 seconds, then type:   OFF')) {
             $since = Read-Since $marks
             $grants = @($since.Audit | Where-Object { $_ -match 'elevation granted reason=sdsys local ssh' })
@@ -1229,7 +1240,7 @@ if ($Run -contains 'w11' -and (Test-Ready 'W11')) {
 }
 
 # ================================================================================================================ W12
-if ($Run -contains 'w12' -and (Test-Ready 'W12')) {
+if ($Run -contains 'w12' -and (Test-Ready 'W12' -NeedAccount)) {
     Say ''
     Say '=== W12: an UNSAFE ssh list (a grant to Users added by hand): treated as none listed; clear repairs it'
     if (-not (Set-Listed 'ssh' $User)) { Add-Row 'W12' 'the row' 'NOT RUN' 'the list could not be given the name' }
@@ -1247,7 +1258,7 @@ if ($Run -contains 'w12' -and (Test-Ready 'W12')) {
             $r = Invoke-Helper $Script:Helper @('-List', 'ssh', '-Action', 'status')
             Set-Verdict 'W12' 'status: unsafe, treated as none listed' @($r.Text) 'sdsys local ssh: unsafe, treated as none listed' @('sdsys local ssh: listed ') 'the helper'
             $marks = New-Marks
-            if (Wait-Person 'W12' @('In WINDOW B type:   ' + $sshCmdLocal, ('Type ' + $User + '''s Windows password.  It should end with "sd-sdsys refused: list-unsafe".'))) {
+            if (Wait-Person 'W12' @(('In WINDOW B type:   ' + $sshCmdLocal), ('Type' + $User + '''s Windows password.  It should end with "sd-sdsys refused: list-unsafe".'))) {
                 $since = Read-Since $marks
                 Set-DoorRefusal 'W12' $User 'list-unsafe' $since
             } else { Add-Row 'W12' 'the door refused list-unsafe' 'NOT RUN' 'the person skipped it' }

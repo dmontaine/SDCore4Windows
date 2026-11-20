@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 19 Nov 26 Windows port - RELEASE_1.1 355: OPENSEQ falls back to read-only when the read-write open is refused for access (MSYS2's
+ *           access() said writable; measured on sdsys\licence from an unelevated administrator).
  * 13 Nov 26 Windows port - RELEASE_1.1 279: WRITESEQ writes LF for an explicit FC$CRLF mode 0, 2 or 3; CR LF stays for mode 1 and a
  *           file with no mode (RELEASE_1.1 271).
  * 10 Nov 26 Windows port - from Linux ec01ff0b (14 Sep 26, P.6): op_openseq()'s error cleanup releases the record lock it took, and frees the
@@ -732,6 +734,17 @@ Private void openseq(bool map_name) {
       /* Open existing sequential file record */
 
       fu = dio_open(fullpathname, (read_only) ? DIO_READ : DIO_OVERWRITE);
+
+      /* 19 Nov 26 - RELEASE_1.1 355: the MSYS2 runtime's access(path, 2) answers "writable" for a file whose only write grant is to
+         BUILTIN\Administrators when that group is deny-only in the session's token (an unelevated administrator), so the read-write
+         open above is refused with EACCES (measured: access W_OK 0, O_RDWR EACCES, O_RDONLY ok, on sdsys\licence).  The test was
+         meant to choose read-only for such a file, so a refused read-write open falls back to read-only, as a file access() had
+         flagged would have been opened.  Windows only: Linux's access() is exact. */
+      if (!ValidFileHandle(fu) && !read_only && (errno == EACCES)) {
+        fu = dio_open(fullpathname, DIO_READ);
+        if (ValidFileHandle(fu))
+          read_only = TRUE;
+      }
 
       if (!ValidFileHandle(fu)) {
         process.status = ER_FNF;
