@@ -11,6 +11,7 @@ to) the session its own stop ends.  FREE: reads two files.  Exit 0 every check p
       seen running or just run; a failure says SD was NOT restarted and exits 1
   D3  -Detach returns before any stop; -FromTask writes its lines to <ProgramData>\\SD\\restart-sd.log and then does the ordinary restart
   D4  (RELEASE_1.1 361) -Detach waits for the task's result; a failure exits 1 after the task's own lines, and run.restart shows them
+  D5  (RELEASE_1.1 361, sit8) the wait ends when the stop begins; the own-window host sd.exe is not counted as SD running
 """
 import os
 import sys
@@ -58,6 +59,18 @@ def checks(raw):
                  "$deadline = (Get-Date).AddSeconds(180)" in d and "$r = [int]$t.LastTaskResult" in w and "$r -ne 267009 -and $r -ne 267011" in w
                  and 0 < w.find("$new | ForEach-Object") < w.find("if ($result -ne 0) {") < w.find("the restart task FAILED")
                  and "rs.res = ps_script_out(ps, @true)" in rr and "if rc # 0 then" in rr and "display rs.res<rs.i>" in rr))
+    # D5, 20 Nov 26 - RELEASE_1.1 361 (VM sit8, measured: SD left stopped): the wait ends once the service leaves Running (before the task
+    # check, so the waiting session is free to end), and the own-window host sd.exe (parent conhost or explorer, or parent of an sd.exe) is
+    # not counted as SD still running.
+    gp = rs[rs.find("function Get-SdProcs {"):rs.find("function Report(")]
+    hp = rs[rs.find("function Get-SdHostPids {"):rs.find("function Report(")]
+    rows.append(("D5", "-Detach returns 0 once the SD service is not Running, before reading the task; Get-SdProcs leaves out the own-window "
+                 "host sd.exe (parent conhost.exe or explorer.exe, or parent of another sd.exe); an unreadable table excuses nothing",
+                 0 < w.find("if ($svc -and $svc.Status -ne 'Running') {") < w.find("$t = $folder.GetTask('sdcore-restart')")
+                 and "exit 0" in w[w.find("if ($svc -and $svc.Status -ne 'Running') {"):w.find("$t = $folder.GetTask('sdcore-restart')")]
+                 and "$hosts = Get-SdHostPids" in gp and "-not ($_.Name -eq 'sd' -and $hosts -contains $_.Id)" in gp
+                 and "$pn -eq 'conhost.exe' -or $pn -eq 'explorer.exe' -or $parentsOfSd -contains [int]$q.ProcessId" in hp
+                 and "catch { return @() }" in hp and "-OperationTimeoutSec 15" in hp))
     stop = rs.find("sc.exe\" stop $SvcName")
     ft = rs.find("if ($FromTask) {")
     rows.append(("D3", "-Detach returns before any stop; -FromTask logs to ProgramData\\SD\\restart-sd.log, before the ordinary restart",
@@ -74,6 +87,9 @@ MUTANTS = [
     ("-FromTask writes no log", "rs", "try { Start-Transcript -Path (Join-Path $env:ProgramData 'SD\\restart-sd.log') -Append | Out-Null } catch { }", "$null = 0"),
     ("-Detach reports success without the task's result (361)", "rs", "$r -ne 267009 -and $r -ne 267011", "$true"),
     ("remote.api drops the script's lines again (361)", "ra", "rs.res = ps_script_out(ps, @true)", "rs.res = ps_script(ps)"),
+    ("-Detach keeps waiting through the stop (361 sit8)", "rs", "if ($svc -and $svc.Status -ne 'Running') {", "if ($false) {"),
+    ("the window host counts as SD running again (361 sit8)", "rs", "-not ($_.Name -eq 'sd' -and $hosts -contains $_.Id)", "$true"),
+    ("a session's own parent would excuse it (361 sit8)", "rs", "$pn -eq 'conhost.exe' -or $pn -eq 'explorer.exe' -or", "$pn -ne '' -or"),
 ]
 
 

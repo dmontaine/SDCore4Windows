@@ -54,6 +54,8 @@
 # <ProgramData>\SD\restart-sd.log because nobody is left to read them.
 # 19 Nov 26 - RELEASE_1.1 361: -Detach then WAITS (180 s at most) for the task's result, and on a failure gives back the task's own
 # lines and exits 1; on success SD's stop ends the calling session first.
+# 20 Nov 26 - RELEASE_1.1 361 (sit8): -Detach stops waiting as soon as the service leaves Running (the waiting session must be free to
+# end, or the task's wait for the sessions runs out); and an own-window HOST sd.exe is not counted as SD still running (Get-SdHostPids).
 #   restart-sd.ps1 -Detach      (from inside SD: remote.api's restart)
 #   restart-sd.ps1 -FromTask    (run by that task only)
 
@@ -121,11 +123,20 @@ if ($Detach) {
     # waits for the task: when the restart works, SD's stop ends the session that called this and nothing more is read; when the task
     # ends with a failure (this script's exit 1 or 2), its own lines are given back and this exits 1.  At most 180 s, the task's own
     # worst case (45 s to settle, 45 s to stop, 20 s for sd -stop, 45 s to start, with room).
-    Say ("the restart is running as SYSTEM; this session ends when SD stops; waiting up to 180 s for the task's result (its lines go to " + $log + ")")
+    # 20 Nov 26 - RELEASE_1.1 361 (VM sit8): BUT THE WAIT MUST END WHEN THE STOP BEGINS.  The caller is an SD session blocked in this
+    # script; while it waits, sd -stop's SIGTERM is not acted on, the task's 20 s wait for the sessions ran out, and SD was left
+    # stopped (restart-sd.log 20 Nov 00:33:54).  So the wait is only for a failure BEFORE the stop: once the SD service is no longer
+    # Running, this returns 0 at once and the session ends with SD; what the task does after that is in its log.
+    Say ("the restart is running as SYSTEM; this session ends when SD stops; waiting up to 180 s for the stop to begin or the task to fail (its lines go to " + $log + ")")
     $deadline = (Get-Date).AddSeconds(180)
     $result = $null
     while ((Get-Date) -lt $deadline) {
-        Start-Sleep -Seconds 2
+        Start-Sleep -Seconds 1
+        $svc = Get-Service -Name $SvcName -ErrorAction SilentlyContinue
+        if ($svc -and $svc.Status -ne 'Running') {
+            Say ('SD is stopping (service ' + $svc.Status + '); this session ends with it and SD starts again')
+            exit 0
+        }
         try {
             $t = $folder.GetTask('sdcore-restart')
             $r = [int]$t.LastTaskResult
@@ -154,14 +165,41 @@ if ($FromTask) {
 }
 
 function Get-SdProcs {
-    return @((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
+    $p = @((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
+    $hosts = Get-SdHostPids
+    return @($p | Where-Object { -not ($_.Name -eq 'sd' -and $hosts -contains $_.Id) })
+}
+
+# 20 Nov 26 - RELEASE_1.1 361 (VM sit8, MEASURED): an interactive SD session in its own window has a HOST sd.exe (win32vt.c
+# own_window) that holds the window and waits on the session; it never joins SD (not in the user table), so sd -stop cannot end it, and
+# counting it left SD stopped and never started ("SD processes are STILL running ... sd(360)"; pid 360's parent was
+# "conhost.exe sd.exe").  A host is an sd.exe whose parent is conhost.exe (the window own_window opened) or explorer.exe (the Start
+# menu shortcut's classic window), or an sd.exe that is the parent of another sd.exe (its session).  No session has either parent:
+# an ssh session's is sshd-session or cmd, a phantom's or a job's is sdwind or sd.  If the process table cannot be read, nothing is
+# excused (the old rule).  A 15 s limit on the query: CIM has stalled for minutes here before (row 312).
+function Get-SdHostPids {
+    $all = @()
+    try { $all = @(Get-CimInstance -ClassName Win32_Process -Filter "Name='sd.exe' OR Name='conhost.exe' OR Name='explorer.exe'" -OperationTimeoutSec 15 -ErrorAction Stop) } catch { return @() }
+    $name = @{}
+    foreach ($q in $all) { $name[[int]$q.ProcessId] = [string]$q.Name }
+    $sd = @($all | Where-Object { $_.Name -eq 'sd.exe' })
+    $parentsOfSd = @($sd | ForEach-Object { [int]$_.ParentProcessId })
+    $out = @()
+    foreach ($q in $sd) {
+        $pp = [int]$q.ParentProcessId
+        $pn = if ($name.ContainsKey($pp)) { $name[$pp] } else { '' }
+        if ($pn -eq 'conhost.exe' -or $pn -eq 'explorer.exe' -or $parentsOfSd -contains [int]$q.ProcessId) { $out += [int]$q.ProcessId }
+    }
+    return $out
 }
 
 function Report([string]$label) {
     $svc = Get-Service -Name $SvcName -ErrorAction SilentlyContinue
     $p   = Get-SdProcs
     $names = if ($p.Count -gt 0) { ($p | ForEach-Object { $_.Name + '(' + $_.Id + ')' }) -join ' ' } else { 'none' }
-    Say ("{0,-7} service={1} processes={2}" -f $label, $(if ($svc) { $svc.Status } else { 'ABSENT' }), $names)
+    $h = @(Get-SdHostPids)
+    $hn = if ($h.Count -gt 0) { ($h | ForEach-Object { 'sd(' + $_ + ')' }) -join ' ' } else { 'none' }
+    Say ("{0,-7} service={1} processes={2} window-hosts-not-counted={3}" -f $label, $(if ($svc) { $svc.Status } else { 'ABSENT' }), $names, $hn)
 }
 
 # THE INSTRUMENT RULE: echo the real inputs before doing anything with them.
