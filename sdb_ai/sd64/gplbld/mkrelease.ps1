@@ -32,7 +32,7 @@
       sd-core[-solo]-for-windows-<ver>-changes.{pdf,html,md}   the Changes document, lower case: the installer's shared-docs.ps1
                                                           (Solo: solo-setup.ps1) copies exactly that pattern into the pdf directory
       pdf\                                                one PDF per chapter of each book, named <book>-<chapter>.pdf with the book
-                                                          in lower case (user, administrator, gettingstarted): Linux mail
+                                                          in lower case (user, administrator, gettingstarted, tuiguide): Linux mail
                                                           2026-11-13T0930, choice (a), so 00a-copyright-and-licence.pdf, which is in
                                                           every book, cannot collide; DOCS.INSTALL takes ^[a-z0-9][a-z0-9._-]{0,79}$
       SHA256SUMS.txt                                      one line for every other file in the package
@@ -177,8 +177,10 @@ foreach ($c in $changes[0..1]) {
 if (-not (Test-PdfMagic $changes[0][0])) { Die "$($changes[0][0]) is not a PDF" }
 
 # The per-chapter PDFs
+# 19 Nov 26 - the TUIGuide ships too (owner, 19 Nov: "Yes, ship it"; Linux mail T3200, template Core 4257dbe8): tuiguide-<chapter>.pdf,
+# by the same rules as the other books.
 $pdfs = @(); $stale = @(); $notes = @()
-foreach ($book in @('User', 'Administrator', 'GettingStarted')) {
+foreach ($book in @('User', 'Administrator', 'GettingStarted', 'TUIGuide')) {
     $mdDir = Join-Path $DocsRepo ($book + '\markdown'); $pdfDir = Join-Path $DocsRepo ($book + '\pdf')
     if (-not (Test-Path -LiteralPath $mdDir)) { Say "no $book book in $docsName; none packaged"; continue }
     $pages = @(Get-ChildItem -LiteralPath $mdDir -Filter '*.md' -File | Where-Object { $_.BaseName -ne 'index' })

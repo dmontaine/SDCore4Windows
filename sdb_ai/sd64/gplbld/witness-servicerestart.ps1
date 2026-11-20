@@ -23,6 +23,8 @@ function Add-Row([string]$Step, [string]$Check, [string]$Verdict, [string]$Evide
     Say ('  [' + $Verdict + '] ' + $Step + ': ' + $Check)
     if ($Evidence) { Say ('         evidence: ' + $Evidence) }
 }
+# A function's @() is unrolled on return (one process comes back as the bare object), so EVERY caller wraps it: @(Get-Winds).
+# 19 Nov 26: the first run refused "one sdwind.exe" with one running, because .Count of the bare object was not 1.
 function Get-Winds { @(Get-CimInstance Win32_Process -Filter "Name='sdwind.exe'" | Where-Object { $_.ExecutablePath -ieq $Wind }) }
 function Get-SvcState { $s = Get-Service -Name SD -ErrorAction SilentlyContinue; if ($s) { [string]$s.Status } else { 'absent' } }
 function Get-LogMark { if (Test-Path -LiteralPath $SvcLog) { (Get-Item -LiteralPath $SvcLog).Length } else { 0 } }
@@ -45,7 +47,7 @@ if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 if (-not (Test-Path $Sd)) { Say 'CANNOT RUN: SD is not installed here.  Nothing was done (exit 2).'; exit 2 }
 $flag = (& sc.exe qfailureflag SD | Out-String)
 Say ('  failure flag: ' + (($flag -split "`r?`n" | Where-Object { $_ -match 'FAILURE_ACTIONS' }) -join ' '))
-$w0 = Get-Winds
+$w0 = @(Get-Winds)
 Say ('  BEFORE: service ' + (Get-SvcState) + ', sdwind pid(s) ' + (($w0 | ForEach-Object { $_.ProcessId }) -join ','))
 if ((Get-SvcState) -ne 'Running' -or $w0.Count -ne 1) { Say 'CANNOT RUN: the SD service must be Running with one sdwind.exe first (Start-Service SD).  Nothing was done (exit 2).'; exit 2 }
 
@@ -58,7 +60,7 @@ $out = (& $Sd -stop 2>&1 | Out-String)
 Show-Lines 'sd -stop said (raw)' @($out -split "`r?`n" | Where-Object { $_.Trim() -ne '' })
 Say '  waiting 25 seconds (a restart would come after 5) ...'
 Start-Sleep -Seconds 25
-$st = Get-SvcState; $w = Get-Winds; $lines = Get-LogSince $mark
+$st = Get-SvcState; $w = @(Get-Winds); $lines = @(Get-LogSince $mark)
 Show-Lines 'sdsvc.log since the mark (raw)' $lines
 Add-Row 'A' 'the service is Stopped 25 s after sd -stop' $(if ($st -eq 'Stopped') { 'PASS' } else { 'FAIL' }) ('service ' + $st)
 Add-Row 'A' 'no sdwind.exe was started again' $(if ($w.Count -eq 0) { 'PASS' } else { 'FAIL' }) ('sdwind pid(s) now: ' + (($w | ForEach-Object { $_.ProcessId }) -join ',') + $(if ($w.Count -eq 0) { 'none' } else { '' }))
@@ -69,8 +71,8 @@ else { Add-Row 'A' 'sdsvc.log names the clean exit' $(if ($clean.Count -gt 0) { 
 Say '  > Start-Service SD   (waiting up to 60 seconds for it and sdwind.exe)'
 Start-Service -Name SD -ErrorAction SilentlyContinue
 $deadline = (Get-Date).AddSeconds(60)
-while ((Get-Date) -lt $deadline -and -not ((Get-SvcState) -eq 'Running' -and (Get-Winds).Count -eq 1)) { Start-Sleep -Seconds 1 }
-$st = Get-SvcState; $w1 = Get-Winds
+while ((Get-Date) -lt $deadline -and -not ((Get-SvcState) -eq 'Running' -and @(Get-Winds).Count -eq 1)) { Start-Sleep -Seconds 1 }
+$st = Get-SvcState; $w1 = @(Get-Winds)
 Add-Row 'A' 'Start-Service brings SD back' $(if ($st -eq 'Running' -and $w1.Count -eq 1) { 'PASS' } else { 'FAIL' }) ('service ' + $st + ', sdwind pid(s) ' + (($w1 | ForEach-Object { $_.ProcessId }) -join ','))
 
 # ---------------------------------------------------------------------------------------------------------------------- B: a death
@@ -87,11 +89,11 @@ else {
     $deadline = (Get-Date).AddSeconds(45)
     $w2 = @()
     while ((Get-Date) -lt $deadline) {
-        $w2 = Get-Winds
+        $w2 = @(Get-Winds)
         if ((Get-SvcState) -eq 'Running' -and $w2.Count -eq 1 -and $w2[0].ProcessId -ne $old) { break }
         Start-Sleep -Seconds 1
     }
-    $st = Get-SvcState; $lines = Get-LogSince $mark
+    $st = Get-SvcState; $lines = @(Get-LogSince $mark)
     Show-Lines 'sdsvc.log since the mark (raw)' $lines
     $new = if ($w2.Count -eq 1) { $w2[0].ProcessId } else { 0 }
     Add-Row 'B' 'the service is Running again with a NEW sdwind.exe' $(if ($st -eq 'Running' -and $new -ne 0 -and $new -ne $old) { 'PASS' } else { 'FAIL' }) ('service ' + $st + ', old pid ' + $old + ', new pid ' + $new)
