@@ -109,8 +109,10 @@ int sdl_sid_name(const char* sid, char* name, size_t nlen);
    another image, no-session for a gap); that process sshd's own image, SYSTEM, a child of the sshd service, created after it (not-ssh);
    sshd's own record in OpenSSH/Operational, an Accepted event written BY that process (its ProcessID), after it was made, for that
    user (no-session); its address a literal loopback (not-local), and that connection still established at the sshd service
-   (no-session).  0 with the user's name now and SID; -1 with *why. */
-int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid, size_t slen, const char** why);
+   (no-session).  sshd's record is waited for, up to SDL_EVENT_WAIT_MS: an event is not queryable the moment sshd writes it.
+   0 with the user's name now and SID; -1 with *why, and *step (when STEP is not NULL) a fixed text naming the step that refused,
+   for the service's log only: four steps share no-session. */
+int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid, size_t slen, const char** why, const char** step);
 
 /* The SDSYS process the service started for an ssh login (sd -SDSYSLOCAL <pid>): 0 when THIS process is the local account SDSYS
    from the SD service's S4U logon (token source SDsessn), elevated, a child of the SD service, and PID passes sdl_ssh_evidence; the

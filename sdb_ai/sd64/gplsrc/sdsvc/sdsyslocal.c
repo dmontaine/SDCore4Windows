@@ -15,6 +15,8 @@
  * START-HISTORY:
  * 18 Nov 26 Windows port - written.  RELEASE_1.1 339, the Windows reading of Linux's root door (sd-elevate sdsys-session, 38cfb301);
  *           .claude/localsdsys/DESIGN.md section 4.2.  NOT RUN: compiled and linked only; the VM witness (W0 first) measures it.
+ * 19 Nov 26 Windows port - RELEASE_1.1 339 (VM sit7): a refusal from sdl_ssh_evidence logs the step that refused
+ *           ("sdl_ssh_evidence: S9 ..."), since S2, S7, S9 and S10 all answer no-session and sit7's could not be told apart.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -789,6 +791,7 @@ static void sl_serve_one(HANDLE h, HANDLE ev) {
   SL_SESSION s;
   ULONGLONG until = GetTickCount64() + SL_REQUEST_MS;
   const char* word = "";
+  const char* step = "";
   DWORD got = 0;
   DWORD n;
   DWORD code = 0;
@@ -835,8 +838,9 @@ static void sl_serve_one(HANDLE h, HANDLE ev) {
     goto out;
   }
   /* 6. Every question about P, asked of the operating system by this process. */
-  if (sdl_ssh_evidence((unsigned long)s.asker_pid, name, sizeof(name), sidtext, sizeof(sidtext), &word) != 0) {
-    sl_refuse(h, ev, &s, word, "sdl_ssh_evidence");
+  if (sdl_ssh_evidence((unsigned long)s.asker_pid, name, sizeof(name), sidtext, sizeof(sidtext), &word, &step) != 0) {
+    snprintf(why, sizeof(why), "sdl_ssh_evidence: %s", step);   /* which step: four of them answer no-session (sit7) */
+    sl_refuse(h, ev, &s, word, why);
     goto out;
   }
   /* 7. The user it names is the pipe client's, and P is still there (held open since step 2). */

@@ -20,6 +20,12 @@
  *           sshd-session.exe join cmd.exe and sshd.exe, every one by full path (system directory, or the sshd service's own image
  *           folder), and A may be sshd-session.exe from that folder.  base_name() went with the name tests.  The TCP row's owner is
  *           NOT changed: W0 listed no port-22 row (the session was ::1), so whose the connection is stays to be measured.
+ * 19 Nov 26 Windows port - RELEASE_1.1 339 (VM sit7): the door refused every sd-sdsys "no-session" while nothing else read
+ *           OpenSSH/Operational, and admitted 6 of 6 while a probe queried it continuously (event queryable 22-38 ms after its own
+ *           time, sd.exe 55-80 ms after it; W0's refusal had sd.exe 60 ms after it).  S9 now waits for sshd's record, up to
+ *           SDL_EVENT_WAIT_MS, asking every SDL_EVENT_STEP_MS; what it accepts is unchanged.  The TCP row's owner was measured the
+ *           same sitting (probe-tcp22): the sshd SERVICE owns the established ::1 row, so S10 stands.  sdl_ssh_evidence returns
+ *           which step refused (STEP) for the service's log: S2, S7, S9 and S10 all answer no-session.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -56,7 +62,11 @@
 #endif
 
 /* A port as the TCP table holds it (network order in the low 16 bits) in host order. */
-#define SDL_PORT(x) ((unsigned short)((((x) & 0xFF) << 8) | (((x) >> 8) & 0xFF)))
+/* sshd's Accepted record is not queryable the instant it is written (sit7: 22-38 ms with a reader polling, longer without one), and
+   sd.exe asks the door some 60 ms after it: S9 asks again every SDL_EVENT_STEP_MS until SDL_EVENT_WAIT_MS has passed. */
+#define SDL_EVENT_WAIT_MS 3000
+#define SDL_EVENT_STEP_MS 50
+#define SDL_PORT(x)((unsigned short)((((x) & 0xFF) << 8) | (((x) >> 8) & 0xFF)))
 
 /* ======================================================================
    Pure: the name rule and the list text                                  */
@@ -777,8 +787,11 @@ static int own_dir_file(const WCHAR* name, WCHAR* out, size_t outlen) {
   return 1;
 }
 
-int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, size_t slen, const char** why) {
+#define SDL_STEP(t) do { if (step != NULL) *step = (t); } while (0)
+
+int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, size_t slen, const char** why, const char** step) {
   char path[MAX_PATH];
+  int waited;
   sdl_list l;
   proc_info p, cur, a, svc;
   HANDLE snap;
@@ -797,6 +810,7 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
     sid_out[0] = '\0';
 
   /* S1: the list, FIRST. */
+  SDL_STEP("S1 the ssh list");
   if (!sdl_list_path("ssh", path, sizeof(path))) {
     *why = "list-unsafe";
     return -1;
@@ -806,11 +820,13 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
 
   snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
   if (snap == INVALID_HANDLE_VALUE) {
+    SDL_STEP("S2 no process snapshot");
     *why = "no-session";
     return -1;
   }
 
   /* S2: the process and its token. */
+  SDL_STEP("S2 the asker's process and token");
   if (!proc_read((DWORD)pid, parent_of(snap, (DWORD)pid), &p)) {
     CloseHandle(snap);
     *why = "no-login";
@@ -818,6 +834,7 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
   }
 
   /* S3, S4: its user on the list, and an account that may be answered. */
+  SDL_STEP("S3-S4 the user listed, an account that may be answered");
   for (i = 0; i < l.n; i++)
     if (strcmp(l.sid[i], p.sid) == 0)
       listed = 1;
@@ -832,6 +849,7 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
   }
 
   /* S6: the logon session is that user's own, and sshd's kind (network for a key, network-cleartext for a password; F2). */
+  SDL_STEP("S6 the logon session");
   if (!logon_facts(&p.logon, p.sid, &same, &type)) {
     CloseHandle(snap);
     *why = "no-login";
@@ -855,6 +873,7 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
      folder (C:\Program Files\OpenSSH from the MSI, not System32).  So the user's part may hold cmd.exe and conhost.exe from the
      system directory and sshd.exe or sshd-session.exe from the sshd SERVICE's image folder - each compared by FULL path, never by
      name alone - and nothing else (a second sd.exe, a shell, a debugger stays session-unsafe). */
+  SDL_STEP("S7 the asker is not SD's own sd.exe");
   if (!own_dir_file(L"sd.exe", sdexe, MAX_PATH) || lstrcmpiW(p.image, sdexe) != 0) {
     CloseHandle(snap);
     *why = "session-unsafe";
@@ -862,10 +881,12 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
   }
   if (GetSystemDirectoryW(sys, MAX_PATH) == 0) {
     CloseHandle(snap);
+    SDL_STEP("S7 no system directory");
     *why = "no-session";
     return -1;
   }
   /* The sshd service, read first now: its image's folder is where sshd's own processes must come from. */
+  SDL_STEP("S8 the sshd service");
   if (!service_proc(SDL_SSHD_SVC, &svc)) {
     CloseHandle(snap);
     *why = "not-ssh";
@@ -889,13 +910,27 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
   cur = p;
   for (hops = 0;; hops++) {
     ppid = cur.ppid;
-    if (hops > 8 || ppid == 0 || !proc_read(ppid, parent_of(snap, ppid), &a) || !ft_before(&a.created, &cur.created)) {
+    if (hops > 8 || ppid == 0) {
       CloseHandle(snap);
+      SDL_STEP("S7 the chain has no SYSTEM process within 8 parents");
+      *why = "no-session";
+      return -1;
+    }
+    if (!proc_read(ppid, parent_of(snap, ppid), &a)) {
+      CloseHandle(snap);
+      SDL_STEP("S7 a parent in the chain could not be read (gone?)");
+      *why = "no-session";
+      return -1;
+    }
+    if (!ft_before(&a.created, &cur.created)) {
+      CloseHandle(snap);
+      SDL_STEP("S7 a parent in the chain was not made before its child");
       *why = "no-session";
       return -1;
     }
     if (a.system)
       break;   /* A: the first SYSTEM process up the chain */
+    SDL_STEP("S7 a process in the chain is another user's, another logon's, or not sshd's own image");
     if (strcmp(a.sid, p.sid) != 0 || a.logon.LowPart != p.logon.LowPart || a.logon.HighPart != p.logon.HighPart) {
       CloseHandle(snap);
       *why = "session-unsafe";
@@ -912,6 +947,7 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
 
   /* S8: A is sshd itself - the sshd service's image or (OpenSSH 10) sshd-session.exe from the service's folder, SYSTEM, a child of
      the running sshd service, made after it. */
+  SDL_STEP("S8 A is not sshd's own process under the sshd service");
   if ((lstrcmpiW(a.image, svc.image) != 0 && lstrcmpiW(a.image, want_sess) != 0) || a.ppid != svc.pid ||
       !ft_before(&svc.created, &a.created)) {
     CloseHandle(snap);
@@ -920,24 +956,38 @@ int sdl_ssh_evidence(unsigned long pid, char* name, size_t nlen, char* sid_out, 
   }
   CloseHandle(snap);
 
-  /* S9: sshd's own Accepted record, written by A, for this user. */
-  if (!sshd_accepted(a.pid, &a.created, evuser, sizeof(evuser), evaddr, sizeof(evaddr), &evport) ||
-      !name_sid(evuser, evsid, sizeof(evsid)) || strcmp(evsid, p.sid) != 0) {
+  /* S9: sshd's own Accepted record, written by A, for this user.
+     19 Nov 26 (sit7): waited for, because the event log has not made it queryable yet when sd.exe asks (see SDL_EVENT_WAIT_MS).
+     The record that is accepted is the same one; only WHEN it is looked for changes. */
+  for (waited = 0; !sshd_accepted(a.pid, &a.created, evuser, sizeof(evuser), evaddr, sizeof(evaddr), &evport);
+       waited += SDL_EVENT_STEP_MS) {
+    if (waited >= SDL_EVENT_WAIT_MS) {
+      SDL_STEP("S9 no Accepted record written by A within the wait");
+      *why = "no-session";
+      return -1;
+    }
+    SleepEx(SDL_EVENT_STEP_MS, FALSE); /* not Sleep(): linuxlb.c defines SD's own Sleep() and this file links into sd.exe too */
+  }
+  if (!name_sid(evuser, evsid, sizeof(evsid)) || strcmp(evsid, p.sid) != 0) {
+    SDL_STEP("S9 sshd's Accepted record names another user");
     *why = "no-session";
     return -1;
   }
 
-  /* S10: from a literal loopback address, and that connection still established at sshd. */
+  /* S10: from a literal loopback address, and that connection still established at sshd (the sshd service owns the row: sit7). */
+  SDL_STEP("S10 sshd's record is not from a loopback address");
   if (!loopback_literal(evaddr, &v6, addr16)) {
     *why = "not-local";
     return -1;
   }
   if (!tcp_established(v6, addr16, evport, svc.pid)) {
+    SDL_STEP("S10 the connection is not established at the sshd service");
     *why = "no-session";
     return -1;
   }
 
   snprintf(sid_out, slen, "%s", p.sid);
+  SDL_STEP("");
   *why = "";
   return 0;
 }
@@ -983,7 +1033,7 @@ int sdl_ssh_self(unsigned long pid, char* name, size_t nlen, const char** why) {
       !ft_before(&svc.created, &me.created))
     return -1;
   /* And the login it was started for passes every question again, asked by this process. */
-  return sdl_ssh_evidence(pid, name, nlen, sid, sizeof(sid), why);
+  return sdl_ssh_evidence(pid, name, nlen, sid, sizeof(sid), why, NULL);
 }
 
 /* END-CODE */
