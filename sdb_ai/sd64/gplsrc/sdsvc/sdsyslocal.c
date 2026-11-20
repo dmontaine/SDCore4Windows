@@ -19,6 +19,13 @@
  *           ("sdl_ssh_evidence: S9 ..."), since S2, S7, S9 and S10 all answer no-session and sit7's could not be told apart.
  * 19 Nov 26 Windows port - RELEASE_1.1 339 (VM sit7 W1): the relayed screen drops ESC[?9001h/l and ESC[?1004h/l (sl_strip_modes):
  *           relayed, they switched the asker's own console to win32-input-mode and no typed key reached the SDSYS session.
+ * 20 Nov 26 Windows port - RELEASE_1.1 360: NO PSEUDO CONSOLE.  sit8's three dumps of a stalled SDSYS session name the spinning thread
+ *           from the MSYS2 runtime's own thread table: "consm", the runtime's console master thread (89 s of CPU, nearly all kernel;
+ *           the console select thread "conssel" 0.19 s; SD's main thread waiting).  A process that owns a console always has that
+ *           thread, so SD reading the console itself would not have stopped it.  The SDSYS process now gets two pipes as its standard
+ *           handles and no console at all (CREATE_NO_WINDOW), as run.in's debugged child does (sdrunin.c), and runs as a CN_PORT
+ *           session (sd.c); LINES and COLUMNS carry the asker's size, as sdrunin.c's do.  A size frame after the start is checked and
+ *           dropped: a session on a pipe has no tty to be told of a resize (as run.in's).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -39,18 +46,18 @@
  *   6. sdl_ssh_evidence(P) (win32localsdsys.c): the ssh list, the account, the logon, the ancestry to
  *      sshd, sshd's own Accepted record, a loopback peer and its connection still open                   its own word
  *   7. the user it names is the user of step 3, and P is still running                                   other-session, no-session
- * Then: an S4U logon of SDSYS (win32s4ulogon.c), made primary and checked ELEVATED (not-elevated); a pseudo console of the asker's
- * size; a job with KILL_ON_JOB_CLOSE (not one process: an SDSYS session starts the elevated helper and PowerShell); the process
+ * Then: an S4U logon of SDSYS (win32s4ulogon.c), made primary and checked ELEVATED (not-elevated); two pipes for its keys and its
+ * screen, no console (RELEASE_1.1 360), the asker's size in LINES and COLUMNS; a job with KILL_ON_JOB_CLOSE (not one process: an SDSYS session starts the elevated helper and PowerShell); the process
  * "<dir of sdsvc.exe>\sd.exe -SDSYSLOCAL <P>" made suspended, put in the job, then let run (a start that fails: not-started).
  * That process's own kernel asks the same questions about P again (sdl_ssh_self), and LOGIN then asks SDSYS's SD password.
  *
  * WHAT IS LOGGED.  Every refusal and every start is ONE line of sdsvc.log naming the word, the pid and the user; a refusal sends the
  * asker "REFUSED <word>" and closes.  SD's audit trail does not see a refusal here: SD never ran (Linux T0745 Q11).
  *
- * THE RELAY.  The pseudo console's output goes to the asker from a thread of its own, which reads until the output ends even when
- * the asker has gone, so that ClosePseudoConsole is never left waiting on a full pipe.  The asker's frames (keys, sizes) are read
- * here and given to the pseudo console.  The session ends when the SDSYS process exits (the pseudo console is closed, its last
- * output reaches the asker, then the pipe is let go) or when the asker goes (the job is terminated).
+ * THE RELAY.  The SDSYS process's screen goes to the asker from a thread of its own, which reads until the output ends even when
+ * the asker has gone, so that the process is never left waiting on a full pipe.  The asker's key frames are read here and written to
+ * the process's keyboard pipe; a size frame is checked and dropped.  The session ends when the SDSYS process exits (its last output
+ * reaches the asker, then the pipe is let go) or when the asker goes (the job is terminated).
  *
  * NOTHING HERE IS FATAL TO THE SERVICE except a RevertToSelf that fails.
  *
@@ -59,7 +66,7 @@
  * START-CODE
  */
 
-/* CreatePseudoConsole and PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE are declared from Windows 10 1809 (RS5); SD's floor is Windows 11. */
+/* Windows 10 1809 (RS5) declarations; SD's floor is Windows 11.  (Kept from the pseudo console, which RELEASE_1.1 360 removed.) */
 #ifndef NTDDI_VERSION
 #define NTDDI_VERSION 0x0A000006
 #endif
@@ -84,7 +91,7 @@
 #define SL_WRITE_MS 60000     /* a write of the screen to the asker that takes longer ends the session */
 #define SL_FLUSH_MS 3000      /* the last screen, read by the asker before the pipe is let go */
 #define SL_EXIT_MS 5000       /* the SDSYS process, terminated, given this to be gone */
-#define SL_DRAIN_MS 5000      /* the output thread, after the pseudo console is closed, given this to end */
+#define SL_DRAIN_MS 5000      /* the output thread, after the SDSYS process has exited, given this to end */
 #define SL_STOP_MS 8000
 #define SL_IO 4096
 #define SL_FRAMES (2 * (3 + SDASK_KEYS_MAX) + 16)
@@ -103,9 +110,8 @@ typedef struct {
   HANDLE proc;
   HANDLE thread;          /* its first thread, suspended until the asker has been told STARTED */
   DWORD pid;
-  HPCON pc;
-  HANDLE in_write;        /* the keys, into the pseudo console */
-  HANDLE out_read;        /* the screen, out of it */
+  HANDLE in_write;        /* the keys, into the SDSYS process's standard input */
+  HANDLE out_read;        /* the screen, out of its standard output */
   HANDLE out_thread;
   volatile LONG asker_gone;
   char who[260];
@@ -379,18 +385,22 @@ static int env_dropped(const WCHAR* var) {
   return 0;
 }
 
-/* SDSYS's own environment block, less the variables above, plus TERM.  malloc'd, or NULL. */
-static WCHAR* sl_env(const void* src, const char* term) {
-  WCHAR add[SDASK_TERM_MAX + 8];
+/* SDSYS's own environment block, less the variables above, plus TERM, LINES and COLUMNS (RELEASE_1.1 360: a session on a pipe has
+   no tty to ask its size; LOGIN takes it from these, as for run.in's child).  malloc'd, or NULL. */
+static WCHAR* sl_env(const void* src, const char* term, int cols, int rows) {
+  WCHAR add[3][SDASK_TERM_MAX + 16];
   const WCHAR* p;
   WCHAR* out;
   WCHAR* q;
   size_t total = 1;
   size_t n;
+  int i;
 
-  if (swprintf(add, SDASK_TERM_MAX + 8, L"TERM=%hs", term) < 0)
+  if ((swprintf(add[0], SDASK_TERM_MAX + 16, L"TERM=%hs", term) < 0) || (swprintf(add[1], SDASK_TERM_MAX + 16, L"LINES=%d", rows) < 0) ||
+      (swprintf(add[2], SDASK_TERM_MAX + 16, L"COLUMNS=%d", cols) < 0))
     return NULL;
-  total += wcslen(add) + 1;
+  for (i = 0; i < 3; i++)
+    total += wcslen(add[i]) + 1;
   for (p = (const WCHAR*)src; (p != NULL) && (*p != L'\0'); p += wcslen(p) + 1) {
     if (!env_dropped(p))
       total += wcslen(p) + 1;
@@ -405,14 +415,18 @@ static WCHAR* sl_env(const void* src, const char* term) {
       q += n;
     }
   }
-  n = wcslen(add) + 1;
-  memcpy(q, add, n * sizeof(WCHAR));
-  q += n;
+  for (i = 0; i < 3; i++) {
+    n = wcslen(add[i]) + 1;
+    memcpy(q, add[i], n * sizeof(WCHAR));
+    q += n;
+  }
   *q = L'\0';
   return out;
 }
 
-/* The screen: everything the pseudo console writes, to the asker while it is there, read to the end whatever happens. */
+/* The screen: everything the SDSYS process writes, to the asker while it is there, read to the end whatever happens. */
+/* 20 Nov 26 - RELEASE_1.1 360: with no pseudo console nothing sends the two modes below any more; the filter stays, since none of
+   the four is screen content and SD writes none of them, so it costs nothing and keeps the asker's console safe if one ever came. */
 /* 19 Nov 26 - RELEASE_1.1 339 (VM sit7 W1).  The pseudo console's screen opens with ESC[?9001h ESC[?1004h: requests to ITS terminal
    for win32-input-mode and focus reports.  Relayed as they stood, the asker's sd.exe wrote them to its own console (sshd's), which
    then handed the asker every key as a win32-input sequence, and no typed key reached the SDSYS session (sit7: "SD password of
@@ -472,7 +486,7 @@ static DWORD WINAPI sl_out_thread(LPVOID arg) {
   for (;;) {
     n = 0;
     if (!ReadFile(s->out_read, buf, sizeof(buf), &n, NULL) || (n == 0))
-      break; /* the pseudo console is closed */
+      break; /* the process's screen pipe has ended */
     m = sl_strip_modes(buf, n, clean, held, &nheld);
     if ((ev == NULL) || (m == 0) || InterlockedCompareExchange(&s->asker_gone, 0, 0))
       continue;
@@ -501,9 +515,7 @@ static void sl_end(SL_SESSION* s) {
     CloseHandle(s->out_read);
     s->out_read = NULL;
   }
-  if (s->pc != NULL)
-    ClosePseudoConsole(s->pc); /* the output thread is still reading, so this is not left waiting on a full pipe */
-  s->pc = NULL;
+  /* The job is terminated above, so every writer of the screen's pipe is gone and the output thread reads to its end. */
   if (s->out_thread != NULL) {
     if (WaitForSingleObject(s->out_thread, SL_DRAIN_MS) == WAIT_TIMEOUT) {
       CancelSynchronousIo(s->out_thread);
@@ -533,19 +545,19 @@ static void sl_end(SL_SESSION* s) {
   s->asker = NULL;
 }
 
-/* Every check has passed: SDSYS, elevated, in a pseudo console of the asker's size, in a job.  1, or 0 with *word and why. */
+/* Every check has passed: SDSYS, elevated, on two pipes and no console, in a job.  1, or 0 with *word and why. */
 static int sl_start(SL_SESSION* s, int cols, int rows, const char* term, const char** word, char* why, size_t whylen) {
   HANDLE imp = NULL;
   HANDLE prim = NULL;
   HANDLE in_read = NULL;
   HANDLE out_write = NULL;
+  HANDLE inh[3] = {NULL, NULL, NULL};
   TOKEN_ELEVATION el;
   STARTUPINFOEXW six;
   PROCESS_INFORMATION pi;
   JOBOBJECT_EXTENDED_LIMIT_INFORMATION jl;
-  COORD size;
-  HRESULT hr;
   SIZE_T alen = 0;
+  int i;
   void* env = NULL;
   WCHAR* newenv = NULL;
   WCHAR exe[MAX_PATH];
@@ -576,18 +588,21 @@ static int sl_start(SL_SESSION* s, int cols, int rows, const char* term, const c
     goto done;
   }
 
-  /* The pseudo console: keys in through one pipe, the screen out through the other. */
+  /* 20 Nov 26 - RELEASE_1.1 360.  NO PSEUDO CONSOLE: keys in through one pipe, the screen out through the other, and these are the
+     process's standard handles.  Under a pseudo console the MSYS2 runtime's console master thread spun and took the session's keys
+     (sit8's dumps); a process with no console has no such thread.  One inheritable duplicate per descriptor (sdrunin.c, after
+     win32session.c: one handle shared by two descriptors breaks the runtime's pipe handler), and only these three cross. */
   if (!CreatePipe(&in_read, &s->in_write, NULL, 0) || !CreatePipe(&s->out_read, &out_write, NULL, 0)) {
-    say(why, whylen, "the pseudo console's pipes could not be made (error %lu)", (unsigned long)GetLastError());
+    say(why, whylen, "the session's pipes could not be made (error %lu)", (unsigned long)GetLastError());
     goto done;
   }
-  size.X = (SHORT)cols;
-  size.Y = (SHORT)rows;
-  hr = CreatePseudoConsole(size, in_read, out_write, 0, &s->pc);
-  if (FAILED(hr)) {
-    s->pc = NULL;
-    say(why, whylen, "CreatePseudoConsole failed (0x%08lx)", (unsigned long)hr);
-    goto done;
+  for (i = 0; i < 3; i++) {
+    if (!DuplicateHandle(GetCurrentProcess(), (i == 0) ? in_read : out_write, GetCurrentProcess(), &inh[i], 0, TRUE,
+                         DUPLICATE_SAME_ACCESS)) {
+      inh[i] = NULL;
+      say(why, whylen, "the session's handles could not be made (error %lu)", (unsigned long)GetLastError());
+      goto done;
+    }
   }
   InitializeProcThreadAttributeList(NULL, 1, 0, &alen);
   six.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc(GetProcessHeap(), 0, alen);
@@ -598,22 +613,20 @@ static int sl_start(SL_SESSION* s, int cols, int rows, const char* term, const c
     say(why, whylen, "the attribute list could not be made (error %lu)", (unsigned long)GetLastError());
     goto done;
   }
-  if (!UpdateProcThreadAttribute(six.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, s->pc, sizeof(HPCON), NULL,
-                                 NULL)) {
-    say(why, whylen, "the pseudo console could not be given to the process (error %lu)", (unsigned long)GetLastError());
+  if (!UpdateProcThreadAttribute(six.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inh, sizeof(inh), NULL, NULL)) {
+    say(why, whylen, "the session's handle list could not be made (error %lu)", (unsigned long)GetLastError());
     goto done;
   }
-  /* The standard handles are the pseudo console's: USESTDHANDLES with none, or a child takes its parent's (memory, 14 Nov 26). */
   six.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
-  six.StartupInfo.hStdInput = NULL;
-  six.StartupInfo.hStdOutput = NULL;
-  six.StartupInfo.hStdError = NULL;
+  six.StartupInfo.hStdInput = inh[0];
+  six.StartupInfo.hStdOutput = inh[1];
+  six.StartupInfo.hStdError = inh[2];
   six.StartupInfo.lpDesktop = (WCHAR*)L"winsta0\\default"; /* as sdrunin.c, whose S4U child was measured to start with it */
 
-  /* SDSYS's own environment, less what the ssh login or another session set, plus TERM. */
+  /* SDSYS's own environment, less what the ssh login or another session set, plus TERM, LINES and COLUMNS. */
   if (!CreateEnvironmentBlock(&env, prim, FALSE))
     env = NULL;
-  if ((newenv = sl_env(env, term)) == NULL) {
+  if ((newenv = sl_env(env, term, cols, rows)) == NULL) {
     say(why, whylen, "the environment could not be made");
     goto done;
   }
@@ -642,9 +655,10 @@ static int sl_start(SL_SESSION* s, int cols, int rows, const char* term, const c
     say(why, whylen, "the command line is too long");
     goto done;
   }
-  if (!CreateProcessAsUserW(prim, exe, cmd, NULL, NULL, FALSE,
-                            CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, newenv, dir,
-                            &six.StartupInfo, &pi)) {
+  /* Inherit TRUE, limited by the handle list to the three above; CREATE_NO_WINDOW: no console is made for it (as sdrunin.c). */
+  if (!CreateProcessAsUserW(prim, exe, cmd, NULL, NULL, TRUE,
+                            CREATE_SUSPENDED | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+                            newenv, dir, &six.StartupInfo, &pi)) {
     say(why, whylen, "the SDSYS process could not be started (CreateProcessAsUser error %lu)", (unsigned long)GetLastError());
     goto done;
   }
@@ -663,11 +677,16 @@ static int sl_start(SL_SESSION* s, int cols, int rows, const char* term, const c
   ok = 1;
 
 done:
-  /* The pseudo console holds its own copies of its ends of the two pipes. */
+  /* The process holds its own copies of its ends of the two pipes; the service keeps none, or the process's exit would never
+     reach the screen's thread as the end of its pipe. */
   if (in_read != NULL)
     CloseHandle(in_read);
   if (out_write != NULL)
     CloseHandle(out_write);
+  for (i = 0; i < 3; i++) {
+    if (inh[i] != NULL)
+      CloseHandle(inh[i]);
+  }
   if (six.lpAttributeList != NULL) {
     DeleteProcThreadAttributeList(six.lpAttributeList);
     HeapFree(GetProcessHeap(), 0, six.lpAttributeList);
@@ -703,14 +722,14 @@ static int sl_go(SL_SESSION* s, char* why, size_t whylen) {
 /* ======================================================================
    The relay                                                                */
 
-/* The asker's frames in buf[0..*len): each whole one given to the pseudo console, a part kept.  0, or -1 when a frame is not one. */
+/* The asker's frames in buf[0..*len): each whole key frame written to the SDSYS process, a part kept.  0, or -1 when a frame is
+   not one. */
 static int sl_frames(SL_SESSION* s, unsigned char* buf, DWORD* len) {
   DWORD used = 0;
   DWORD n;
   DWORD k;
   int cols;
   int rows;
-  COORD size;
 
   while (used < *len) {
     unsigned char* f = buf + used;
@@ -735,9 +754,7 @@ static int sl_frames(SL_SESSION* s, unsigned char* buf, DWORD* len) {
       rows = (f[3] << 8) | f[4];
       if ((cols < SDASK_MIN_COLS) || (cols > SDASK_MAX_SIZE) || (rows < SDASK_MIN_ROWS) || (rows > SDASK_MAX_SIZE))
         return -1;
-      size.X = (SHORT)cols;
-      size.Y = (SHORT)rows;
-      (void)ResizePseudoConsole(s->pc, size);
+      /* 20 Nov 26 - RELEASE_1.1 360: checked and dropped.  The session is on a pipe, with no tty to be told (as run.in's). */
       used += 5;
     } else {
       return -1;
@@ -814,10 +831,9 @@ static void sl_relay(SL_SESSION* s) {
   }
   CloseHandle(ev);
 
-  if (child_done && (s->pc != NULL)) {
-    /* The last screen: the pseudo console closed, its output read to the end, then given time to reach the asker. */
-    ClosePseudoConsole(s->pc);
-    s->pc = NULL;
+  if (child_done) {
+    /* The last screen: the process's output read to the end (its pipe ends with it), then given time to reach the asker.  A
+       process it started that still holds the pipe is ended with the job in sl_end; the wait is bounded either way. */
     if (WaitForSingleObject(s->out_thread, SL_DRAIN_MS) == WAIT_TIMEOUT)
       CancelSynchronousIo(s->out_thread);
     if (!InterlockedCompareExchange(&s->asker_gone, 0, 0))

@@ -1111,7 +1111,7 @@ if ($Run -contains 'w5' -and (Test-Ready 'W5' -NeedAccount)) {
     if (Test-Path -LiteralPath $SshList) { Add-Row 'W5' 'the row' 'NOT RUN' 'the ssh list could not be emptied' }
     else {
         $marks = New-Marks
-        if (Wait-Person 'W5' @(('In WINDOW B type:   ' + $sshCmdLocal), ('Type' + $User + '''s Windows password.  It should end at once with "sd-sdsys refused: list-empty".'))) {
+        if (Wait-Person 'W5' @(('In WINDOW B type:   ' + $sshCmdLocal), ('Type ' + $User + '''s Windows password.  It should end at once with "sd-sdsys refused: list-empty".'))) {
             $since = Read-Since $marks
             Set-DoorRefusal 'W5' $User 'list-empty' $since
             $why = @($since.Audit | Where-Object { $_ -match 'why=|sdsys local' })

@@ -15,6 +15,8 @@ WHAT IS CHECKED, without SD, an install or elevation:
       line BEFORE the PWDELAY sleep); the grant line and 15177 are in the SDSYS case after kernel(K$ADMINISTRATOR, 1).  APISRVR sends a
       loopback sdsys SCRAM to the local door BEFORE remote.sdsys api's list is read (term 5), asks 'peer' then 'api', refuses with 12992.
       The kernel case reads each list FIRST.  Key 175 in keys.h and int$keys.h.  local.sdsys in voc_template only.  stage.py ships the helper.
+      RELEASE_1.1 360 (20 Nov 2026): the service starts SDSYS with no console (two pipes, a three-handle list, CREATE_NO_WINDOW, LINES
+      and COLUMNS), sd.c makes it CN_PORT, kernel.c names its terminal "sdsys-local".
   MUTANTS  on copies only (the live files are hashed before and after): each check above is broken once and must go red.
 
 Exit 0 all passed, 1 a check failed, 2 it could not measure (no UCRT64 gcc or no PowerShell: NO TREE).
@@ -285,6 +287,41 @@ lc = read(os.path.join(SRC, "win32localsdsys.c"))
 cp = chain_problems(lc)
 row(not cp, "the ssh chain (S7, S8): cmd/conhost from the system directory, sshd/sshd-session from the service's folder, by full path; A the service's child", "; ".join(cp))
 
+
+# 20 Nov 26 - RELEASE_1.1 360 (sit8's dumps: the MSYS2 runtime's console master thread "consm" spun under the pseudo console and the
+# session took no key).  The SDSYS process has NO console: the service gives it two pipes as its standard handles, exactly three
+# inheritable handles by a handle list, CREATE_NO_WINDOW, the size in LINES and COLUMNS; a size frame is dropped; sd.c makes it CN_PORT
+# only for -SDSYSLOCAL on a non-terminal input; kernel.c names its terminal so LOGIN's no-terminal test (Linux 044271af) still holds.
+def pipe_problems(svc, sdc, kc):
+    bad = []
+    for gone in ("CreatePseudoConsole(", "PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE", "ResizePseudoConsole(", "ClosePseudoConsole(", "HPCON "):
+        if gone in svc:
+            bad.append("the service still uses " + gone.strip("( "))
+    for want in ("UpdateProcThreadAttribute(six.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inh, sizeof(inh), NULL, NULL)",
+                 "six.StartupInfo.hStdInput = inh[0];", "six.StartupInfo.hStdOutput = inh[1];", "six.StartupInfo.hStdError = inh[2];",
+                 "CREATE_SUSPENDED | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT",
+                 'L"LINES=%d", rows', 'L"COLUMNS=%d", cols', "newenv = sl_env(env, term, cols, rows)"):
+        if want not in svc:
+            bad.append("the service lacks: " + want)
+    if "HANDLE inh[3] = {NULL, NULL, NULL};" not in svc:
+        bad.append("the handle list is not exactly three")
+    st = svc[svc.find("static int sl_start("):]
+    st = st[:st.find("\n}\n")]
+    if not (0 < st.find("if (inh[i] != NULL)\n      CloseHandle(inh[i]);") and 0 < st.find("if (out_write != NULL)\n    CloseHandle(out_write);")):
+        bad.append("the service keeps a copy of the process's ends (its exit would never end the screen's pipe)")
+    if "if ((sdsyslocal_claim != NULL) && (connection_type == CN_CONSOLE) && !isatty(0))\n    connection_type = CN_PORT;" not in sdc:
+        bad.append("sd.c does not make -SDSYSLOCAL on a non-terminal input CN_PORT")
+    if 'if ((p == NULL) && (sdsyslocal_claim != NULL) && (connection_type == CN_PORT))\n        strcpy((char*)(my_uptr->ttyname), "sdsys-local");' not in kc:
+        bad.append("kernel.c does not name the piped SDSYS session's terminal")
+    return bad
+
+
+svc = read(os.path.join(SRC, "sdsvc", "sdsyslocal.c"))
+sdc = read(os.path.join(SRC, "sd.c"))
+kc = read(os.path.join(SRC, "kernel.c"))
+pp = pipe_problems(svc, sdc, kc)
+row(not pp, "RELEASE_1.1 360: the SDSYS process has no console - two pipes by a three-handle list, CREATE_NO_WINDOW, LINES/COLUMNS; CN_PORT; @TTY named", "; ".join(pp))
+
 # ------------------------------------------------------------------ mutants
 print("== mutants (copies only)")
 MUT = [
@@ -315,6 +352,24 @@ for name, old, new in (
         row(False, "MUTANT control: the text the mutant changes is in the live win32localsdsys.c (%s)" % name)
         continue
     row(len(chain_problems(lc.replace(old, new, 1))) > 0, "MUTANT: %s is caught" % name)
+
+# 20 Nov 26 - RELEASE_1.1 360: the pipe door's mutants (text only, on copies of the strings).
+for name, which, old, new in (
+        ("the process given a console again", "svc", "CREATE_SUSPENDED | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT",
+         "CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT"),
+        ("every inheritable handle of the service crosses", "svc",
+         "UpdateProcThreadAttribute(six.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inh, sizeof(inh), NULL, NULL)", "TRUE"),
+        ("the service keeps the inheritable copies", "svc", "    if (inh[i] != NULL)\n      CloseHandle(inh[i]);\n", ""),
+        ("the size not given", "svc", 'L"COLUMNS=%d", cols', 'L"X=%d", cols'),
+        ("the piped session left CN_CONSOLE", "sdc", "    connection_type = CN_PORT;\n\n  /* Start connection */", "    ;\n\n  /* Start connection */"),
+        ("any -SDSYSLOCAL made CN_PORT, a terminal too", "sdc", "(connection_type == CN_CONSOLE) && !isatty(0))", "(connection_type == CN_CONSOLE))"),
+        ("the piped session has no terminal name", "kc", 'strcpy((char*)(my_uptr->ttyname), "sdsys-local");', ";")):
+    src = {"svc": svc, "sdc": sdc, "kc": kc}
+    if old not in src[which]:
+        row(False, "MUTANT control: the text the mutant changes is in the live file (%s)" % name)
+        continue
+    src[which] = src[which].replace(old, new, 1)
+    row(len(pipe_problems(src["svc"], src["sdc"], src["kc"])) > 0, "MUTANT: %s is caught" % name)
 
 if live_c:
     mc = read(os.path.join(SRC, "win32localsdsys.c"))

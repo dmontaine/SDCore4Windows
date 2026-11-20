@@ -61,6 +61,8 @@
  * 10 Nov 26 Windows port - for Linux 5162a5d1 (S.102 stage 3), carry area 14: -JOB name, the claim a scheduled job's task makes (job_claim).
  *           Windows only: Linux reads the name from systemd's cgroup.  It grants nothing by itself; K$JOB.MARK tests it.
  * rev 0.9.1 Mar 25 return to single rev track
+ * 20 Nov 26 Windows port - RELEASE_1.1 360: -SDSYSLOCAL with a standard input that is no terminal is a CN_PORT session (the SD
+ *           service now starts SDSYS on two pipes, no pseudo console), as run.in's child is.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -803,6 +805,15 @@ Private bool comlin(int argc, char *argv[]) {
   /* 13 Nov 26 Windows port - RELEASE_1.1 253(b): run.in's debugged child is let through here or not at all (runin_door exits). */
   if (runin_account != NULL)
     runin_door();
+
+  /* 20 Nov 26 Windows port - RELEASE_1.1 360.  THE SD SERVICE'S SDSYS SESSION IS ON TWO PIPES, NOT A CONSOLE.  Under the pseudo console it
+     had until now, the MSYS2 runtime's console master thread ("consm", named in its own thread table in sit8's dumps) spun at a core
+     and the session took no key.  sdsvc/sdsyslocal.c gives the process two pipes as its standard handles and CREATE_NO_WINDOW, so it
+     owns no console and has no such thread; here it becomes CN_PORT, exactly as run.in's child (runin_door above): output written to
+     descriptor 1 as it is made, input read from descriptor 0 by keyin's poll.  Only with a standard input that is no terminal: the
+     claim is a word anybody may type, and it changes nothing else (K$SDSYS.LOCAL decides, kernel.c names the terminal). */
+  if ((sdsyslocal_claim != NULL) && (connection_type == CN_CONSOLE) && !isatty(0))
+    connection_type = CN_PORT;
 
   /* Start connection */
 
