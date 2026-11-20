@@ -3,6 +3,16 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+19 Nov 26  IF SD STOPS ON ITS OWN, THE SERVICE STARTS IT AGAIN.
+
+             What        - When SD's background program ends without being asked to, the SD service starts SD
+                           again after 5 seconds, and once more after 15 seconds; then it leaves it stopped.
+             Why         - After a power cut a test machine's SD did not stay up, and the restart the service was
+                           set up with never ran: Windows needs a further setting to apply it to a service that
+                           reports its own failure.
+             Does NOT    - Undo a stop you asked for: sd -stop and Stop-Service SD are never followed by a restart.
+                           sdsvc.log says whether SD was stopped or ended on its own.
+
 19 Nov 26  OPENSEQ OPENS A FILE YOU MAY ONLY READ, READ-ONLY, INSTEAD OF FAILING.
 
              What        - OPENSEQ without READONLY of a file the session may read but not change now opens it

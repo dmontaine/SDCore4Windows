@@ -370,6 +370,11 @@ if ($LASTEXITCODE -ne 0) { Say "sc create failed, exit $LASTEXITCODE"; exit 1 }
 # RECOVERY: restart twice, then leave it alone.  A daemon that cannot start is
 # not made to work by trying for ever, and a restart loop hides the fault.
 & "$env:SystemRoot\System32\sc.exe" failure $SvcName reset= 86400 actions= restart/5000/restart/15000/none/0 | Out-Null
+# 19 Nov 26 - RELEASE_1.1 295: WITHOUT THE FAILURE FLAG THE ACTIONS ABOVE NEVER RAN for SD's own deaths.  Windows applies them to a
+# service that ends without reporting STOPPED; sdsvc reports STOPPED with a service-specific error (3, the daemon gone), which counts
+# only when this flag is 1.  A deliberate "sd -stop" is not restarted: sdwind exits 0 and sdsvc stops with NO_ERROR (Linux's
+# Restart=on-failure, mail T2930).
+& "$env:SystemRoot\System32\sc.exe" failureflag $SvcName 1 | Out-Null
 
 Say "$SvcName created, start= auto"
 

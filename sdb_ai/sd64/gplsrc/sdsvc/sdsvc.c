@@ -13,6 +13,9 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 19 Nov 26 Windows port - RELEASE_1.1 295 (Linux's rule, mail T2930): the daemon is held by a handle; gone with exit code 0 (sd -stop)
+ *           the service stops with NO_ERROR, any other end keeps exit code 3, which the failure flag install-service.ps1 now sets
+ *           turns into a restart.
  * 18 Nov 26 Windows port - RELEASE_1.1 341: sdwind_running() counts only the sdwind.exe beside this program, by full image path; a name
  *           test counted SD Core Solo's daemon and reported RUNNING over a Core whose "sd -start" had failed.
  * 18 Nov 26 Windows port - RELEASE_1.1 339: the service is the door of "ssh -t <user>@localhost sd-sdsys" (sdsyslocal.c, pipe
@@ -273,6 +276,22 @@ static BOOL sdwind_is_ours(DWORD pid) {
   return ok && _stricmp(img, own_sdwind) == 0;
 }
 
+/* 19 Nov 26 Windows port - RELEASE_1.1 295 (Linux's rule, mail T2930: a stop is a CLEAN exit, a death is anything else).  The
+   daemon seen running is held by a handle, so when it is gone its exit code can be read: "sd -stop" ends it with SIGTERM and
+   sdwind.c returns 0 (sysseg.c kill(daemon_pid, SIGTERM); sdwind.c signal_handler), while a crash, a kill or a failed start
+   is not 0.  Re-opened whenever the running daemon is a different process from the one held. */
+static HANDLE sdwind_h = NULL;
+static DWORD sdwind_held_pid = 0;
+
+static void hold_sdwind(DWORD pid) {
+  if (sdwind_h != NULL && sdwind_held_pid == pid)
+    return;
+  if (sdwind_h != NULL)
+    CloseHandle(sdwind_h);
+  sdwind_h = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  sdwind_held_pid = (sdwind_h != NULL) ? pid : 0;
+}
+
 static BOOL sdwind_running(void) {
   HANDLE snap;
   PROCESSENTRY32 pe;
@@ -290,6 +309,7 @@ static BOOL sdwind_running(void) {
     do {
       if (_stricmp(pe.szExeFile, SDWIND_EXE) == 0 && sdwind_is_ours(pe.th32ProcessID)) {
         found = TRUE;
+        hold_sdwind(pe.th32ProcessID);
         break;
       }
     } while (Process32Next(snap, &pe));
@@ -876,6 +896,30 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
     alive++;
 
     if (!sdwind_running()) {
+      DWORD wcode = STILL_ACTIVE;
+      BOOL have_code = (sdwind_h != NULL) && GetExitCodeProcess(sdwind_h, &wcode) && (wcode != STILL_ACTIVE);
+
+      /* 19 Nov 26 - RELEASE_1.1 295: exit code 0 is "sd -stop" - SD was stopped on purpose.  The service stops WITHOUT a failure,
+         so the recovery actions (install-service.ps1 sets the failure flag) do not start it again, as Linux's Restart=on-failure
+         does not restart a clean exit.  "sd -stop" has already cleared up, so it is not run again here. */
+      if (have_code && wcode == 0) {
+        svc_log("%s ended with exit code 0 after %d seconds - SD was stopped (sd -stop); the service stops too, not as a failure",
+                SDWIND_EXE, alive);
+        sdaudit_stop();
+        sdrunin_stop();
+        sdsyslocal_stop();
+        CloseHandle(sdwind_h);
+        sdwind_h = NULL;
+        report(SERVICE_STOPPED, NO_ERROR, 0);
+        CloseHandle(svc_stop_event);
+        svc_stop_event = NULL;
+        return;
+      }
+      if (have_code)
+        svc_log("%s exit code %lu (0x%08lX)", SDWIND_EXE, (unsigned long)wcode, (unsigned long)wcode);
+      else
+        svc_log("%s exit code not readable (no handle was held)", SDWIND_EXE);
+
       svc_log("%s has GONE after %d seconds - SD is not running any more",
               SDWIND_EXE, alive);
 
