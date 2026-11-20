@@ -627,7 +627,7 @@ def text_rows(t):
     rows.append(("W17", "built and started: the Makefile builds sdrunin.c and win32s4ulogon.c into sdsvc.exe; gpl.src puts win32s4ulogon and win32runin into sd; "
                  "the service starts the broker before \"sd -start\" and stops it wherever it stops the audit writer",
                  "$(SVCDIR)/sdrunin.c $(SVCDIR)/sdsyslocal.c $(GPLSRC)win32s4ulogon.c $(GPLSRC)win32localsdsys.c -lsecur32 -lbcrypt" in mk and "win32s4ulogon" in gs and "win32runin" in gs   # 18 Nov 26: RELEASE_1.1 339's door beside it
-                 and 0 < mn.find("  svc_runin_start();") < mn.find('run_sd("-start", &rc)') and mn.count("sdrunin_stop();") == mn.count("sdaudit_stop();") == 4, ""))
+                 and 0 < mn.find("  svc_runin_start();") < mn.find('run_sd("-start", &rc)') and mn.count("sdrunin_stop();") == mn.count("sdaudit_stop();") == 5, ""))  # 19 Nov 26 - RELEASE_1.1 359: five exits since row 295's clean exit (d23229d5)
     # 14 Nov 26 (RELEASE_1.1 253(b), VM sit2 C11: "the child's token has no logon SID"): a Network logon carries none, so the groups logon MAKES one
     sl = body(t["win32s4ulogon.c"], "void* win32_s4u_logon_groups(")
     rows.append(("W19", "the groups logon puts a logon SID in the token: S-1-5-5-<hi>-<lo> from a fresh LUID, marked SE_GROUP_LOGON_ID, enabled and mandatory, after the "

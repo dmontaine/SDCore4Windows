@@ -421,8 +421,9 @@ def text_rows(t):
     mn = body(sc, "static void WINAPI svc_main(DWORD argc, LPSTR *argv) {")
     st, rs = mn.find("svc_audit_start();"), mn.find('run_sd("-start", &rc)')
     last_stop = mn.rfind('run_sd("-stop", &rc);')
-    rows.append(("W5", "sdsvc starts the writer before \"sd -start\", stops it after the last \"sd -stop\", and on all three failure paths",
-                 0 < st < rs and 0 < last_stop < mn.rfind("sdaudit_stop();") and mn.count("sdaudit_stop();") == 4, "start %d, sd -start %d, stops %d" % (st, rs, mn.count("sdaudit_stop();"))))
+    rows.append(("W5", "sdsvc starts the writer before \"sd -start\", stops it after the last \"sd -stop\", and on all four other exits (no start, half-started, a clean exit 0, a death)",
+                 # 19 Nov 26 - RELEASE_1.1 359: row 295 (d23229d5) added the clean-exit path (exit code 0 = sd -stop), a fifth stop
+                 0 < st < rs and 0 < last_stop < mn.rfind("sdaudit_stop();") and mn.count("sdaudit_stop();") == 5, "start %d, sd -start %d, stops %d" % (st, rs, mn.count("sdaudit_stop();"))))
     ol = body(t["op_lock.c"], "Private void lock_trace(int code, int16_t file_id, const char* id, int16_t id_len) {")
     rows.append(("W6", "lock_trace() sends its line to the service and never opens the file itself",
                  "win32_locktrace_pipe(sd_sysdir(), buff, bytes);" in ol and "open(" not in ol and "win32_audit_append" not in ol and "fopen" not in ol, ""))
