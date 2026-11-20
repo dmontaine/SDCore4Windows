@@ -13,6 +13,11 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 19 Nov 26 Windows port - RELEASE_1.1 358 (VM sit7: after an admitted session ended, ssh did not return in 5 of 6 until Ctrl+C): the
+ *           key read is non-blocking (O_NONBLOCK on fd 0 for the relay, the old flags put back on every way out).  select() on the
+ *           MSYS2 console may say "readable" for an input event that is no key (a key release, focus, a size change); a blocking read
+ *           then waited for a real key, and the end of the SDSYS session, seen only at the top of the loop, waited with it.  EAGAIN is
+ *           now "no key yet" and the loop goes back to the pipe.
  * 18 Nov 26 Windows port - written for RELEASE_1.1 339 (Linux S.267; no-terminal Linux 044271af).  win32sdsysask.h has the design and
  *           the wire.  NOT RUN: compiled and linked only.
  * END-HISTORY
@@ -33,6 +38,7 @@
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,6 +88,11 @@ static int sdask_out(const char* buf, int len) {
     if (n < 0) {
       if (errno == EINTR)
         continue;
+      if (errno == EAGAIN) { /* 19 Nov 26 (358): fd 1 may share fd 0's O_NONBLOCK; a full terminal waits, it does not end the relay */
+        struct timespec ms = {0, 2000000};
+        nanosleep(&ms, NULL);
+        continue;
+      }
       return -1;
     }
     buf += n;
@@ -117,6 +128,7 @@ void sdsys_local_detect(int argc) {
   int rc;
   int n;
   int got;
+  int old_fl;
 
   if ((argc != 1) || (cmd == NULL) || (conn == NULL) || (strcmp(cmd, SDL_COMMAND) != 0))
     return;
@@ -151,6 +163,10 @@ void sdsys_local_detect(int argc) {
     cfmakeraw(&raw_tty);
     (void)tcsetattr(0, TCSANOW, &raw_tty);
   }
+  /* 19 Nov 26 - RELEASE_1.1 358: a read that cannot wait (see the history). */
+  old_fl = fcntl(0, F_GETFL);
+  if (old_fl != -1)
+    (void)fcntl(0, F_SETFL, old_fl | O_NONBLOCK);
   signal(SIGWINCH, sdask_winch_handler);
   signal(SIGPIPE, SIG_IGN);
   next_size = sdask_now_ms() + SDASK_SIZE_MS;
@@ -176,8 +192,8 @@ void sdsys_local_detect(int argc) {
       goto done;
     if ((rc > 0) && FD_ISSET(0, &rd)) {
       n = (int)read(0, buf, sizeof(buf));
-      if ((n < 0) && (errno == EINTR))
-        continue;
+      if ((n < 0) && ((errno == EINTR) || (errno == EAGAIN)))
+        continue; /* EAGAIN: the console's event was no key (RELEASE_1.1 358) - back to the pipe */
       if (n <= 0)
         goto done; /* the ssh login's input has ended */
       if (sdask_keys(buf, n) != 0)
@@ -199,6 +215,8 @@ void sdsys_local_detect(int argc) {
 
 done:
   sdask_close();
+  if (old_fl != -1)
+    (void)fcntl(0, F_SETFL, old_fl);
   if (have_old)
     (void)tcsetattr(0, TCSANOW, &old_tty);
   exit(0);
