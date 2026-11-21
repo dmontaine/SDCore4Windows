@@ -250,9 +250,9 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            home screen), and the installer says so.  PY_OBJTYPE returns the type as a number
                            (1 string, 2 list, 3 dictionary, 4 integer, 5 float, 0 anything else), as SD's own PY_JSON
                            and PY_TEST expect; it returned the type's name.  PY_OBJLEN answers -10302 for a length too
-                           big for a 32-bit number.  An upgrade that keeps sd.conf adds SCREENTHEME=paper when the file
-                           has no SCREENTHEME line and changes SCREENTHEME=blue (W2.0-0-rc1's default) to paper once,
-                           leaving a comment line so that blue set again afterwards is kept.  The refusal of a change to
+                           big for a 32-bit number.  (An upgrade that keeps sd.conf leaves its SCREENTHEME exactly as it
+                           is: a first version of this release changed blue to paper once, and that was taken out on
+                           21 Nov 26, because users keep the theme they have.)  The refusal of a change to
                            a shared file's structure says "SDSYS, the administrator": SDSYS through the API is the
                            administrator too.  MODIFY.PASSWORD run with -QUIET (the
                            installer's step) asks "<account> SD password:" and "Enter password again:".  The three

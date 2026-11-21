@@ -2423,56 +2423,11 @@ begin
     Log('RetiredConf: COULD NOT rewrite sd.conf, which still names:' + Removed);
 end;
 
-{ 17 Nov 26 - four-version audit round 3 (P-4944), Linux's installer SCREENTHEME block (S.172, owner 8 Nov 2026: "Change the
-  default theme to more monochrome so that the text is always readable").  THE DELIVERED SCREEN THEME IS PAPER, and a kept
-  sd.conf may be older: a kept file with no SCREENTHEME line gets SCREENTHEME=paper; a kept SCREENTHEME=blue (W2.0-0-rc1's
-  delivered default, not a choice) is changed to paper ONCE - the change leaves the comment line ScreenThemeMark in the file,
-  and a file that has it is not changed again, so an administrator who sets blue afterwards keeps it.  Any other value is the
-  administrator's choice and is left alone.  Beside RemoveRetiredConf and for the same reason (sd.conf is onlyifdoesntexist,
-  so only a kept file can be old); a fresh install has no file yet and nothing is done.  Written to the setup log only. }
-const
-  ScreenThemeMark = '# SCREENTHEME blue was changed to paper by the installer (S.172); set it back to blue to keep the old look';
-
-procedure UpgradeScreenTheme;
-var
-  Lines: TArrayOfString;
-  I, N, Found: Integer;
-  Conf, L: String;
-  HasMark: Boolean;
-begin
-  Conf := ExpandConstant('{#DataDir}\sd.conf');
-  if not LoadStringsFromFile(Conf, Lines) then
-    Exit;
-  N := GetArrayLength(Lines);
-  Found := -1;
-  HasMark := False;
-  for I := 0 to N - 1 do
-  begin
-    if (Found < 0) and (Copy(Lines[I], 1, 12) = 'SCREENTHEME=') then
-      Found := I;
-    if Lines[I] = ScreenThemeMark then
-      HasMark := True;
-  end;
-  if Found < 0 then
-  begin
-    SetArrayLength(Lines, N + 1);
-    Lines[N] := 'SCREENTHEME=paper';
-    L := 'added SCREENTHEME=paper (the kept file had no SCREENTHEME line)';
-  end
-  else if (TrimRight(Lines[Found]) = 'SCREENTHEME=blue') and not HasMark then
-  begin
-    Lines[Found] := 'SCREENTHEME=paper';
-    SetArrayLength(Lines, N + 1);
-    Lines[N] := ScreenThemeMark;
-    L := 'changed SCREENTHEME=blue to SCREENTHEME=paper (the new delivered look)';
-  end
-  else
-    Exit;
-  if SaveStringsToFile(Conf, Lines, False) then
-    Log('ScreenTheme: ' + L)
-  else
-    Log('ScreenTheme: COULD NOT rewrite sd.conf; it was not ' + L);
-end;
+{ 21 Nov 26 - UpgradeScreenTheme (17 Nov, P-4944, Linux S.172: a kept sd.conf with no SCREENTHEME line got paper, and a kept
+  SCREENTHEME=blue was changed to paper once) IS REMOVED.  The owner, chat 21 Nov 2026, asked whether that one-time change should
+  stand as an exception to "put back exactly as it was": "Each user can change their theme, I would think they would get their
+  existing theme back."  So a kept sd.conf's SCREENTHEME is left exactly as it is, and a kept file with no line stays as it was
+  (the library's own default, mono).  The delivered paper is the shipped sd.conf's, which only a FRESH install writes. }
 
 { 30 Aug 26 - MAY OTHER COMPUTERS REACH IT?  PRE_RELEASE_FIXES 75.
 
@@ -5253,9 +5208,7 @@ begin
     anything can start SD (see RemoveRetiredConf). }
   if CurStep = ssInstall then
     RemoveRetiredConf;
-  { 17 Nov 26 - P-4944: and an old kept SCREENTHEME is brought to the delivered paper (see UpgradeScreenTheme). }
-  if CurStep = ssInstall then
-    UpgradeScreenTheme;
+  { 21 Nov 26 - a kept SCREENTHEME is no longer touched (see the note where UpgradeScreenTheme was). }
 
   if CurStep = ssPostInstall then
   begin
