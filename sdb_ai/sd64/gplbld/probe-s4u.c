@@ -293,8 +293,12 @@ static void report_privilege(const char *priv) {
  * whether an S4U-logged-on user can write to the temp directory, which is a
  * different question that would fail for its own reasons.
  */
+/* 21 Nov 26 - probe-sdsys-taskreg.ps1: argv[2] names a FILE whose first line is a command line to run under the token INSTEAD of whoami.exe
+ * (the child's own output is still the reading, up to 4095 bytes).  Empty means whoami, as before. */
+static char g_childcmd[1024] = "";
+
 static char *run_whoami_as(HANDLE tok, const char *desktop, DWORD *lasterr) {
-  char sysdir[MAX_PATH], cmd[MAX_PATH + 32], tmpdir[MAX_PATH], tmpfile[MAX_PATH];
+  char sysdir[MAX_PATH], cmd[MAX_PATH + 32], tmpdir[MAX_PATH], tmpfile[MAX_PATH], cl[1024];
   SECURITY_ATTRIBUTES sa;
   STARTUPINFOA si;
   PROCESS_INFORMATION pi;
@@ -336,7 +340,8 @@ static char *run_whoami_as(HANDLE tok, const char *desktop, DWORD *lasterr) {
   si.lpDesktop = (LPSTR)desktop;   /* NULL, or "winsta0\\default" */
   ZeroMemory(&pi, sizeof(pi));
 
-  ok = CreateProcessAsUserA(tok, cmd, NULL, NULL, NULL, TRUE,
+  snprintf(cl, sizeof(cl), "%s", g_childcmd);
+  ok = CreateProcessAsUserA(tok, g_childcmd[0] ? NULL : cmd, g_childcmd[0] ? cl : NULL, NULL, NULL, TRUE,
                             CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
   if (!ok) {
     *lasterr = GetLastError();
@@ -346,7 +351,7 @@ static char *run_whoami_as(HANDLE tok, const char *desktop, DWORD *lasterr) {
     return NULL;
   }
 
-  WaitForSingleObject(pi.hProcess, 15000);
+  WaitForSingleObject(pi.hProcess, g_childcmd[0] ? 90000 : 15000);
   CloseHandle(pi.hThread);
   CloseHandle(pi.hProcess);
   CloseHandle(hout);
@@ -500,6 +505,20 @@ int main(int argc, char *argv[]) {
     }
   }
   printf("Target account: %s\\%s\n", domain, account);
+
+  /* 21 Nov 26 - argv[2]: a file whose first line is the command line the child runs instead of whoami.exe (see g_childcmd). */
+  if (argc > 2 && argv[2][0] != '\0') {
+    FILE *cf = fopen(argv[2], "r");
+    size_t n;
+    if (cf == NULL || fgets(g_childcmd, sizeof(g_childcmd), cf) == NULL) {
+      printf("Cannot read the child command line from %s\n", argv[2]);
+      return 2;
+    }
+    fclose(cf);
+    n = strlen(g_childcmd);
+    while (n > 0 && (g_childcmd[n - 1] == '\n' || g_childcmd[n - 1] == '\r')) g_childcmd[--n] = '\0';
+    printf("Child command line (from %s): %s\n", argv[2], g_childcmd);
+  }
 
   /* ---------------------------------------------------------------- */
   step("STEP 1 - who is asking, and with what privileges");
