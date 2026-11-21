@@ -136,12 +136,47 @@ def rows_for(iss_raw, jobs_raw):
        and "Your database was kept, but its Windows groups were recreated:" in code
        and "ssh, API, files and AI access are as they were." in code
        and "API access is NOT restored." in code, "")
-    ck("M3", "the jobs and remote administration lines are built only when this was not an upgrade; the note is spent whatever it said",
-       re.search(r"KeptMsg := '';\s*\n\s*if not TrueUpgrade then\s*\n\s*begin\s*\n\s*KeptJobs := KeptJobCount;", code) is not None
-       and "Scheduled jobs: ' + IntToStr(KeptJobs) + ' kept, none scheduled." in code
-       and "Remote administration: off. It was on before the uninstall." in code
+    ck("M3", "the jobs and remote administration warnings are built only when this was not an upgrade; the note is spent whatever it said",
+       re.search(r"KeptMsg := '';\s*\n\s*KeptCount := 0;\s*\n\s*if not TrueUpgrade then\s*\n\s*begin\s*\n\s*KeptJobs := KeptJobCount;", code) is not None
+       and "SCHEDULED JOB(S) ARE KEPT BUT NONE IS SCHEDULED. " in code
+       and "REMOTE ADMINISTRATION IS OFF. It was on before the uninstall." in code
        and re.search(r"end;\s*\n\s*RadminNoteClear;", code) is not None, "")
-    ck("M4", "KeptMsg reaches the closing page, directly after the access paragraph", "AccessMsg +\n             KeptMsg +" in code, "")
+    ck("M4", "KeptMsg reaches the closing page through WarnReport, and is no longer part of FinishReport",
+       "WarnReport := WarnReport + MarkWarn(KeptMsg);" in code and "AccessMsg +\n             'SD Core''s own system files were replaced.'" in code, "")
+    # ---- W: the owner's rule (chat, 21 Nov 26): "If there are warnings they should not be buried in other text.  They need to be explicit,
+    # stand out so that they can not be missed." -------------------------------------------------------------------------------------
+    srep = proc(code, "ShowFinishedReport")
+    ck("W1", "the Finished page draws WarnReport FIRST, directly under 'SD Core is installed.' and above the sign-out line",
+       in_order(code, "ShowFinishedReport('SD Core is installed.' + #13#10#13#10 +", "WarnReport +", "'You must sign out or restart before using SD Core.'"), "")
+    ck("W2", "a paragraph that starts with !! is drawn bold and red, with the font set before the caption so the height is measured bold",
+       "if Copy(Chunk, 1, 2) = '!!' then" in srep and "Para[N].Font.Style := [fsBold];" in srep and "Para[N].Font.Color := clRed;" in srep
+       and srep.find("Para[N].Font.Color := clRed;") < srep.find("Para[N].Caption := Chunk;"), "")
+    ck("W3", "the marks are taken out of what goes to the log and the scrolling memo (whose text keeps the warning's capital letters)",
+       "StringChange(Plain, '!!', '');" in srep and "Plain + #13#10#13#10, True);" in srep and "Memo.Text := Plain;" in srep and "Memo.Text := Msg;" not in srep, "")
+    mw = proc(code, "MarkWarn")
+    ck("W4", "MarkWarn marks every non-empty paragraph of its text",
+       "Result := Result + '!!' + Chunk + #13#10#13#10;" in mw and "if Trim(Chunk) <> '' then" in mw, "")
+    ck("W5", "the groups-recreated and the missing-firewall-rule warnings go to WarnReport too, marked, and not to FinishReport",
+       "WarnReport := WarnReport + MarkWarn('WARNING: THE WINDOWS GROUPS THAT SAY WHO MAY USE ssh" in code
+       and "SetLength(AccessMsg, 0);" in code
+       and "WarnReport := WarnReport + MarkWarn('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API." in code
+       and "ApiRuleMsg := #13#10#13#10" not in code, "")
+    ck("W6", "the warning block opens with a heading in capitals that says the settings are not on and that these are the steps",
+       "'WARNING: SETTINGS YOU HAD BEFORE THE UNINSTALL ARE NOT ON NOW, AND THIS INSTALLER CANNOT TURN THEM ON AGAIN. '" in code and "'DO THESE STEPS:'" in code, "")
+    # ---- S: the owner's rule (chat, 21 Nov 26): what cannot be put back is warned about during the install WITH THE EXACT STEPS -------
+    ck("S1", "the jobs line and the remote administration line each give the steps (sign in to Windows as SDSYS, start SD Core, type), the jobs' lines from KeptJobSteps and the other the command remote.sdsys on",
+       code.count("sign in to Windows as SDSYS, start SD Core and type:") == 2 and "+ KeptJobSteps + #13#10#13#10;" in code
+       and "'    remote.sdsys on' + #13#10#13#10;" in code, "")
+    sjw = proc(code, "SafeJobWord")
+    kjs = proc(code, "KeptJobSteps")
+    ck("S2", "SafeJobWord lets through only lower case letters, digits and a hyphen, and with Extra a space, a colon and a full stop",
+       "(C >= 'a') and (C <= 'z')" in sjw and "(C >= '0') and (C <= '9')" in sjw and "(C = '-')" in sjw
+       and "(Extra and ((C = ' ') or (C = ':') or (C = '.')))" in sjw and "Length(S) <= 40" in sjw, "")
+    ck("S3", "KeptJobSteps prints set.job change NAME JOB SCHEDULE only for a plain name, the job backup-all or update-accounts and a plain schedule; anything else is named as damaged, never echoed from the file",
+       "if SafeJobWord(Name, False) and ((JobId = 'backup-all') or (JobId = 'update-accounts')) and SafeJobWord(Sched, True) then" in kjs
+       and "'    set.job change ' + Name + ' ' + JobId + ' ' + Sched" in kjs
+       and "its definition is damaged" in kjs and "Copy(Line, 1, 4) = 'job='" in kjs and "Copy(Line, 1, 9) = 'schedule='" in kjs
+       and "FILE_ATTRIBUTE_DIRECTORY) = 0" in kjs and "'radmin-'" in kjs, "")
     return rows
 
 
@@ -158,7 +193,7 @@ MUTANTS = [
     ("the delete path forgets RemoveRouteGroups", "iss", "    RemoveRouteGroups;\n    RemoveSdUsersGroup;\n    RadminNoteClear;", "    RemoveSdUsersGroup;\n    RadminNoteClear;", "G6"),
     ("the uninstaller purges the jobs again", "iss", "Script + '\" job-unschedule'", "Script + '\" job-purge'", "J1"),
     ("job-unschedule takes the definitions", "jobs", "if ((-not $keepDefs) -and (Test-Path -LiteralPath $jobsDir)) {", "if (Test-Path -LiteralPath $jobsDir) {", "J2"),
-    ("KeptJobCount counts directories", "iss", "if ((FR.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0) and", "if (True) and", "J3"),
+    ("KeptJobCount counts directories", "iss", "if ((FR.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0) and\n           (Copy(FR.Name, 1, 7) <> 'radmin-')", "if (True) and\n           (Copy(FR.Name, 1, 7) <> 'radmin-')", "J3"),
     ("the note is written whatever the state says", "iss", "and (Trim(String(S)) = 'on') then", "then", "R1"),
     ("the note is written after RemoveRemoteAdmin", "iss", "    SaveRadminNote;   { 21 Nov 26 - RELEASE_1.1 369(a): BEFORE RemoveRemoteAdmin, which takes the state file away }\n    RemoveRemoteAdmin;",
      "    RemoveRemoteAdmin;\n    SaveRadminNote;", "R2"),
@@ -166,8 +201,18 @@ MUTANTS = [
     ("Setup stops sampling the group", "iss", "RouteGroupsKept := Exec(", "RouteGroupsKept := not Exec(", "M1"),
     ("the box claims recreation whatever Setup found", "iss", "        if RouteGroupsKept then\n          AccessMsg :=\n            'Your database was kept, and so were its Windows groups:' + #13#10#13#10\n        else\n",
      "        if False then\n          AccessMsg :=\n            'Your database was kept, and so were its Windows groups:' + #13#10#13#10\n        else\n", "M2"),
-    ("the jobs line is built on an upgrade too", "iss", "KeptMsg := '';\n      if not TrueUpgrade then\n      begin\n        KeptJobs := KeptJobCount;", "KeptMsg := '';\n      if True then\n      begin\n        KeptJobs := KeptJobCount;", "M3"),
-    ("KeptMsg is dropped from the page", "iss", "AccessMsg +\n             KeptMsg +", "AccessMsg +", "M4"),
+    ("the jobs line is built on an upgrade too", "iss", "KeptCount := 0;\n      if not TrueUpgrade then\n      begin\n        KeptJobs := KeptJobCount;", "KeptCount := 0;\n      if True then\n      begin\n        KeptJobs := KeptJobCount;", "M3"),
+    ("KeptMsg is dropped from the page", "iss", "WarnReport := WarnReport + MarkWarn(KeptMsg);", "", "M4"),
+    ("the remote administration warning loses its command", "iss", "'    remote.sdsys on' + #13#10#13#10;", "'' + #13#10#13#10;", "S1"),
+    ("the jobs warning loses its steps", "iss", "#13#10#13#10 + KeptJobSteps + #13#10#13#10;", "#13#10#13#10 + #13#10#13#10;", "S1"),
+    ("the warnings are drawn after the sign-out line", "iss", "      WarnReport +\n      'You must sign out or restart before using SD Core.' + #13#10#13#10 +", "      'You must sign out or restart before using SD Core.' + #13#10#13#10 +\n      WarnReport +", "W1"),
+    ("a warning paragraph is no longer red", "iss", "      Para[N].Font.Color := clRed;\n", "", "W2"),
+    ("the scrolling memo shows the marks", "iss", "Memo.Text := Plain;", "Memo.Text := Msg;", "W3"),
+    ("MarkWarn marks nothing", "iss", "Result := Result + '!!' + Chunk + #13#10#13#10;", "Result := Result + Chunk + #13#10#13#10;", "W4"),
+    ("the missing-firewall-rule warning goes back into the text", "iss", "WarnReport := WarnReport + MarkWarn('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API.", "ApiRuleMsg := #13#10#13#10 + ('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API.", "W5"),
+    ("the warning block loses its heading", "iss", "'DO THESE STEPS:'", "'THESE:'", "W6"),
+    ("SafeJobWord lets capitals through", "iss", "if not (((C >= 'a') and (C <= 'z')) or", "if not (((C >= 'A') and (C <= 'z')) or", "S2"),
+    ("KeptJobSteps trusts any job id", "iss", "and ((JobId = 'backup-all') or (JobId = 'update-accounts')) and SafeJobWord(Sched, True) then", "and SafeJobWord(Sched, True) then", "S3"),
 ]
 
 

@@ -1485,6 +1485,10 @@ var
     CurPageChanged, which runs after that procedure has returned. }
   StatusReport: String;
   AccountsReport: String;
+  { 21 Nov 26 - THE OWNER (chat): "If there are warnings they should not be buried in other text.  They need to be explicit, stand out so
+    that they can not be missed."  Every warning of the Finished page - what a Keep did not put back, with the exact steps - is gathered
+    here, each paragraph marked with !! (MarkWarn), and the page draws it FIRST, in bold red (ShowFinishedReport), above the rest. }
+  WarnReport: String;
   SdsysCode: Integer;
   { 18 Sep 26 - RELEASE_1.1 66.  attach-account.ps1's exit code (0 the account
     was made, 2 it was already there, 1 refused, 3 no server), assigned at
@@ -3131,6 +3135,72 @@ begin
         if ((FR.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0) and
            (Copy(FR.Name, 1, 7) <> 'radmin-') and (Copy(FR.Name, 1, 1) <> '.') then
           Result := Result + 1;
+      until not FindNext(FR);
+    finally
+      FindClose(FR);
+    end;
+  end;
+end;
+
+{ 21 Nov 26 - THE OWNER'S RULE (chat): "if the admin says not to delete during a deletion then the system should be put back exactly as it
+  was before the uninstall.  If that is impossible then the admin needs to be warned during the install the exact steps they must take to
+  restore the system exactly as it was."  This installer cannot register the jobs' tasks (they run as SDSYS, row 280), so the closing page
+  gives the exact command for each kept definition.  SafeJobWord: only lower case letters, digits and a hyphen, and with Extra also a
+  space, a colon and a full stop (a schedule), so nothing but a plain word of those is ever printed from a file. }
+function SafeJobWord(const S: String; const Extra: Boolean): Boolean;
+var
+  I: Integer;
+  C: Char;
+begin
+  Result := (Length(S) > 0) and (Length(S) <= 40);
+  for I := 1 to Length(S) do
+  begin
+    C := S[I];
+    if not (((C >= 'a') and (C <= 'z')) or ((C >= '0') and (C <= '9')) or (C = '-') or
+            (Extra and ((C = ' ') or (C = ':') or (C = '.')))) then
+      Result := False;
+  end;
+end;
+
+{ One closing-page line per kept definition: the set.job command that gives it its task again, from the file's own job= and schedule=
+  lines.  A definition that is not plain (an unknown job, an odd character, a missing line) is named and not trusted. }
+function KeptJobSteps: String;
+var
+  FR: TFindRec;
+  Dir, Name, JobId, Sched, Line: String;
+  Lines: TArrayOfString;
+  I: Integer;
+begin
+  Result := '';
+  Dir := ExpandConstant('{#DataDir}\sd-jobs\');
+  if FindFirst(Dir + '*', FR) then
+  begin
+    try
+      repeat
+        Name := FR.Name;
+        if ((FR.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0) and
+           (Copy(Name, 1, 7) <> 'radmin-') and (Copy(Name, 1, 1) <> '.') then
+        begin
+          JobId := '';
+          Sched := '';
+          if LoadStringsFromFile(Dir + Name, Lines) then
+          begin
+            for I := 0 to GetArrayLength(Lines) - 1 do
+            begin
+              Line := Trim(Lines[I]);
+              if Copy(Line, 1, 4) = 'job=' then
+                JobId := Copy(Line, 5, 40);
+              if Copy(Line, 1, 9) = 'schedule=' then
+                Sched := Copy(Line, 10, 40);
+            end;
+          end;
+          if SafeJobWord(Name, False) and ((JobId = 'backup-all') or (JobId = 'update-accounts')) and SafeJobWord(Sched, True) then
+            Result := Result + '    set.job change ' + Name + ' ' + JobId + ' ' + Sched + #13#10
+          else if SafeJobWord(Name, False) then
+            Result := Result + '    ' + Name + ': its definition is damaged; make it again with set.job change ' + Name + ' <job> <schedule>' + #13#10
+          else
+            Result := Result + '    one definition has a name that is not plain; delete that file from ' + ExpandConstant('{#DataDir}\sd-jobs') + #13#10;
+        end;
       until not FindNext(FR);
     finally
       FindClose(FR);
@@ -4918,9 +4988,14 @@ var
   Page: TWinControl;
   Para: array[0..63] of TNewStaticText;
   Memo: TNewMemo;
-  Rest, Chunk: String;
+  Rest, Chunk, Plain: String;
   N, I, P, Y, TextW, GapY, MaxH, L, T: Integer;
 begin
+  { 21 Nov 26 - the owner's rule (see WarnReport): a paragraph that starts with !! is a WARNING and is drawn bold and red.  The marks are
+    taken out of what goes to the log and to the scrolling memo, whose plain text keeps the warning's own capital letters. }
+  Plain := Msg;
+  StringChange(Plain, '!!', '');
+
   { 24 Sep 26 - THE PAGE IS ALSO WRITTEN TO A FILE, RELEASE_1.1 110.  An install
     on the owner's test machine said SDSYS "could NOT" be created, with a code;
     by the time anybody asked, nobody remembered the wording, and the code was
@@ -4932,7 +5007,7 @@ begin
     file is its copy. }
   SaveStringToFile(ExpandConstant('{#DataDir}\install-summary.log'),
                    '=== ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', '-', ':') +
-                   '  the Finished page said:' + #13#10 + Msg + #13#10#13#10, True);
+                   '  the Finished page said:' + #13#10 + Plain + #13#10#13#10, True);
 
   Page := WizardForm.FinishedLabel.Parent;
   L := WizardForm.FinishedLabel.Left;
@@ -4972,6 +5047,13 @@ begin
     Para[N].Left := L;
     Para[N].Top := T + Y;
     Para[N].Width := TextW;
+    { 21 Nov 26 - a WARNING paragraph: bold and red, set BEFORE the caption so AdjustHeight measures the bold text. }
+    if Copy(Chunk, 1, 2) = '!!' then
+    begin
+      Chunk := Copy(Chunk, 3, Length(Chunk));
+      Para[N].Font.Style := [fsBold];
+      Para[N].Font.Color := clRed;
+    end;
     Para[N].Caption := Chunk;
     Para[N].AdjustHeight();
     Y := Y + Para[N].Height + GapY;
@@ -4997,7 +5079,34 @@ begin
     Memo.ReadOnly := True;
     Memo.WordWrap := True;
     Memo.ScrollBars := ssVertical;
-    Memo.Text := Msg;
+    Memo.Text := Plain;
+  end;
+end;
+
+{ 21 Nov 26 - mark every paragraph of S (blocks split on a blank line) as a warning for ShowFinishedReport, which draws it bold and red.
+  Written before ShowFinishedReport's callers and after it, so it is declared here, below it, and used only by CurStepChanged. }
+function MarkWarn(const S: String): String;
+var
+  Rest, Chunk: String;
+  P: Integer;
+begin
+  Result := '';
+  Rest := S;
+  while Rest <> '' do
+  begin
+    P := Pos(#13#10#13#10, Rest);
+    if P = 0 then
+    begin
+      Chunk := Rest;
+      Rest := '';
+    end
+    else
+    begin
+      Chunk := Copy(Rest, 1, P - 1);
+      Rest := Copy(Rest, P + 4, Length(Rest));
+    end;
+    if Trim(Chunk) <> '' then
+      Result := Result + '!!' + Chunk + #13#10#13#10;
   end;
 end;
 
@@ -5132,7 +5241,7 @@ var
   AccessMsg: String;
   { 21 Nov 26 - RELEASE_1.1 368, 369(a): what the uninstall closed and the reinstall cannot reopen (see RadminNoteSaysOn). }
   KeptMsg: String;
-  KeptJobs: Integer;
+  KeptJobs, KeptCount: Integer;
   ApiRuleMsg: String;
   ApiScope: String;
   { 26 Sep 26 - InstallPython's answer: empty when the box was not ticked. }
@@ -5930,24 +6039,47 @@ begin
         (RadminNoteSaysOn says why): the jobs' tasks - their definitions are in the kept tree - and remote administration.  Results
         only; what to do about them is in the documentation.  Not on an upgrade, where no uninstall ran.  The note is spent here
         whatever it said. }
+      { 21 Nov 26 - THE OWNER'S TWO RULES.  (1) A Keep puts the system back as it was; what this installer cannot put back is warned about
+        with the exact steps.  (2) "If there are warnings they should not be buried in other text.  They need to be explicit, stand out so
+        that they can not be missed."  So every such warning goes to WarnReport (MarkWarn), which the Finished page draws first, in bold
+        red; none of them is part of FinishReport.  Here: remote administration and the jobs' tasks (KeptMsg), the access groups when they
+        had to be made again (AccessMsg), and the API's missing firewall rule (ApiRuleMsg). }
       KeptMsg := '';
+      KeptCount := 0;
       if not TrueUpgrade then
       begin
         KeptJobs := KeptJobCount;
-        if KeptJobs > 0 then
-          KeptMsg := KeptMsg + 'Scheduled jobs: ' + IntToStr(KeptJobs) + ' kept, none scheduled.' + #13#10#13#10;
         if RadminNoteSaysOn then
-          KeptMsg := KeptMsg + 'Remote administration: off. It was on before the uninstall.' + #13#10#13#10;
+        begin
+          KeptCount := KeptCount + 1;
+          KeptMsg := KeptMsg + IntToStr(KeptCount) + '. REMOTE ADMINISTRATION IS OFF. It was on before the uninstall. To turn it on again, ' +
+            'sign in to Windows as SDSYS, start SD Core and type:' + #13#10#13#10 + '    remote.sdsys on' + #13#10#13#10;
+        end;
+        if KeptJobs > 0 then
+        begin
+          KeptCount := KeptCount + 1;
+          KeptMsg := KeptMsg + IntToStr(KeptCount) + '. ' + IntToStr(KeptJobs) + ' SCHEDULED JOB(S) ARE KEPT BUT NONE IS SCHEDULED. ' +
+            'To schedule them again, sign in to Windows as SDSYS, start SD Core and type:' + #13#10#13#10 + KeptJobSteps + #13#10#13#10;
+        end;
+        if KeptCount > 0 then
+          KeptMsg := 'WARNING: SETTINGS YOU HAD BEFORE THE UNINSTALL ARE NOT ON NOW, AND THIS INSTALLER CANNOT TURN THEM ON AGAIN. ' +
+            'DO THESE STEPS:' + #13#10#13#10 + KeptMsg;
       end;
       RadminNoteClear;
+      WarnReport := '';
+      if (not TrueUpgrade) and (not RouteGroupsKept) and (AccessMsg <> '') then
+      begin
+        WarnReport := WarnReport + MarkWarn('WARNING: THE WINDOWS GROUPS THAT SAY WHO MAY USE ssh, THE API, FILES AND THE AI WERE GONE, ' +
+          'SO ACCESS IS NOT AS IT WAS.' + #13#10#13#10 + AccessMsg);
+        SetLength(AccessMsg, 0);   { emptied, not assigned '': test-apigate-units counts the one initialisation of AccessMsg }
+      end;
+      WarnReport := WarnReport + MarkWarn(KeptMsg);
 
       ApiRuleMsg := '';
       if (not ApiConfAbsent) and ApiListenerAfterwards and (ApiScope = 'none') then
-        ApiRuleMsg := #13#10#13#10 +
-          'No firewall rule lets other computers reach the SD Core API. To allow ' +
-          'it, in SD Core as an administrator:' + #13#10#13#10 +
-          '    remote.api on' + #13#10#13#10 +
-          'or "remote.api local" for this computer only.';
+        WarnReport := WarnReport + MarkWarn('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API. To allow it, ' +
+          'in SD Core as an administrator:' + #13#10#13#10 + '    remote.api on' + #13#10#13#10 +
+          'or "remote.api local" for this computer only.');
 
       { 30 Aug 26 - REWRITTEN, BECAUSE IT SAID THE OPPOSITE OF WHAT HAD JUST
         HAPPENED.  PRE_RELEASE_FIXES 77.
@@ -6004,7 +6136,6 @@ begin
              { PRE_RELEASE_FIXES 135.  Directly under the promise it qualifies,
                and empty on an in-place upgrade - see the builder above. }
              AccessMsg +
-             KeptMsg +
              'SD Core''s own system files were replaced.' + #13#10#13#10 +
              { 30 Aug 26 - THE LAST SENTENCE WENT STALE BETWEEN BEING WRITTEN AND
                BEING READ, WHICH IS THIS FILE'S OLDEST HABIT.  It said "edit
@@ -6103,6 +6234,7 @@ begin
   begin
     FinishReportShown := True;
     ShowFinishedReport('SD Core is installed.' + #13#10#13#10 +
+      WarnReport +
       'You must sign out or restart before using SD Core.' + #13#10#13#10 +
       FinishReport +
       StatusReport +
