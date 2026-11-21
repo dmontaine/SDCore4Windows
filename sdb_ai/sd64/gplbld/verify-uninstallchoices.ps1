@@ -180,6 +180,8 @@ function Get-CasePrecondition($case, $before, $prefix) {
         'keepdb-delconf' {
             if (-not $before.TreePresent) { return 'the data tree was already absent - there was no database to keep.' }
             if (-not $before.ConfPresent) { return 'sd.conf was already absent, so its absence afterwards proves nothing.' }
+            # 21 Nov 26 - RELEASE_1.1 369(b): "kept" is judged on sdapi and sdssh, so both must be there beforehand.
+            if (($before.RouteGroups -notcontains 'sdapi') -or ($before.RouteGroups -notcontains 'sdssh')) { return 'sdapi and sdssh were not both present beforehand, so their survival could not be observed.' }
             return ''
         }
         'deldb-keepconf' {
@@ -241,7 +243,19 @@ function Get-UninstallVerdict($case, $before, $after, $saw, $prefix) {
     if ($case -eq 'silentkeep') {
         Row $rows 'route groups SURVIVE a silent uninstall' $before.RouteGroups.Count $after.RouteGroups.Count
     } else {
-        Row $rows 'route groups removed (interactive)' 0 $after.RouteGroups.Count
+        # 21 Nov 26 - RELEASE_1.1 369(b): an interactive uninstall removes sdsshonly always (it carries the console and Remote Desktop denials)
+        # and the gate groups sdapi and sdssh only with the accounts or the data tree, as Linux keeps them with the accounts.  So: sdsshonly
+        # is gone in every interactive case; sdapi and sdssh SURVIVE where the database was kept (keepdb-delconf) and are gone where no
+        # tree survives (deldb-keepconf, deldb-delacct, treeabsent).
+        Row $rows 'sdsshonly removed (interactive)' $false ($after.RouteGroups -contains 'sdsshonly')
+        $gates = @('sdapi', 'sdssh')
+        $gatesBefore = (@($before.RouteGroups | Where-Object { $gates -contains $_ }) -join ',')
+        $gatesAfter  = (@($after.RouteGroups  | Where-Object { $gates -contains $_ }) -join ',')
+        if ($case -eq 'keepdb-delconf') {
+            Row $rows 'sdapi and sdssh kept with the kept database (interactive)' $gatesBefore $gatesAfter
+        } else {
+            Row $rows 'sdapi and sdssh removed, no database survives (interactive)' '' $gatesAfter
+        }
     }
 
     switch ($case) {

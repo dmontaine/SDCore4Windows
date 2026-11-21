@@ -397,7 +397,7 @@ function Get-Rows([hashtable]$t) {
     }
     $rm = $a.Substring([Math]::Max(0, $a.IndexOf("if (`$armMode -ceq 'none') {")))
     $rm = $rm.Substring(0, [Math]::Max(0, $rm.IndexOf("Out-Line `"`${Prog}: the broker task is removed`"")))
-    $jpu = $jb.Substring([Math]::Max(0, $jb.IndexOf("'job-purge' {")))
+    $jpu = $jb.Substring([Math]::Max(0, $jb.IndexOf("{ `$_ -ceq 'job-purge' -or `$_ -ceq 'job-unschedule' } {")))   # 21 Nov 26 (RELEASE_1.1 368): one clause serves both verbs
     $jpu = $jpu.Substring(0, [Math]::Max(0, $jpu.IndexOf('Out-Line "${Prog}: task $($t.TaskName) removed"')))
     $null = $rows.Add(@('R12 (RELEASE_1.1 291) a running task is stopped and waited for before it is unregistered: the helper is in sd-taskfolder.ps1 and works (driven on stubs), and the broker''s -Remove and sd-jobs'' job-purge call it before Unregister-ScheduledTask',
         (($tfx -match 'function Stop-SdTaskBeforeRemoval') -and ($tfx -match 'Stop-ScheduledTask -TaskPath \$taskPath -TaskName \$taskName -ErrorAction Stop') -and ($tfx -match "while \(\`$null -ne \`$t -and \[string\]\`$t\.State -eq 'Running'") -and

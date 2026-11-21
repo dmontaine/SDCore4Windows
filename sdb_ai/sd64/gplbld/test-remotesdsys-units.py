@@ -227,7 +227,8 @@ def checks(raw):
     ck("I1", "the installer does not offer remote administration (no page, no -RemoteAdmin to the finishing window) and an upgrade leaves it as it was (no -Off, no -On); the uninstaller still runs remote-admin.ps1 -Remove after the jobs",
        "RemoteAdminPage" not in iss and "RemoteAdminChosen" not in iss and "' -RemoteAdmin'" not in iss
        and "'\" -Off'" not in iss and "'\" -On'" not in iss
-       and re.search(r"RemoveScheduledJobs;\s*\n\s*RemoveRemoteAdmin;", iss) is not None and "'\" -Remove'" in iss.replace(" + '\" -Remove'", "'\" -Remove'"), "")
+       # 21 Nov 26 (RELEASE_1.1 369a): SaveRadminNote sits between them, so the state file is read before -Remove takes it away
+       and re.search(r"RemoveScheduledJobs;\s*\n\s*SaveRadminNote;[^\n]*\n\s*RemoveRemoteAdmin;", iss) is not None and "'\" -Remove'" in iss.replace(" + '\" -Remove'", "'\" -Remove'"), "")
     fi = raw["finish"]
     ck("I2", "finish-install.ps1 takes no -RemoteAdmin and never runs REMOTE.SDSYS",
        "$RemoteAdmin" not in fi and "'REMOTE.SDSYS'" not in fi, "")

@@ -669,7 +669,8 @@ def checks(srcs):
     rsg = pas_func(iss, "procedure RemoveSdUsersGroup;")
     ck("I4 the remover (sd.iss) deletes the group sdg_shared once, in RemoveSdUsersGroup, which runs only when the data tree is gone (UsersGroupGoes, or the tree already gone), not when it is kept",
        iss.count("localgroup sdg_shared /delete") == 1 and "localgroup sdg_shared /delete" in rsg
-       and re.search(r"if UsersGroupGoes then\s*RemoveSdUsersGroup;", iss) is not None, "")
+       # 21 Nov 26 (RELEASE_1.1 369b): the call is now in a begin ... end with RemoveRouteGroups before it; the condition is the same
+       and re.search(r"if UsersGroupGoes then\s*begin(?:\s*\{[^}]*\})?\s*RemoveRouteGroups;\s*RemoveSdUsersGroup;", iss) is not None, "")
     ck("I5 the marker's name is the same in the installer and in create_account: $shared.make in the sdsys directory",
        "Marker = Join-Path $Data 'sdsys" + BS + "$shared.make'" in gp and "@sdsys:@ds:'$shared.make'" in ca2, "")
 

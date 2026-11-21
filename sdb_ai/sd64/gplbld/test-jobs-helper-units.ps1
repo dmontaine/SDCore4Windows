@@ -158,7 +158,17 @@ try {
     $r = Run-Helper @('job-set', 'one-more', 'backup-all', 'hourly')
     Row 'R21 a 33rd job is refused' (($r.Rc -eq 1) -and (@($r.Out | Where-Object { $_ -clike 'sd-jobs: there are already 32 jobs*' }).Count -eq 1) -and -not (Test-Path -LiteralPath (Join-Path $jd 'one-more'))) ($r.Out -join ' | ')
 
-    # P: job-purge, the uninstaller's verb.  The dry run takes the scratch definitions and asks Task Scheduler nothing.  The folder holds j1..j32 and Bad.
+    # U: job-unschedule, the uninstaller's verb since 21 Nov 26 (RELEASE_1.1 368: an uninstall that keeps the data keeps the jobs' definitions).  It removes
+    # every task and leaves the definitions and their folder.  The dry run asks Task Scheduler nothing.  The folder holds j1..j32 and Bad.
+    $r = Run-Helper @('job-unschedule', 'x')
+    Row 'U1 job-unschedule takes nothing (exit 1), and then removes nothing' (($r.Rc -eq 1) -and (Has $r 'sd-jobs: job-unschedule takes nothing') -and (Test-Path -LiteralPath (Join-Path $jd 'j1'))) ($r.Out -join ' | ')
+    $namesBefore = (@(Get-ChildItem -LiteralPath $jd -Force | ForEach-Object { $_.Name } | Sort-Object)) -join ','
+    $r = Run-Helper @('job-unschedule')
+    $namesAfter = (@(Get-ChildItem -LiteralPath $jd -Force | ForEach-Object { $_.Name } | Sort-Object)) -join ','
+    Write-Output "  ran: $($r.Cmd) -> exit $($r.Rc); before $namesBefore; after $namesAfter"
+    Row 'U2 job-unschedule removes no task in the dry run, leaves every definition and the folder, and says the definitions are kept (exit 0)' (($r.Rc -eq 0) -and (Has $r 'sd-jobs: dry run: no task is removed') -and (Has $r 'sd-jobs: the scheduled tasks are removed; the definitions are kept') -and -not (Has $r 'sd-jobs: the scheduled jobs are removed') -and ($namesBefore.Length -gt 0) -and ($namesBefore -ceq $namesAfter)) ($r.Out -join ' | ')
+
+    # P: job-purge.  The dry run takes the scratch definitions and asks Task Scheduler nothing.  The folder holds j1..j32 and Bad.
     $r = Run-Helper @('job-purge', 'x')
     Row 'P1 job-purge takes nothing (exit 1), and then removes nothing' (($r.Rc -eq 1) -and (Has $r 'sd-jobs: job-purge takes nothing') -and (Test-Path -LiteralPath (Join-Path $jd 'j1'))) ($r.Out -join ' | ')
     New-Item -ItemType Directory -Path (Join-Path $jd 'adir') | Out-Null
@@ -198,11 +208,11 @@ Row 'T9 job-set makes the new file the administrators'' (owner Administrators, o
 $adm = $text.Substring($text.IndexOf('function Test-JobAdminPath'), $text.IndexOf('function Read-JobRows') - $text.IndexOf('function Test-JobAdminPath'))
 Row 'T5 the ACL rule is the kernel''s: no reparse point, the right kind, owner SYSTEM or Administrators, no other allowed SID' ($adm.Contains('ReparsePoint') -and $adm.Contains("@('S-1-5-18', 'S-1-5-32-544')") -and $adm.Contains('if ($ok -notcontains $owner)') -and $adm.Contains('if ($ok -notcontains $r.IdentityReference.Value)'))
 Row 'T6 the task XML has no Password element and the principal is S4U at the highest run level' ($text.Contains('<LogonType>S4U</LogonType><RunLevel>HighestAvailable</RunLevel>') -and -not $text.Contains('<Password>'))
-$iPurgeIf = $main.IndexOf("if (`$Action -cne 'job-purge') {"); $iSdsys = $main.IndexOf('if ($me.User.Value -ne $sdsysSid)'); $iRole = $main.IndexOf("IsInRole([Security.Principal.SecurityIdentifier]'S-1-5-32-544')")
-Row 'T7 job-purge alone is spared the SDSYS test (the test sits under "if ($Action -cne ''job-purge'')"); the elevation test follows it for every verb' (($iPurgeIf -gt 0) -and ($iPurgeIf -lt $iSdsys) -and ($iSdsys -lt $iRole) -and ([regex]::Matches($main, [regex]::Escape("-cne 'job-purge'")).Count -eq 1)) "$iPurgeIf $iSdsys $iRole"
-$iP = $main.IndexOf("'job-purge' {"); $iD = $main.IndexOf('default {')
+$iPurgeIf = $main.IndexOf("if (`$Action -cne 'job-purge' -and `$Action -cne 'job-unschedule') {"); $iSdsys = $main.IndexOf('if ($me.User.Value -ne $sdsysSid)'); $iRole = $main.IndexOf("IsInRole([Security.Principal.SecurityIdentifier]'S-1-5-32-544')")
+Row 'T7 job-purge and job-unschedule alone are spared the SDSYS test (the test sits under "if ($Action -cne ''job-purge'' -and $Action -cne ''job-unschedule'')"); the elevation test follows it for every verb' (($iPurgeIf -gt 0) -and ($iPurgeIf -lt $iSdsys) -and ($iSdsys -lt $iRole) -and ([regex]::Matches($main, [regex]::Escape("-cne 'job-purge'")).Count -eq 1) -and ([regex]::Matches($main, [regex]::Escape("-cne 'job-unschedule'")).Count -eq 1)) "$iPurgeIf $iSdsys $iRole"
+$iP = $main.IndexOf("{ `$_ -ceq 'job-purge' -or `$_ -ceq 'job-unschedule' } {"); $iD = $main.IndexOf('default {')
 $purge = if ($iP -gt 0 -and $iD -gt $iP) { $main.Substring($iP, $iD - $iP) } else { '' }
-Row 'T8 job-purge''s dry run reaches no scheduler cmdlet, the tasks go before the definitions, and nothing in it deletes recursively' (($purge -ne '') -and ($purge.IndexOf('if ($DryRun) {') -gt 0) -and ($purge.IndexOf('if ($DryRun) {') -lt $purge.IndexOf('Get-ScheduledTask')) -and ($purge.IndexOf('Unregister-ScheduledTask') -lt $purge.IndexOf('Remove-Item')) -and (-not $purge.Contains('-Recurse')) -and $purge.Contains('[IO.Directory]::Delete($jobsDir, $false)')) "purge block $($purge.Length) characters"
+Row 'T8 job-purge''s and job-unschedule''s dry run reaches no scheduler cmdlet, the tasks go before the definitions, nothing in it deletes recursively, and only job-purge touches the definitions' (($purge -ne '') -and ($purge.IndexOf('if ($DryRun) {') -gt 0) -and ($purge.IndexOf('if ($DryRun) {') -lt $purge.IndexOf('Get-ScheduledTask')) -and ($purge.IndexOf('Unregister-ScheduledTask') -lt $purge.IndexOf('Remove-Item')) -and (-not $purge.Contains('-Recurse')) -and $purge.Contains('[IO.Directory]::Delete($jobsDir, $false)') -and $purge.Contains('$keepDefs = ($Action -ceq ''job-unschedule'')') -and $purge.Contains('if ((-not $keepDefs) -and (Test-Path -LiteralPath $jobsDir)) {') -and ($purge.IndexOf('$keepDefs = ') -lt $purge.IndexOf('Remove-Item'))) "purge block $($purge.Length) characters"
 
 $fails = 0
 foreach ($row in $script:rows) {

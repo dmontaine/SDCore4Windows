@@ -3,6 +3,20 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+21 Nov 26  UNINSTALLING AND KEEPING YOUR DATA NO LONGER LOSES WHO MAY USE SSH, THE API, FILES AND THE AI, OR YOUR SCHEDULED JOBS.
+
+             What        - When you keep the database and the Windows accounts, the groups that say which account
+                           may use ssh, the API, files and the AI are kept too, so after a reinstall every account has
+                           the access it had.  They were removed, and a reinstall gave ssh to every account and the
+                           API, files and the AI to none.  The scheduled jobs' definitions are kept as well (only
+                           their tasks are removed); the closing page of the reinstall says how many it found and that
+                           none is scheduled yet, and SET.JOB CHANGE in an SDSYS session schedules one again.  Remote
+                           administration is still shut by an uninstall; the closing page of the reinstall says it
+                           was on.
+             Why         - What an administrator set should not change because SD was removed and installed again.
+             Does NOT    - Keep the group that denies the console and Remote Desktop to accounts confined to SD; it
+                           is removed, as before.  Turn remote administration or a job on again by itself.
+
 20 Nov 26  TOOL.JOBS' HELP LINES FIT THE BOX.
 
              What        - The three help lines at the foot of tool.jobs are shorter, so none is cut at the edge of the

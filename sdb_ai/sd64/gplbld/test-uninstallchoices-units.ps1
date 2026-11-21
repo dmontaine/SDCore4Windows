@@ -151,14 +151,22 @@ Check 'silentkeep fails if the route groups were removed silently' `
       (Failed (Get-UninstallVerdict 'silentkeep' $before (New-State @{ RouteGroups = @() }) 'yes' '') 'route groups SURVIVE') $null
 Check 'silentkeep fails if only some of them survived' `
       (Failed (Get-UninstallVerdict 'silentkeep' $before (New-State @{ RouteGroups = @('sdsshonly') }) 'yes' '') 'route groups SURVIVE') $null
-Check 'an INTERACTIVE case fails if the route groups survived' `
-      (Failed (Get-UninstallVerdict 'keepdb-delconf' $before (New-State @{ ConfPresent = $false }) 'yes' '') 'route groups removed') $null
+# 21 Nov 26 - RELEASE_1.1 369(b): the interactive rows are split.  sdsshonly goes in every interactive case; sdapi and sdssh stay with a
+# kept database and go where no database survives.  Each direction is pinned, so neither can drift back to "all three go" or "all stay".
+Check 'an INTERACTIVE case fails if sdsshonly survived' `
+      (Failed (Get-UninstallVerdict 'keepdb-delconf' $before (New-State @{ ConfPresent = $false }) 'yes' '') 'sdsshonly removed') $null
+Check 'keepdb-delconf fails if sdapi and sdssh were removed with a kept database' `
+      (Failed (Get-UninstallVerdict 'keepdb-delconf' $before (New-State @{ ConfPresent = $false; RouteGroups = @() }) 'yes' '') 'sdapi and sdssh kept') $null
+Check 'a case with no surviving database fails if sdapi and sdssh survived' `
+      (Failed (Get-UninstallVerdict 'deldb-keepconf' $before (New-State @{ SdsysPresent = $false; TreeEntries = @('sd.conf'); SdusersPresent = $false; RouteGroups = @('sdapi', 'sdssh') }) 'yes' '') 'sdapi and sdssh removed') $null
+Check 'keepdb-delconf is refused when sdapi and sdssh were not both there beforehand' `
+      ((Get-CasePrecondition 'keepdb-delconf' (New-State @{ RouteGroups = @('sdsshonly') }) '') -like '*sdapi and sdssh*') $null
 Check 'a snapshot with no route groups at all is refused' `
       ((Get-CasePrecondition 'silentkeep' (New-State @{ RouteGroups = @() }) '') -like '*route groups*') $null
 
 Write-Host ''
 Write-Host '=== 4. the two 38 combinations are each others control ==='
-$kdc = New-State @{ ConfPresent = $false; TreeEntries = @('sdsys'); RouteGroups = @() }
+$kdc = New-State @{ ConfPresent = $false; TreeEntries = @('sdsys'); RouteGroups = @('sdapi', 'sdssh') }   # 21 Nov 26 (369b): the gates stay with the kept database
 Check 'keepdb-delconf passes when only sd.conf went' (AllPass (Get-UninstallVerdict 'keepdb-delconf' $before $kdc 'yes' '')) $null
 Check 'keepdb-delconf fails if sdsys went too' `
       (Failed (Get-UninstallVerdict 'keepdb-delconf' $before (New-State @{ ConfPresent = $false; SdsysPresent = $false }) 'yes' '') 'sdsys survives') $null

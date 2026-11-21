@@ -502,7 +502,8 @@ def run_checks(raw):
     # installer of its own).  Linux's sd-elevate rows (the whitelist for addgroup / delgroup / groupadd) are out: Windows has no sudo helper; SDSYS changes a group
     # in its own session through !os_group, so there is no list of group names at a privilege boundary to hold.
     egf = srg[srg.find("function Ensure-Group"): srg.find("function Get-Members")] if "function Ensure-Group" in srg else ""
-    rsg = iss[iss.find("procedure RemoveSdGroups;"): iss.find("\nend;", iss.find("procedure RemoveSdGroups;"))] if "procedure RemoveSdGroups;" in iss else ""
+    # 21 Nov 26 (RELEASE_1.1 369b): the six gate groups are removed by RemoveRouteGroups (with the accounts or the data tree), no longer by RemoveSdGroups, which keeps sdsshonly only.
+    rsg = iss[iss.find("procedure RemoveRouteGroups;"): iss.find("\nend;", iss.find("procedure RemoveRouteGroups;"))] if "procedure RemoveRouteGroups;" in iss else ""
     ck("F14 the installer makes sdfileswrite and sdfilesadmin with the other route groups (sync-route-groups.ps1, run by sd.iss: Ensure-Group, New-LocalGroup only when Get-LocalGroup "
        "finds none, so an upgrade install creates them empty and adds nobody; nobody is added to either); the uninstaller removes them with the other route groups, after the "
        "silent-uninstall exit, once each",
@@ -513,7 +514,7 @@ def run_checks(raw):
        and not re.search(r"Add-LocalGroupMember[^\n]*(?:\$FilesWriteGroup|\$FilesAdminGroup|\$FilesGroup|sdfiles)", srg)
        and "Script := ExpandConstant('{app}" + chr(92) + "sync-route-groups.ps1');" in iss and "RouteMsg := SyncRouteGroups;" in iss
        and ordered(rsg, "if UninstallSilent then", "Exit;", "Exec(Net, 'localgroup sdfiles /delete'", "Exec(Net, 'localgroup sdfileswrite /delete'", "Exec(Net, 'localgroup sdfilesadmin /delete'")
-       and iss.count("localgroup sdfileswrite /delete") == 1 and iss.count("localgroup sdfilesadmin /delete") == 1 and "RemoveSdGroups;" in iss[iss.find("\nend;", iss.find("procedure RemoveSdGroups;")):], "")
+       and iss.count("localgroup sdfileswrite /delete") == 1 and iss.count("localgroup sdfilesadmin /delete") == 1 and "RemoveRouteGroups;" in iss[iss.find("\nend;", iss.find("procedure RemoveRouteGroups;")):], "")
     m21, m22, m23 = (raw["msg:%d" % n].strip("\n") for n in (12526, 12527, 12528))
     stray = []                                    # any other program of gpl.bp that writes one of the three numbers
     for fname in sorted(os.listdir(GPL)):

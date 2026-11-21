@@ -19,7 +19,14 @@
 #   sd-jobs.ps1 job-list                       the defined jobs, one line each ("job NAME: SCHEDULE: COMMAND (JOB)" or "damaged NAME: WHY")
 #   sd-jobs.ps1 job-run NAME                   starts the job's task now, exactly as its trigger would
 #   sd-jobs.ps1 job-state NAME                 "next=..." and "last=..." from Task Scheduler (read only)
-#   sd-jobs.ps1 job-purge                      the uninstaller's: removes every job's task, then the definitions and their directory
+#   sd-jobs.ps1 job-purge                      removes every job's task, then the definitions and their directory
+#   sd-jobs.ps1 job-unschedule                 the uninstaller's: removes every job's task and leaves the definitions (RELEASE_1.1 368)
+#
+# 21 Nov 26 - RELEASE_1.1 368 (Linux S.284: an uninstall that keeps the configuration keeps the jobs' definitions).  The uninstaller used to
+# run job-purge, so a Keep lost the administrator's jobs; it now runs job-unschedule, which removes the TASKS (a task must not start a program
+# that is gone) and leaves the definitions in the data tree, where a Delete takes them with the tree.  The reinstall cannot register the
+# tasks again - they run as SDSYS, which only SDSYS can register (row 280) - so it says how many definitions it found.  job-purge stays for
+# a person who wants both gone.
 #
 # Called by SET.JOB (gpl.bp/set_job) from the administrator's session, which is elevated already (an SDSYS session is elevated or it is
 # nothing), so nothing here asks for elevation: it REFUSES unless the caller is the local Windows account SDSYS with an elevated token,
@@ -257,7 +264,7 @@ try {
         $safe = { param($p) Test-JobAdminPath $p $false }
         $me = [Security.Principal.WindowsIdentity]::GetCurrent()
         # job-purge is the uninstaller's and only removes, so any elevated administrator may ask for it.  Every other verb is SDSYS's alone.
-        if ($Action -cne 'job-purge') {
+        if ($Action -cne 'job-purge' -and $Action -cne 'job-unschedule') {
             try {
                 $sdsysSid = (New-Object Security.Principal.NTAccount("$([Environment]::MachineName)\SDSYS")).Translate([Security.Principal.SecurityIdentifier]).Value
             } catch { Exit-Refused 'there is no local account SDSYS' }
@@ -427,13 +434,15 @@ try {
             exit 0
         }
 
-        'job-purge' {
-            # The uninstaller's (sd.iss RemoveScheduledJobs).  The tasks go FIRST - a task left behind would start a program that is gone -
-            # then the definitions, which are SD's and belong to nothing once SD is gone.  Nothing here deletes a directory's contents
-            # wholesale: this script makes only plain files in the directory, so only plain files are taken from it.
-            if ($Words.Count -ne 0) { Exit-Refused 'job-purge takes nothing' }
-            Out-Line "${Prog}: job-purge: first: every task ${JobTaskPath}sdcore-job-* is removed"
-            Out-Line "${Prog}: then: removes the definitions in $jobsDir, and the directory"
+        { $_ -ceq 'job-purge' -or $_ -ceq 'job-unschedule' } {
+            # job-unschedule is the uninstaller's (sd.iss RemoveScheduledJobs); job-purge is the same and takes the definitions too.  The tasks
+            # go FIRST - a task left behind would start a program that is gone - then, for job-purge only, the definitions.  Nothing here
+            # deletes a directory's contents wholesale: this script makes only plain files in the directory, so only plain files are taken.
+            $keepDefs = ($Action -ceq 'job-unschedule')
+            if ($Words.Count -ne 0) { Exit-Refused "$Action takes nothing" }
+            Out-Line "${Prog}: ${Action}: first: every task ${JobTaskPath}sdcore-job-* is removed"
+            if ($keepDefs) { Out-Line "${Prog}: then: the definitions in $jobsDir are left" }
+            else { Out-Line "${Prog}: then: removes the definitions in $jobsDir, and the directory" }
             $left = 0
             if ($DryRun) {
                 Out-Line "${Prog}: dry run: no task is removed"
@@ -457,7 +466,7 @@ try {
                     if ($tf.GetTasks(1).Count -eq 0 -and $tf.GetFolders(0).Count -eq 0) { $svc.GetFolder('\').DeleteFolder($JobTaskPath.Trim('\'), 0) }
                 } catch { }
             }
-            if (Test-Path -LiteralPath $jobsDir) {
+            if ((-not $keepDefs) -and (Test-Path -LiteralPath $jobsDir)) {
                 $d = Get-Item -LiteralPath $jobsDir -Force
                 if ((-not $d.PSIsContainer) -or ($d.Attributes -band [IO.FileAttributes]::ReparsePoint) -or (-not $DryRun -and -not (Test-JobAdminPath $jobsDir $true))) {
                     $left++
@@ -472,12 +481,13 @@ try {
                 }
             }
             if ($left -gt 0) { Out-Line "${Prog}: not everything was removed; see the lines above"; exit 1 }
-            Out-Line "${Prog}: the scheduled jobs are removed"
+            if ($keepDefs) { Out-Line "${Prog}: the scheduled tasks are removed; the definitions are kept" }
+            else { Out-Line "${Prog}: the scheduled jobs are removed" }
             exit 0
         }
 
         default {
-            Out-Line "${Prog}: usage: sd-jobs.ps1 job-set NAME JOB SCHEDULE... | job-delete NAME | job-list | job-run NAME | job-state NAME | job-purge"
+            Out-Line "${Prog}: usage: sd-jobs.ps1 job-set NAME JOB SCHEDULE... | job-delete NAME | job-list | job-run NAME | job-state NAME | job-unschedule | job-purge"
             exit 2
         }
     }

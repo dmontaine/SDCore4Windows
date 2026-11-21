@@ -1353,6 +1353,9 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 
 var
   DataTreeWasAbsent: Boolean;
+  { 21 Nov 26 - RELEASE_1.1 369(b): did the route group sdssh exist when Setup started?  The uninstaller now keeps the groups with kept
+    accounts, so the closing box must not say they were recreated when they were not.  Sampled with DataTreeWasAbsent. }
+  RouteGroupsKept: Boolean;
   { 17 Nov 26 - four-version audit round 3 (P-1435, P-2329), Linux's 14 Nov 26 "an upgrade does not ask where sessions start":
     the data tree is kept from a release before the home screen (W1.1-3 and earlier: its newvoc has no set.start.default),
     where every session started at the prompt.  Sampled with DataTreeWasAbsent, before [Files] replaces newvoc. }
@@ -1788,7 +1791,7 @@ function InitializeSetup: Boolean;
 var
   PreflightPs, PreflightScript, PreflightReasonPath: String;
   PreflightReason: AnsiString;
-  PreflightCode: Integer;
+  PreflightCode, GroupCode: Integer;
 begin
   UseWindowsPowerShellModules;
 
@@ -1804,6 +1807,9 @@ begin
      whole set consistently and so looks identical either way.  Only a genuine
      first install exposes it.  Measured 14 Aug 2026. *)
   DataTreeWasAbsent := not DirExists(ExpandConstant('{#DataDir}\sdsys'));
+  { 21 Nov 26 - RELEASE_1.1 369(b): net localgroup answers 0 for a group that exists and 2 for one that does not. }
+  RouteGroupsKept := Exec(ExpandConstant('{sys}\net.exe'), 'localgroup sdssh', '', SW_HIDE, ewWaitUntilTerminated, GroupCode) and
+                     (GroupCode = 0);
   DataTreeBeforeHome := (not DataTreeWasAbsent) and
                         DirExists(ExpandConstant('{#DataDir}\sdsys\newvoc')) and
                         not FileExists(ExpandConstant('{#DataDir}\sdsys\newvoc\set.start.default'));
@@ -3076,6 +3082,60 @@ end;
 procedure ApiNoteClear;
 begin
   RegDeleteValue(HKLM64, ApiNoteKey, 'ApiAccess');
+end;
+
+{ 21 Nov 26 - RELEASE_1.1 369(a), 368: WHAT AN UNINSTALL THAT KEEPS THE DATABASE TOOK AWAY AND A REINSTALL CANNOT PUT BACK, SAID AT THE END.
+  Remote administration is closed by every uninstall (RemoveRemoteAdmin: it closes, never opens), and Linux then reopens it from a note at
+  the next install.  Windows cannot: the broker task and the jobs' tasks run as SDSYS, and Windows registers such a task only for SDSYS
+  itself (row 280, measured), which the installer, an administrator, is not.  So the uninstall notes that it was on - in the same key
+  and for the same reason as the API's note, HKLM64 so that only an administrator can write it - and the reinstall says that it is off
+  and was on, then spends the note.  The note is also cleared by an uninstall that leaves no database (the accounts it concerns are gone),
+  and a note anything but the word on says nothing. }
+function RadminNoteSaysOn: Boolean;
+var
+  V: String;
+begin
+  Result := RegQueryStringValue(HKLM64, ApiNoteKey, 'RemoteAdmin', V) and (V = 'on');
+end;
+
+procedure RadminNoteClear;
+begin
+  RegDeleteValue(HKLM64, ApiNoteKey, 'RemoteAdmin');
+end;
+
+{ At usUninstall, BEFORE RemoveRemoteAdmin: the state file is read while it still exists.  Only the word on is noted. }
+procedure SaveRadminNote;
+var
+  S: AnsiString;
+begin
+  S := '';
+  if LoadStringFromFile(ExpandConstant('{#DataDir}\remote-admin\state'), S) and (Trim(String(S)) = 'on') then
+    RegWriteStringValue(HKLM64, ApiNoteKey, 'RemoteAdmin', 'on')
+  else
+    RadminNoteClear;
+end;
+
+{ How many scheduled-job definitions a kept data tree holds: the plain files of sd-jobs, less the remote administration broker's one-shot
+  radmin- ones and the helper's own .new temporary.  An uninstall removes the jobs' TASKS and keeps these (sd-jobs.ps1 job-unschedule). }
+function KeptJobCount: Integer;
+var
+  FR: TFindRec;
+  Dir: String;
+begin
+  Result := 0;
+  Dir := ExpandConstant('{#DataDir}\sd-jobs\');
+  if FindFirst(Dir + '*', FR) then
+  begin
+    try
+      repeat
+        if ((FR.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0) and
+           (Copy(FR.Name, 1, 7) <> 'radmin-') and (Copy(FR.Name, 1, 1) <> '.') then
+          Result := Result + 1;
+      until not FindNext(FR);
+    finally
+      FindClose(FR);
+    end;
+  end;
 end;
 
 { The kept rule put back: api-firewall.ps1 -Open, as ApplyApiFirewall does for a box ticked.  Not a choice made now - the
@@ -5070,6 +5130,9 @@ var
     variables because they are gated on different questions and either can be
     the only one that fires. }
   AccessMsg: String;
+  { 21 Nov 26 - RELEASE_1.1 368, 369(a): what the uninstall closed and the reinstall cannot reopen (see RadminNoteSaysOn). }
+  KeptMsg: String;
+  KeptJobs: Integer;
   ApiRuleMsg: String;
   ApiScope: String;
   { 26 Sep 26 - InstallPython's answer: empty when the box was not ticked. }
@@ -5813,8 +5876,16 @@ begin
       AccessMsg := '';
       if not TrueUpgrade then
       begin
-        AccessMsg :=
-          'Your database was kept, but its Windows groups were recreated:' + #13#10#13#10;
+        { 21 Nov 26 - RELEASE_1.1 369(b): TWO OUTCOMES NOW, TOLD APART BY WHAT SETUP FOUND (RouteGroupsKept, sampled before any file was
+          written).  The uninstaller keeps the route groups with kept accounts, so the usual reinstall finds them and seeds nothing:
+          every account's ssh, API, files and AI access is as the administrator left it.  Only a machine where the groups were gone
+          (an older uninstaller took them, or the tree was moved here) gets them recreated, with ssh from sdusers as before. }
+        if RouteGroupsKept then
+          AccessMsg :=
+            'Your database was kept, and so were its Windows groups:' + #13#10#13#10
+        else
+          AccessMsg :=
+            'Your database was kept, but its Windows groups were recreated:' + #13#10#13#10;
 
         { ONLY IF THE STEP DID NOT REPORT A PROBLEM.  RestoreSshOnly's failure is
           already in the summary box the reader has just closed, and claiming the
@@ -5825,9 +5896,15 @@ begin
           AccessMsg := AccessMsg +
             '    The ssh-only confinement IS restored, from the account register.' + #13#10;
 
+        if RouteGroupsKept then
+          AccessMsg := AccessMsg +
+            '    ssh, API, files and AI access are as they were.' + #13#10#13#10
+        else
+          AccessMsg := AccessMsg +
+            '    ssh access is restored for every member of "sdusers".' + #13#10 +
+            '    API access is NOT restored.' + #13#10#13#10;
+
         AccessMsg := AccessMsg +
-          '    ssh access is restored for every member of "sdusers".' + #13#10 +
-          '    API access is NOT restored.' + #13#10#13#10 +
           'Set access per account, in SD Core as an administrator:' + #13#10#13#10 +
           '    modify.account <name> ssh | api | both | none' + #13#10#13#10;
       end;
@@ -5849,6 +5926,21 @@ begin
         unreachable.  And a MEASURED absence of the rule - never an assumed one,
         and never "restricted", which is a state somebody chose deliberately
         with remote.api local. }
+      { 21 Nov 26 - RELEASE_1.1 368, 369(a).  The two things an uninstall that kept the database closed and this install cannot reopen
+        (RadminNoteSaysOn says why): the jobs' tasks - their definitions are in the kept tree - and remote administration.  Results
+        only; what to do about them is in the documentation.  Not on an upgrade, where no uninstall ran.  The note is spent here
+        whatever it said. }
+      KeptMsg := '';
+      if not TrueUpgrade then
+      begin
+        KeptJobs := KeptJobCount;
+        if KeptJobs > 0 then
+          KeptMsg := KeptMsg + 'Scheduled jobs: ' + IntToStr(KeptJobs) + ' kept, none scheduled.' + #13#10#13#10;
+        if RadminNoteSaysOn then
+          KeptMsg := KeptMsg + 'Remote administration: off. It was on before the uninstall.' + #13#10#13#10;
+      end;
+      RadminNoteClear;
+
       ApiRuleMsg := '';
       if (not ApiConfAbsent) and ApiListenerAfterwards and (ApiScope = 'none') then
         ApiRuleMsg := #13#10#13#10 +
@@ -5912,6 +6004,7 @@ begin
              { PRE_RELEASE_FIXES 135.  Directly under the promise it qualifies,
                and empty on an in-place upgrade - see the builder above. }
              AccessMsg +
+             KeptMsg +
              'SD Core''s own system files were replaced.' + #13#10#13#10 +
              { 30 Aug 26 - THE LAST SENTENCE WENT STALE BETWEEN BEING WRITTEN AND
                BEING READ, WHICH IS THIS FILE'S OLDEST HABIT.  It said "edit
@@ -6173,6 +6266,11 @@ end;
    the script has been deleted with the rest of the application directory.
    That is also before the [UninstallRun] entries stop the server.
 
+   21 Nov 26 - RELEASE_1.1 368, from Linux S.284: ONLY THE TASKS GO NOW (job-unschedule).  The definitions stay in the data tree, so a
+   Keep keeps the administrator's jobs and a Delete takes them with the tree (DelTree); the paragraph above about the definitions
+   going with the tasks held while nothing could keep them.  The reinstall reports how many it found (KeptJobCount); it cannot register
+   their tasks again, which run as SDSYS and can be registered only by SDSYS (row 280).
+
    Not brace-delimited - see RemoveFromPath. *)
 procedure RemoveScheduledJobs;
 var
@@ -6183,7 +6281,7 @@ begin
   if not FileExists(Script) then
     Exit;
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + Script + '" job-purge',
+  Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + Script + '" job-unschedule',
        '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
@@ -6311,6 +6409,31 @@ begin
   if UninstallSilent then
     Exit;
 
+  { 21 Nov 26 - RELEASE_1.1 369(b): ONLY sdsshonly GOES HERE NOW.  It is the one route group that carries Windows rights (the console
+    and Remote Desktop denials), so the reason above is its alone.  The six that only SAY which account may use which route (sdssh, sdapi,
+    sdfiles, sdfileswrite, sdfilesadmin, sdaiusers) used to go here too, and a Keep reinstall then found them gone: API, files and AI were
+    off for every account and ssh was on for every member of sdusers (the seed of sync-route-groups.ps1), which is not what the
+    administrator had set.  They stay with the kept accounts and go with the accounts or the data tree - RemoveRouteGroups, as Linux's
+    deletesdcore.sh keeps them with the accounts (Linux mail 22 Nov, cell Core S5). }
+  Net := ExpandConstant('{sys}\net.exe');
+  Exec(Net, 'localgroup sdsshonly /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
+{ 21 Nov 26 - RELEASE_1.1 369(b).  THE SIX ROUTE GROUPS THAT HOLD AN ADMINISTRATOR'S CHOICE - sdssh, sdapi, sdfiles, sdfileswrite,
+  sdfilesadmin, sdaiusers - removed WHEN THEIR ACCOUNTS OR THEIR DATA TREE ARE: after the accounts sweep removed the accounts (their
+  memberships went with them, so the groups are empty), and where no data tree survives the uninstall (the reinstall then starts as a
+  first install and must not meet old members).  On a Keep with the accounts kept they stay, as sdsshnokey does for the same reason
+  (OfferAccountRemoval); sync-route-groups.ps1 then finds each one and seeds nothing, so the reinstall changes nobody's access.
+  NOT ON A SILENT UNINSTALL, as before: a silent one keeps the database and the accounts, and so keeps these.  Absent is not an error;
+  the exit code is not tested.  Not brace-delimited - see RemoveFromPath. }
+procedure RemoveRouteGroups;
+var
+  Net: String;
+  Code: Integer;
+begin
+  if UninstallSilent then
+    Exit;
+
   Net := ExpandConstant('{sys}\net.exe');
   Exec(Net, 'localgroup sdssh /delete',     '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec(Net, 'localgroup sdapi /delete',     '', SW_HIDE, ewWaitUntilTerminated, Code);
@@ -6320,7 +6443,6 @@ begin
   Exec(Net, 'localgroup sdfilesadmin /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
   { 13 Nov 26 - RELEASE_1.1 246: the AI gate's group goes with the others. }
   Exec(Net, 'localgroup sdaiusers /delete',    '', SW_HIDE, ewWaitUntilTerminated, Code);
-  Exec(Net, 'localgroup sdsshonly /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
 { PRE_RELEASE_FIXES 140, owner's ruling 2 Sep 2026.  REMOVE sdusers WHEN NO DATA
@@ -6645,6 +6767,10 @@ begin
   if Code = 0 then
     Exec(ExpandConstant('{sys}\net.exe'), 'localgroup sdsshnokey /delete', '', SW_HIDE, ewWaitUntilTerminated, NetCode);
 
+  { 21 Nov 26 - RELEASE_1.1 369(b): the six route groups go with the accounts too (see RemoveRouteGroups); on a keep they stay. }
+  if Code = 0 then
+    RemoveRouteGroups;
+
   if Code = 0 then
     MsgBox('The Windows accounts SD Core created were removed; ' + KeepUser +
            ' was kept.' + #13#10#13#10 +
@@ -6669,6 +6795,7 @@ begin
     SaveApiAccessNote;
     RemoveApiFirewall;
     RemoveScheduledJobs;
+    SaveRadminNote;   { 21 Nov 26 - RELEASE_1.1 369(a): BEFORE RemoveRemoteAdmin, which takes the state file away }
     RemoveRemoteAdmin;
     RemoveFromPath;
     Exit;
@@ -6739,8 +6866,10 @@ begin
       carries. }
     if not UninstallSilent then
       OfferAccountRemoval;
+    RemoveRouteGroups;   { 21 Nov 26 - RELEASE_1.1 369(b): no tree survives, so nothing keeps them; it declines on a silent uninstall }
     RemoveSdUsersGroup;
     ApiNoteClear;   { 14 Nov 26 - RELEASE_1.1 283: no tree, so no sd.conf to keep the API's state for }
+    RadminNoteClear;   { 21 Nov 26 - RELEASE_1.1 369(a): nor the accounts remote administration concerned }
     Exit;
   end;
 
@@ -6859,7 +6988,12 @@ begin
     Removing it first emptied the sweep's candidate set and turned the accounts
     question into a no-op that reported success. }
   if UsersGroupGoes then
+  begin
+    { 21 Nov 26 - RELEASE_1.1 369(b): the database is gone, so the route groups' members are of no account to a reinstall. }
+    RemoveRouteGroups;
     RemoveSdUsersGroup;
+    RadminNoteClear;   { 21 Nov 26 - RELEASE_1.1 369(a): and so are the accounts remote administration concerned }
+  end;
 end;
 
 function NotOnPath(Dir: String): Boolean;
