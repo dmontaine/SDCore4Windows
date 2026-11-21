@@ -57,6 +57,7 @@ Say ''
 Say ('this machine''s own IPv4 addresses (up, not link-local): ' + $(if ($own.Count) { ($own | ForEach-Object { $_.Ip + ' (' + $_.If + ')' }) -join ', ' } else { 'NONE' }))
 if ($own.Count -eq 0) { Bail 'no own address besides loopback - nothing to measure' }
 
+try { $Host.UI.RawUI.FlushInputBuffer() } catch { }   # RELEASE_1.1 372: typed-ahead keys are thrown away, not taken into the password
 $ss = Read-Host -AsSecureString 'SDSYS''s SD password'
 $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
 try { $pw = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }

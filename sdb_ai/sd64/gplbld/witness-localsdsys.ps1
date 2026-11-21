@@ -466,7 +466,10 @@ function Wait-Person([string]$Row, [string[]]$Lines) {
     return $true
 }
 
-function Read-Secret([string]$Prompt) { return (Read-Host -AsSecureString $Prompt) }
+function Read-Secret([string]$Prompt) {
+    try { $Host.UI.RawUI.FlushInputBuffer() } catch { }   # RELEASE_1.1 372: typed-ahead keys are thrown away, not taken into the password
+    return (Read-Host -AsSecureString $Prompt)
+}
 
 function Get-Plain([Security.SecureString]$S) {
     $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($S)

@@ -148,6 +148,7 @@ Say ("{0} granted Modify on the work directory" -f $Account)
 Write-Output ''
 Write-Output ("Type the Windows {0} password.  It is not echoed, not written to any" -f $Account)
 Write-Output '  file, and never put on a command line.'
+try { $Host.UI.RawUI.FlushInputBuffer() } catch { }   # RELEASE_1.1 372: typed-ahead keys are thrown away, not taken into the password
 $secret = Read-Host -Prompt ("{0} password" -f $Account) -AsSecureString
 if ($null -eq $secret -or $secret.Length -eq 0) {
     Write-Output 'probe-sdsysseat: no password given - nothing was measured.'

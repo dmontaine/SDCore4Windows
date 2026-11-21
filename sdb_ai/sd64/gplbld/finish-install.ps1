@@ -375,6 +375,9 @@ function Set-SdsysPassword {
     $tries = 0
     while ($tries -lt 3) {
         $tries++
+        # 21 Nov 26 - RELEASE_1.1 372 (owner: "the buffer is never pasted into a password prompt"): keys typed before this prompt
+        # appeared are thrown away, not taken as the start of the password.  A console only; anywhere else the call is refused and skipped.
+        try { $Host.UI.RawUI.FlushInputBuffer() } catch { }
         $a = Read-Host $prompt -AsSecureString
         if ($a.Length -eq 0) {
             # AN EMPTY LINE IS A DELIBERATE ANSWER rather than a mistake: SD's own
@@ -414,6 +417,7 @@ function Set-SdsysPassword {
             Write-Host ''
             continue
         }
+        try { $Host.UI.RawUI.FlushInputBuffer() } catch { }   # RELEASE_1.1 372, as above
         $b = Read-Host 'Repeat new password' -AsSecureString
         Write-Host ''
         $pa = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($a))

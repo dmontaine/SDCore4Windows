@@ -54,6 +54,7 @@ if ($loop -and $Port -ne 4247) {
 $tcp = New-Object Net.Sockets.TcpClient
 try { $tcp.Connect($Vm, $Port); Say ('reach  : ' + $Vm + ':' + $Port + ' accepts a TCP connection') } catch { Bail ('nothing answers at ' + $Vm + ':' + $Port + ' - is the VM''s API open to the network (remote.api on)?') } finally { $tcp.Close() }
 
+try { $Host.UI.RawUI.FlushInputBuffer() } catch { }   # RELEASE_1.1 372: typed-ahead keys are thrown away, not taken into the password
 $ss = Read-Host -AsSecureString 'The VM''s SDSYS SD password'
 $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
 try { $pw = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
