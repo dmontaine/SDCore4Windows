@@ -6,6 +6,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 20 Nov 26 Windows port - RELEASE_1.1 366 (Linux b1ee36ff, S.279): the help lines are short enough for the box - screen text cuts a long line, and
+*           at 140 columns sit9 showed "explains the bo"; the F1 sentence moved to another line.
 * 20 Nov 26 Windows port - RELEASE_1.1 365 (Linux fc54d055, S.277): the N / C form's schedule label is "Schedule" (it was cut at 28 cells) and its entry 20 cells,
 *           so "default: daily 02:30" fits beside it; the forms of a schedule are said under the entries when the form opens (SCHED.FORMS; Linux 14114 is 15114).
 * 14 Nov 26 Windows port - from Linux c4ce87e9 (RELEASE_1.1 307): the help line and the Selected line say F6 changes box, not Tab.
@@ -624,13 +626,13 @@ wrap.lines:
 
 draw.help:
    if view = 2 then
-      screen text 'Up and Down move, PgUp and PgDn a page.  N makes a job, C (or Enter) changes it, D deletes it, R runs it now.  F1 or ? explains the box.' at h.x + 2,h.y + 1 width h.tw
+      screen text 'Up, Down, PgUp, PgDn move.  N makes a job, C or Enter changes it, D deletes it, R runs it now.' at h.x + 2,h.y + 1 width h.tw
       screen text 'Each change is shown as its command; you answer Run or Cancel.  A delete asks for the job' : "'s name." at h.x + 2,h.y + 2 width h.tw
-      screen text 'F5 reads the jobs again.  A goes back to the account commands.  Ctrl-Q leaves.' at h.x + 2,h.y + 3 width h.tw
+      screen text 'F1 or ? explains the box.  F5 reads the jobs again.  A goes back to the account commands.  Ctrl-Q leaves.' at h.x + 2,h.y + 3 width h.tw
       return
    end
-   screen text 'Up and Down move, PgUp and PgDn a page.  F6 changes box.  Enter in Commands allows or stops allowing.  F1 or ? explains the box.' at h.x + 2,h.y + 1 width h.tw
-   screen text 'Each change is shown as its command; you answer Run or Cancel.' at h.x + 2,h.y + 2 width h.tw
+   screen text 'Up, Down, PgUp, PgDn move.  F6 changes box.  Enter in Commands allows or stops allowing.' at h.x + 2,h.y + 1 width h.tw
+   screen text 'Each change is shown as its command; you answer Run or Cancel.  F1 or ? explains the box.' at h.x + 2,h.y + 2 width h.tw
    screen text 'F5 reads the lists again.  J shows the administrator' : "'s scheduled jobs.  Ctrl-Q leaves." at h.x + 2,h.y + 3 width h.tw
    return
 

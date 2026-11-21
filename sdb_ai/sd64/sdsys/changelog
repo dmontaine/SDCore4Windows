@@ -3,6 +3,14 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+20 Nov 26  TOOL.JOBS' HELP LINES FIT THE BOX.
+
+             What        - The three help lines at the foot of tool.jobs are shorter, so none is cut at the edge of the
+                           box on a 140-column screen ("F1 or ? explains the bo" was seen).
+             Why         - The lines were written with screen text, which cuts a line that is too long instead of
+                           wrapping it.
+             Does NOT    - Change a key or what a key does; the same words are all still there.
+
 20 Nov 26  AN SDSYS SESSION REACHED WITH SSH -T ... SD-SDSYS NO LONGER STOPS TAKING KEYS.
 
              What        - A session opened with ssh -t <user>@localhost sd-sdsys could take no key at all, not
