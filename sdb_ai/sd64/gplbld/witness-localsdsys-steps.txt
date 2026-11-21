@@ -53,8 +53,9 @@ choose a test password for this VM and keep it.  Then type these at the SD promp
 remote.api local
      (answer Y when it asks to restart SD)
 
-CREATE.ACCOUNT USER sdlocalv
-     (a NEW name: SD makes the Windows user itself and refuses one that already exists, so it cannot be sdlocalw.
+CREATE.ACCOUNT USER sdlocalv SSH
+     (SSH: its ssh sign-in, which is off unless typed - without it sshd answers "Permission denied" (sit9).
+      A NEW name: SD makes the Windows user itself and refuses one that already exists, so it cannot be sdlocalw.
       It asks for sdlocalv's password: choose a third test password and keep it; it is both its Windows and its SD password.)
 
 MODIFY.ACCOUNT sdlocalv SH-ON
