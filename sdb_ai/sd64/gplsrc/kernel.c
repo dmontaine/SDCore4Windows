@@ -55,7 +55,8 @@
  *           token says
  * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
  * 10 Nov 26 dm  S.125, found by AddressSanitizer: k_return() read the header of an I-type whose copy an abort had released.
- * 20 Nov 26 Windows port - RELEASE_1.1 360: the SD service's SDSYS session on two pipes is @TTY "sdsys-local" (it has no tty name).
+ * 20 Nov 26 Windows port - RELEASE_1.1 360: the SD service's SDSYS session on two pipes is @TTY "/dev/sdsyslocal" (it has no tty
+ *           name; sit9: a name without /dev/ made HOME refuse it).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -423,9 +424,12 @@ retry_login:
       /* 20 Nov 26 Windows port - RELEASE_1.1 360: the SD service's SDSYS session for a listed user's ssh login is on two pipes now,
          not a pseudo console (sdsvc/sdsyslocal.c), so stdin has no tty name; its terminal is the asker's, which refuses to start
          without one (sd_sdsysask.c).  LOGIN's local door asks K$TTY and refuses an empty one (no-terminal), as Linux 044271af.
-         Only a name: whether this is that session is K$SDSYS.LOCAL's question, asked again in LOGIN before this is read. */
+         Only a name: whether this is that session is K$SDSYS.LOCAL's question, asked again in LOGIN before this is read.
+         20 Nov 26 (sit9) - A /dev/ NAME: HOME, home_entry, EXIT and CPROC's sign-on and LOGTO take a session as a terminal only when
+         @TTY begins "/dev/" (tool_home:175); "sdsys-local" made HOME answer 12868 "home needs a terminal".  15 characters, the most
+         ttyname holds (MAX_TTYNAME_LEN); not a file anything opens. */
       if ((p == NULL) && (sdsyslocal_claim != NULL) && (connection_type == CN_PORT))
-        strcpy((char*)(my_uptr->ttyname), "sdsys-local");
+        strcpy((char*)(my_uptr->ttyname), "/dev/sdsyslocal");
     }
   }
 

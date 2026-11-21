@@ -16,7 +16,7 @@ WHAT IS CHECKED, without SD, an install or elevation:
       loopback sdsys SCRAM to the local door BEFORE remote.sdsys api's list is read (term 5), asks 'peer' then 'api', refuses with 12992.
       The kernel case reads each list FIRST.  Key 175 in keys.h and int$keys.h.  local.sdsys in voc_template only.  stage.py ships the helper.
       RELEASE_1.1 360 (20 Nov 2026): the service starts SDSYS with no console (two pipes, a three-handle list, CREATE_NO_WINDOW, LINES
-      and COLUMNS), sd.c makes it CN_PORT, kernel.c names its terminal "sdsys-local".
+      and COLUMNS), sd.c makes it CN_PORT, kernel.c names its terminal "/dev/sdsyslocal" (a /dev/ name: HOME needs one, sit9).
   MUTANTS  on copies only (the live files are hashed before and after): each check above is broken once and must go red.
 
 Exit 0 all passed, 1 a check failed, 2 it could not measure (no UCRT64 gcc or no PowerShell: NO TREE).
@@ -311,8 +311,14 @@ def pipe_problems(svc, sdc, kc):
         bad.append("the service keeps a copy of the process's ends (its exit would never end the screen's pipe)")
     if "if ((sdsyslocal_claim != NULL) && (connection_type == CN_CONSOLE) && !isatty(0))\n    connection_type = CN_PORT;" not in sdc:
         bad.append("sd.c does not make -SDSYSLOCAL on a non-terminal input CN_PORT")
-    if 'if ((p == NULL) && (sdsyslocal_claim != NULL) && (connection_type == CN_PORT))\n        strcpy((char*)(my_uptr->ttyname), "sdsys-local");' not in kc:
+    # 20 Nov 26 (sit9): the name must begin "/dev/" - HOME, home_entry, EXIT and CPROC take a session as a terminal only then
+    # (tool_home:175 refused "sdsys-local" with 12868) - and fit ttyname (MAX_TTYNAME_LEN 15)
+    m = re.search(r'if \(\(p == NULL\) && \(sdsyslocal_claim != NULL\) && \(connection_type == CN_PORT\)\)\n'
+                  r'        strcpy\(\(char\*\)\(my_uptr->ttyname\), "([^"]*)"\);', kc)
+    if not m:
         bad.append("kernel.c does not name the piped SDSYS session's terminal")
+    elif not m.group(1).startswith("/dev/") or len(m.group(1)) > 15:
+        bad.append("the piped session's terminal name '%s' does not begin /dev/ or is over 15 characters" % m.group(1))
     return bad
 
 
@@ -363,7 +369,12 @@ for name, which, old, new in (
         ("the size not given", "svc", 'L"COLUMNS=%d", cols', 'L"X=%d", cols'),
         ("the piped session left CN_CONSOLE", "sdc", "    connection_type = CN_PORT;\n\n  /* Start connection */", "    ;\n\n  /* Start connection */"),
         ("any -SDSYSLOCAL made CN_PORT, a terminal too", "sdc", "(connection_type == CN_CONSOLE) && !isatty(0))", "(connection_type == CN_CONSOLE))"),
-        ("the piped session has no terminal name", "kc", 'strcpy((char*)(my_uptr->ttyname), "sdsys-local");', ";")):
+        ("the piped session has no terminal name", "kc", 'strcpy((char*)(my_uptr->ttyname), "/dev/sdsyslocal");', ";"),
+        # anchored on the strcpy: the history block at the top of kernel.c also holds the name
+        ("the piped session's name without /dev/ (sit9: HOME refused)", "kc", 'my_uptr->ttyname), "/dev/sdsyslocal");',
+         'my_uptr->ttyname), "sdsys-local");'),
+        ("the piped session's name too long for ttyname", "kc", 'my_uptr->ttyname), "/dev/sdsyslocal");',
+         'my_uptr->ttyname), "/dev/sdsys-local");')):
     src = {"svc": svc, "sdc": sdc, "kc": kc}
     if old not in src[which]:
         row(False, "MUTANT control: the text the mutant changes is in the live file (%s)" % name)
