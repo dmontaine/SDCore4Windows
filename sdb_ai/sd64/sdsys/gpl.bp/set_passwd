@@ -164,6 +164,8 @@ end
    ps := @fm : '} catch { exit 1 }'
    ps := @fm : 'exit 0'
 
+* 21 Nov 26 Windows port - RELEASE_1.1 373: the password is in, and Windows takes a few seconds to set it; say so first (owner's rule of 12 Nov).
+   display sysmsg(12944)   ;* Making the change (a few seconds)...
    stat = ps_script(ps)
    safe.pw = '' ; ps = ''
 

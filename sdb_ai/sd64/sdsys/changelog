@@ -3,6 +3,17 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+21 Nov 26  MAKING A WINDOWS ACCOUNT SAYS WHAT IT IS DOING BEFORE IT WAITS, AND THE INSTALLER'S PASSWORD PROMPT IGNORES KEYS TYPED AHEAD.
+
+             What        - CREATE.ACCOUNT USER (and so REMOTE.SDSYS ON, the first time) prints "Making the change (a few
+                           seconds)..." before it makes the Windows user, and again after the new password is typed and
+                           before Windows sets it; they were silent for about ten seconds.  The password prompts of the
+                           installer's closing window (the SDSYS password and its repeat) throw away keys typed before
+                           they appeared, so they are not taken as the start of the password.
+             Why         - A wait over two seconds should say what it is for; a password should be only what is typed
+                           at its prompt.
+             Does NOT    - Change the prompts inside SD: those are changed separately.
+
 21 Nov 26  UNINSTALLING AND KEEPING YOUR DATA NO LONGER LOSES WHO MAY USE SSH, THE API, FILES AND THE AI, OR YOUR SCHEDULED JOBS.
 
              What        - When you keep the database and the Windows accounts, the groups that say which account

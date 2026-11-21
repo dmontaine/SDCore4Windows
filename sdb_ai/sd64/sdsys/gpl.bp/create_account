@@ -518,6 +518,9 @@ PW.REUSE.AGAIN:
          if system(1001) = 1 then
            crt "Warning: **** Case Inversion is not active during password entry! ****"
          end
+* 21 Nov 26 Windows port - RELEASE_1.1 373 (VM sit12, remote.sdsys on took about 10 s with no word before the wait; the owner's rule of
+*   12 Nov: anything over 2 s says first what it is doing).  create_user runs PowerShell, a few seconds.
+         display sysmsg(12944)   ;* Making the change (a few seconds)...
          if not(create_user(acc.uname)) then
            * create user failed
 * 21 Aug 26 Windows port - THE MINUS WAS MISSING, and it is the one error exit
