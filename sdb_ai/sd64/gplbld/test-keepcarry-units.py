@@ -12,6 +12,9 @@
 #      touches the definitions; KeptJobCount counts only plain files that are not radmin- or dot names.
 #   R  the uninstall notes that remote administration was on (SaveRadminNote: only the word on, HKLM64 beside the API's note) BEFORE
 #      RemoveRemoteAdmin takes the state file; the note is cleared when no database survives and spent by the reinstall whatever it said.
+#   P  the PATH box (RELEASE_1.1 371): the uninstall notes the word off when SD's folder was not on the system PATH (SavePathNote, before
+#      RemoveFromPath, HKLM64 beside the other notes); the wizard unticks the box to match; the note is spent by every install and cleared
+#      where no database survives.
 #   M  the closing page says what the reinstall found: the groups kept or recreated, the jobs kept and not scheduled, remote administration
 #      off and once on - and nothing about any of it on an upgrade, where no uninstall ran.
 #
@@ -71,7 +74,8 @@ def rows_for(iss_raw, jobs_raw):
 
     # ---- the null case: the pieces are really there ---------------------------------------------------------------------------
     names = ["RemoveSdGroups", "RemoveRouteGroups", "OfferAccountRemoval", "CurUninstallStepChanged", "RemoveScheduledJobs",
-             "SaveRadminNote", "RadminNoteClear", "RadminNoteSaysOn", "KeptJobCount", "InitializeSetup"]
+             "SaveRadminNote", "RadminNoteClear", "RadminNoteSaysOn", "KeptJobCount", "InitializeSetup",
+             "SavePathNote", "PathNoteClear", "PathNoteSaysOff", "InitializeWizard"]
     missing = [n for n in names if proc(code, n) == ""]
     ck("N0", "sd.iss holds every procedure this guard reads (a guard that read nothing would pass)", not missing and len(code) > 100000, "missing: %s" % missing)
 
@@ -127,6 +131,22 @@ def rows_for(iss_raw, jobs_raw):
        in_order(first, "RemoveScheduledJobs;", "SaveRadminNote;", "RemoveRemoteAdmin;"), "")
     ck("R3", "the note is cleared where no database survives: the tree-gone path and the database-deleted path",
        "RadminNoteClear;" in tg and re.search(r"RemoveSdUsersGroup;\s*\n\s*RadminNoteClear;", cus[cus.find("if UsersGroupGoes then"):]) is not None, "")
+
+    # ---- P: the PATH box after a Keep (RELEASE_1.1 371, the owner's rule "a Keep must restore the system exactly") ----------------------
+    spn = proc(code, "SavePathNote")
+    ck("P1", "SavePathNote notes the word off, in HKLM64 beside the other notes, only when the system PATH was read and SD's folder was not on it; otherwise it clears the note",
+       "RegQueryStringValue(HKLM, 'SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment', 'Path', Path)" in spn
+       and "';') = 0) then" in spn and "RegWriteStringValue(HKLM64, ApiNoteKey, 'Path', 'off')" in spn and "PathNoteClear;" in spn
+       and "RegDeleteValue(HKLM64, ApiNoteKey, 'Path')" in proc(code, "PathNoteClear")
+       and "(V = 'off')" in proc(code, "PathNoteSaysOff") and "RegQueryStringValue(HKLM64, ApiNoteKey, 'Path', V)" in proc(code, "PathNoteSaysOff"), "")
+    ck("P2", "at usUninstall the PATH is noted BEFORE RemoveFromPath takes SD's folder off it",
+       in_order(first, "SavePathNote;", "RemoveFromPath;"), "")
+    iw = proc(code, "InitializeWizard")
+    ck("P3", "the wizard unticks the PATH box when the note says off, before the tasks page, and ApiNoteKey is declared above it",
+       re.search(r"if PathNoteSaysOff then\s*\n\s*WizardSelectTasks\('!addtopath'\);", iw) is not None
+       and code.find("function ApiNoteKey") < code.find("procedure InitializeWizard") and code.find("function PathNoteSaysOff") < code.find("procedure InitializeWizard"), "")
+    ck("P4", "the PATH note is spent by every install and cleared where no database survives, each beside RadminNoteClear (three places)",
+       len(re.findall(r"RadminNoteClear;\s*\n\s*PathNoteClear;", code)) == 3, "%d" % len(re.findall(r"RadminNoteClear;\s*\n\s*PathNoteClear;", code)))
 
     # ---- M -------------------------------------------------------------------------------------------------------------------------
     ck("M1", "Setup samples whether sdssh existed before any file was written (net localgroup sdssh, exit 0), next to DataTreeWasAbsent",
@@ -207,6 +227,13 @@ MUTANTS = [
     ("the note is written after RemoveRemoteAdmin", "iss", "    SaveRadminNote;   { 21 Nov 26 - RELEASE_1.1 369(a): BEFORE RemoveRemoteAdmin, which takes the state file away }\n    RemoveRemoteAdmin;",
      "    RemoveRemoteAdmin;\n    SaveRadminNote;", "R2"),
     ("the tree-gone path keeps the note", "iss", "    RadminNoteClear;   { 21 Nov 26 - RELEASE_1.1 369(a): nor the accounts remote administration concerned }\n", "", "R3"),
+    ("the PATH is noted off whatever it held", "iss", "';') = 0) then\n    RegWriteStringValue(HKLM64, ApiNoteKey, 'Path', 'off')", "';') >= 0) then\n    RegWriteStringValue(HKLM64, ApiNoteKey, 'Path', 'off')", "P1"),
+    ("the PATH note is written after RemoveFromPath", "iss", "    SavePathNote;   { 21 Nov 26 - RELEASE_1.1 371: BEFORE RemoveFromPath, which takes the entry away }\n    RemoveFromPath;",
+     "    RemoveFromPath;\n    SavePathNote;", "P2"),
+    ("the wizard selects the PATH box instead of unticking it", "iss", "WizardSelectTasks('!addtopath');", "WizardSelectTasks('addtopath');", "P3"),
+    ("the wizard reads the PATH note from plain HKLM", "iss", "RegQueryStringValue(HKLM64, ApiNoteKey, 'Path', V)", "RegQueryStringValue(HKLM, ApiNoteKey, 'Path', V)", "P1"),
+    ("an install keeps the PATH note", "iss", "      PathNoteClear;   { 21 Nov 26 - RELEASE_1.1 371: spent by any install; the wizard already read it }\n", "", "P4"),
+    ("the tree-gone path keeps the PATH note", "iss", "    PathNoteClear;   { 21 Nov 26 - RELEASE_1.1 371: a reinstall is a fresh install, the PATH box at its default }\n    Exit;", "    Exit;", "P4"),
     ("Setup stops sampling the group", "iss", "RouteGroupsKept := Exec(", "RouteGroupsKept := not Exec(", "M1"),
     ("the box claims recreation whatever Setup found", "iss", "        if RouteGroupsKept then\n          AccessMsg :=\n            'Your database was kept, and so were its Windows groups:' + #13#10#13#10\n        else\n",
      "        if False then\n          AccessMsg :=\n            'Your database was kept, and so were its Windows groups:' + #13#10#13#10\n        else\n", "M2"),

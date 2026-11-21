@@ -2524,8 +2524,36 @@ end;
    ShouldSkipPage went with it - it existed only to hide the mode page on an
    upgrade.  Recorded in PRE_RELEASE 75. *)
 
+{ Where the installer keeps what an uninstall noted for the reinstall that follows it: the API's open rule (RELEASE_1.1 283), remote
+  administration (369) and the PATH box (371).  HKLM64, which only an administrator can write; the long reason is at ApiNoteSaysOpen. }
+function ApiNoteKey: String;
+begin
+  Result := 'SOFTWARE\SD\SetupNotes';
+end;
+
+{ 21 Nov 26 - RELEASE_1.1 371, the owner's rule "a Keep must restore the system exactly": the PATH box.  An uninstall always takes SD's
+  folder off the system PATH (RemoveFromPath), so a reinstall that kept the database asked the box again, ticked, and an administrator
+  who had left SD off the PATH got it on unless he unticked it again.  The uninstall now notes the one case that differs from the
+  box's default (SD's folder was NOT on PATH: the word off, SavePathNote) and this wizard unticks the box to match.  The box is still
+  shown, so the administrator can change his mind.  Only the word off does anything; the note is spent by any install. }
+function PathNoteSaysOff: Boolean;
+var
+  V: String;
+begin
+  Result := RegQueryStringValue(HKLM64, ApiNoteKey, 'Path', V) and (V = 'off');
+end;
+
+procedure PathNoteClear;
+begin
+  RegDeleteValue(HKLM64, ApiNoteKey, 'Path');
+end;
+
 procedure InitializeWizard;
 begin
+  { 21 Nov 26 - RELEASE_1.1 371: the PATH box as the administrator had it before an uninstall that kept the database (see PathNoteSaysOff). }
+  if PathNoteSaysOff then
+    WizardSelectTasks('!addtopath');
+
   { 1 Sep 26 - MORE AIR BETWEEN THE TASKS.  Owner, looking at the wizard: the
     rows ran together, worst where the wrapped ssh label met its child box.  A
     taller minimum row height separates them; taken from the control's own value
@@ -3026,10 +3054,7 @@ end;
   WHERE: HKLM64, which only an administrator can write.  A note in the data tree would let any SD user, who may modify everything
   there, open the API by writing one word.  HKLM64 and not HKLM because Setup is a 32-bit process (see SdWasInstalled).
   The note is removed by whichever comes first: this install, or an uninstall that leaves no sd.conf. }
-function ApiNoteKey: String;
-begin
-  Result := 'SOFTWARE\SD\SetupNotes';
-end;
+{ ApiNoteKey itself is declared above InitializeWizard (21 Nov 26, RELEASE_1.1 371: the wizard reads the PATH note before the tasks page). }
 
 function ApiNoteSaysOpen: Boolean;
 var
@@ -3072,6 +3097,20 @@ begin
     RegWriteStringValue(HKLM64, ApiNoteKey, 'RemoteAdmin', 'on')
   else
     RadminNoteClear;
+end;
+
+{ 21 Nov 26 - RELEASE_1.1 371: at usUninstall, BEFORE RemoveFromPath takes the entry.  Notes off only when the system PATH could be read and SD's
+  folder was not on it; on it, or unreadable, the note is cleared and the reinstall's box keeps its default (ticked). }
+procedure SavePathNote;
+var
+  Path: String;
+begin
+  Path := '';
+  if RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment', 'Path', Path) and
+     (Pos(';' + Lowercase(ExpandConstant('{app}\usr\bin')) + ';', ';' + Lowercase(Path) + ';') = 0) then
+    RegWriteStringValue(HKLM64, ApiNoteKey, 'Path', 'off')
+  else
+    PathNoteClear;
 end;
 
 { How many scheduled-job definitions a kept data tree holds: the plain files of sd-jobs, less the remote administration broker's one-shot
@@ -6179,6 +6218,7 @@ begin
             'DO THESE STEPS:' + #13#10#13#10 + KeptMsg;
       end;
       RadminNoteClear;
+      PathNoteClear;   { 21 Nov 26 - RELEASE_1.1 371: spent by any install; the wizard already read it }
       WarnReport := '';
       if (not TrueUpgrade) and (not RouteGroupsKept) and (AccessMsg <> '') then
       begin
@@ -7043,6 +7083,7 @@ begin
     RemoveScheduledJobs;
     SaveRadminNote;   { 21 Nov 26 - RELEASE_1.1 369(a): BEFORE RemoveRemoteAdmin, which takes the state file away }
     RemoveRemoteAdmin;
+    SavePathNote;   { 21 Nov 26 - RELEASE_1.1 371: BEFORE RemoveFromPath, which takes the entry away }
     RemoveFromPath;
     Exit;
   end;
@@ -7116,6 +7157,7 @@ begin
     RemoveSdUsersGroup;
     ApiNoteClear;   { 14 Nov 26 - RELEASE_1.1 283: no tree, so no sd.conf to keep the API's state for }
     RadminNoteClear;   { 21 Nov 26 - RELEASE_1.1 369(a): nor the accounts remote administration concerned }
+    PathNoteClear;   { 21 Nov 26 - RELEASE_1.1 371: a reinstall is a fresh install, the PATH box at its default }
     Exit;
   end;
 
@@ -7239,6 +7281,7 @@ begin
     RemoveRouteGroups;
     RemoveSdUsersGroup;
     RadminNoteClear;   { 21 Nov 26 - RELEASE_1.1 369(a): and so are the accounts remote administration concerned }
+    PathNoteClear;   { 21 Nov 26 - RELEASE_1.1 371: a reinstall is a fresh install, the PATH box at its default }
   end;
 end;
 

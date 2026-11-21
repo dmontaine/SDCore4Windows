@@ -15,7 +15,9 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            and checks each definition and the uninstall's note first.  The closing page says what
                            came back.  Anything that could not come back is at the top of that page in bold red with
                            the reason and the exact steps: sign in to Windows as SDSYS, start SD Core and type one
-                           SET.JOB CHANGE line for each job, or REMOTE.SDSYS ON.
+                           SET.JOB CHANGE line for each job, or REMOTE.SDSYS ON.  The "Add SD Core to the system PATH"
+                           box of the reinstall starts as you had it: if SD's folder was not on the PATH when you
+                           uninstalled, the box starts cleared (it is still there to change).
              Why         - What an administrator set should not change because SD was removed and installed again.
              Does NOT    - Keep the group that denies the console and Remote Desktop to accounts confined to SD; it
                            is removed, as before.  Run any command as SDSYS for anyone: the helper does one fixed job.
