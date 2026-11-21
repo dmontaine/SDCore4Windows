@@ -211,7 +211,7 @@ def checks(att, iss, mod, keys):
         "task text: %s" % (iss[task.start():task.start() + 300] if task else "absent"))
     row("S10b the box is SHOWN in the wizard (no Check: on the task), and the wizard is made taller so it is not below the fold (RELEASE_1.1 185)",
         # 10 Nov 26: 150, Inno's most, for the start box below it (RELEASE_1.1 210); 145 was RELEASE_1.1 185's height
-        task is not None and "Check:" not in iss[task.start():task.end()] and re.search(r"^WizardSizePercent=100,150\s*$", iss, re.M) is not None,
+        task is not None and "Check:" not in iss[task.start():task.end()] and re.search(r"^WizardSizePercent=140,150\s*$", iss, re.M) is not None,
         "task text: %s" % (iss[task.start():task.end()] if task else "absent"))
     ps = between(iss, "function AttachInstallerAccount", "(* 25 Oct 26 - THE SHARED ACCOUNT")
     row("S11 the installer passes -OpenGates only under WizardIsTaskSelected('opengates')",
@@ -266,7 +266,7 @@ MUTANTS = [
     ("sdaiusers is not read back (13 Nov 26, RELEASE_1.1 246)", "att", "; 'sdaiusers' = 'ai-on' }", " }"),
     ("register field 18 is not read back", "att", ", @(18, 'pins-on'), @(19", ", @(19"),      # 13 Nov 26: field 19 follows it since 10 Nov
     ("the box is hidden from the wizard again", "iss", 'GroupDescription: "5)  SD Core account:"; Flags: unchecked', 'GroupDescription: "5)  SD Core account:"; Flags: unchecked; Check: WizardSilent'),
-    ("the wizard is back to its old height", "iss", "WizardSizePercent=100,150\n", ""),      # 13 Nov 26: 150 since 10 Nov (RELEASE_1.1 210)
+    ("the wizard is back to its old height", "iss", "WizardSizePercent=140,150\n", ""),      # 13 Nov 26: 150 since 10 Nov (RELEASE_1.1 210); 140 wide since 21 Nov (375)
     ("a wrong register field", "att", "@(10, 'voc-on')", "@(9, 'voc-on')"),
     ("the success is not judged", "att", "if ($closed.Count -eq 0) {", "if ($true) {"),
     ("a missing group is not judged", "att", "if ((-not $in) -and ($closed -notcontains $GateGroups[$g])) { $null = $closed.Add($GateGroups[$g]) }", ""),

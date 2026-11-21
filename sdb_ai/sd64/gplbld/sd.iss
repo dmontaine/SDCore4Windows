@@ -109,7 +109,10 @@ WizardStyle=modern
 ; 8 Nov 26 - taller, so the tasks page shows every box without scrolling once the opengates box is back (RELEASE_1.1 185's stated remedy).
 ; 10 Nov 26 - 150, Inno's most (170 was refused: "Value of WizardSizePercent is invalid"), for the start box (RELEASE_1.1 210): at 145 the
 ;   owner saw Home screen and not Command prompt, below the bottom of the list.  The choice is now ONE box under 5), so one line more, not three.
-WizardSizePercent=100,150
+; 21 Nov 26 - 140 wide (RELEASE_1.1 375, the owner on VM sit12: "Can the finish dialog be made wider to reduce the scroll" - a Keep reinstall's
+;   closing page needed three screens).  The text column of every page and of the closing report (ShowFinishedReport reads the page's own
+;   width) grows with it; no page of this script sets a fixed width.
+WizardSizePercent=140,150
 
 ; 02 Sep 26 - WINDOWS 10 AND 11, NOTHING EARLIER.  Owner's ruling, 2 Sep 2026:
 ; "I don't believe in supporting versions no longer supported by the vendor",
@@ -1357,8 +1360,9 @@ var
     accounts, so the closing box must not say they were recreated when they were not.  Sampled with DataTreeWasAbsent. }
   RouteGroupsKept: Boolean;
   { 17 Nov 26 - four-version audit round 3 (P-1435, P-2329), Linux's 14 Nov 26 "an upgrade does not ask where sessions start":
-    the data tree is kept from a release before the home screen (W1.1-3 and earlier: its newvoc has no set.start.default),
-    where every session started at the prompt.  Sampled with DataTreeWasAbsent, before [Files] replaces newvoc. }
+    the data tree is kept from a release before the home screen (W1.1-3 and earlier: no gpl.bp.out\tool_home; 21 Nov 26, RELEASE_1.1 376:
+    NOT "its newvoc has no set.start.default", which no tree's newvoc has), where every session started at the prompt.  Sampled with
+    DataTreeWasAbsent, before [Files] replaces anything. }
   DataTreeBeforeHome: Boolean;
   SshWasAbsent: Boolean;
   { 13 Nov 26 - RELEASE_1.1 213.  THE API RULE IS MADE BEFORE SD STARTS.  The service entry in [Run] starts SD,
@@ -1477,6 +1481,9 @@ var
     wizard's last page needs has to outlive the step that learned it. }
   FinishReport: String;
   FinishReportShown: Boolean;
+  { 21 Nov 26 - RELEASE_1.1 371: the PATH box is unticked ONCE, the first time the tasks page is shown (CurPageChanged), so going back to
+    the page after the administrator ticked it again does not undo his choice. }
+  PathBoxApplied: Boolean;
   { 20 Sep 26 - THE OTHER TWO PIECES OF THE FINISHED PAGE, split out of what
     used to be all of FinishReport so the page can hold his spec's three
     fixed status lines and "accounts exist" paragraph in fixed positions
@@ -1814,9 +1821,14 @@ begin
   { 21 Nov 26 - RELEASE_1.1 369(b): net localgroup answers 0 for a group that exists and 2 for one that does not. }
   RouteGroupsKept := Exec(ExpandConstant('{sys}\net.exe'), 'localgroup sdssh', '', SW_HIDE, ewWaitUntilTerminated, GroupCode) and
                      (GroupCode = 0);
+  { 21 Nov 26 - RELEASE_1.1 376 (VM sit12: a fresh install left at the home screen, Keep, reinstall: start.default became terminal).  The
+    marker was newvoc\set.start.default, which THIS release's newvoc never carries either (SET.START.DEFAULT is SDSYS's own verb, in
+    voc_template only; test-home-units H15), so every tree read as one from before the home screen.  The marker is now the home screen's
+    own program, as in Linux's deletesdcore.sh: its compiled object (gpl.bp.out\tool_home) or, in an older development tree, its source. }
   DataTreeBeforeHome := (not DataTreeWasAbsent) and
                         DirExists(ExpandConstant('{#DataDir}\sdsys\newvoc')) and
-                        not FileExists(ExpandConstant('{#DataDir}\sdsys\newvoc\set.start.default'));
+                        not FileExists(ExpandConstant('{#DataDir}\sdsys\gpl.bp.out\tool_home')) and
+                        not FileExists(ExpandConstant('{#DataDir}\sdsys\gpl.bp\tool_home'));
 
   (* 31 Aug 26 - IS SD INSTALLED RIGHT NOW?  PRE_RELEASE_FIXES 88.  Sampled
      here and never again, because Inno writes this very key at the end of the
@@ -2550,9 +2562,9 @@ end;
 
 procedure InitializeWizard;
 begin
-  { 21 Nov 26 - RELEASE_1.1 371: the PATH box as the administrator had it before an uninstall that kept the database (see PathNoteSaysOff). }
-  if PathNoteSaysOff then
-    WizardSelectTasks('!addtopath');
+  { 21 Nov 26 - RELEASE_1.1 371: the PATH box is NOT unticked here.  Measured on VM sit12: the uninstall had written Path=off and the
+    reinstall's box still started ticked, because Inno fills the task list after InitializeWizard has returned, so a WizardSelectTasks
+    call made here changes nothing.  It is made in CurPageChanged, at wpSelectTasks, where the list exists. }
 
   { 1 Sep 26 - MORE AIR BETWEEN THE TASKS.  Owner, looking at the wizard: the
     rows ran together, worst where the wrapped ssh label met its child box.  A
@@ -5065,7 +5077,10 @@ var
   Para: array[0..63] of TNewStaticText;
   Memo: TNewMemo;
   Rest, Chunk, Plain, AfterText: String;
-  N, I, P, Y, TextW, GapY, MaxH, L, T, KeepN, WarnBottom: Integer;
+  N, I, P, Y, TextW, GapY, MaxH, L, T, KeepN, WarnBottom, WarnTop, WarnH, Avail, WarnLabelsFrom: Integer;
+  WarnText: String;
+  WarnSeen: Boolean;
+  WarnMemo: TNewMemo;
 begin
   { 21 Nov 26 - the owner's rule (see WarnReport): a paragraph that starts with !! is a WARNING and is drawn bold and red.  The marks are
     taken out of what goes to the log and to the scrolling memo, whose plain text keeps the warning's own capital letters.
@@ -5075,6 +5090,10 @@ begin
     into the scrolling memo, below them; the whole page goes to the memo only if the warnings alone take more than 60 percent of it. }
   KeepN := 0;
   WarnBottom := 0;
+  WarnTop := 0;
+  WarnLabelsFrom := 0;
+  WarnText := '';
+  WarnSeen := False;
   AfterText := '';
   Plain := Msg;
   StringChange(Plain, '!!', '');
@@ -5134,6 +5153,17 @@ begin
     if Copy(Chunk, 1, 2) = '!!' then
     begin
       Chunk := Copy(Chunk, 3, Length(Chunk));
+      { 21 Nov 26 - RELEASE_1.1 370: remember where the first warning starts (the labels above it stay) and every paragraph from there to
+        the last warning, for the red memo that takes over when the warnings alone are most of the page. }
+      if not WarnSeen then
+      begin
+        WarnSeen := True;
+        WarnTop := Y;
+        WarnLabelsFrom := N;        { this label is the first warning's }
+      end
+      else
+        WarnText := WarnText + AfterText;      { a plain paragraph between two warnings }
+      WarnText := WarnText + Chunk + #13#10#13#10;
       Para[N].Font.Style := [fsBold];
       Para[N].Font.Color := clRed;
       Para[N].Caption := Chunk;
@@ -5175,6 +5205,46 @@ begin
       Memo.WordWrap := True;
       Memo.ScrollBars := ssVertical;
       Memo.Text := Trim(AfterText);
+    end
+    else if (KeepN > 0) and (Rest = '') then
+    begin
+      { 21 Nov 26 - RELEASE_1.1 370 (VM sit12, round 2: a damaged job definition's warning block was right in its words, but the page fell
+        back to ONE plain memo, no red, because the warnings alone were over 60 percent of this small page - the red was lost exactly when
+        it mattered).  The warnings are drawn in their OWN memo, bold and red, which scrolls if it must; what comes before the first warning
+        stays as labels above it; what comes after the last one is a plain memo below.  If nothing comes after, the red memo takes the
+        rest of the page, otherwise six tenths of it. }
+      for I := WarnLabelsFrom to N - 1 do
+        Para[I].Free();
+      Avail := MaxH - WarnTop;
+      if Trim(AfterText) = '' then
+        WarnH := Avail
+      else
+        WarnH := (Avail * 6) div 10;
+      WarnMemo := TNewMemo.Create(WizardForm);
+      WarnMemo.Parent := Page;
+      WarnMemo.Left := L;
+      WarnMemo.Top := T + WarnTop;
+      WarnMemo.Width := TextW;
+      WarnMemo.Height := WarnH;
+      WarnMemo.ReadOnly := True;
+      WarnMemo.WordWrap := True;
+      WarnMemo.ScrollBars := ssVertical;
+      WarnMemo.Font.Style := [fsBold];
+      WarnMemo.Font.Color := clRed;
+      WarnMemo.Text := Trim(WarnText);
+      if Trim(AfterText) <> '' then
+      begin
+        Memo := TNewMemo.Create(WizardForm);
+        Memo.Parent := Page;
+        Memo.Left := L;
+        Memo.Top := T + WarnTop + WarnH + GapY;
+        Memo.Width := TextW;
+        Memo.Height := Avail - WarnH - GapY;
+        Memo.ReadOnly := True;
+        Memo.WordWrap := True;
+        Memo.ScrollBars := ssVertical;
+        Memo.Text := Trim(AfterText);
+      end;
     end
     else
     begin
@@ -6352,6 +6422,16 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
+  { 21 Nov 26 - RELEASE_1.1 371: the PATH box as the administrator had it before an uninstall that kept the database (see PathNoteSaysOff).
+    Here, not in InitializeWizard: the task list exists only once the tasks page is shown.  Once (PathBoxApplied): coming back to the page
+    must not undo a box he ticked again. }
+  if (CurPageID = wpSelectTasks) and not PathBoxApplied then
+  begin
+    PathBoxApplied := True;
+    if PathNoteSaysOff then
+      WizardSelectTasks('!addtopath');
+  end;
+
   { 22 Aug 26 - THE FINISHED PAGE SAYS WHAT HAPPENS NEXT.  Owner, looking at
     it: "the last pane of the wizard doesn't say anything about the script that
     is going to run after the user clicks Finish".  It said Inno's stock text -

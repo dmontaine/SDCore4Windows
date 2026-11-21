@@ -13,7 +13,8 @@
 #   R  the uninstall notes that remote administration was on (SaveRadminNote: only the word on, HKLM64 beside the API's note) BEFORE
 #      RemoveRemoteAdmin takes the state file; the note is cleared when no database survives and spent by the reinstall whatever it said.
 #   P  the PATH box (RELEASE_1.1 371): the uninstall notes the word off when SD's folder was not on the system PATH (SavePathNote, before
-#      RemoveFromPath, HKLM64 beside the other notes); the wizard unticks the box to match; the note is spent by every install and cleared
+#      RemoveFromPath, HKLM64 beside the other notes); the wizard unticks the box to match, once, where the task list exists (CurPageChanged
+#      at wpSelectTasks, not InitializeWizard); the note is spent by every install and cleared
 #      where no database survives.
 #   M  the closing page says what the reinstall found: the groups kept or recreated, the jobs kept and not scheduled, remote administration
 #      off and once on - and nothing about any of it on an upgrade, where no uninstall ran.
@@ -75,7 +76,7 @@ def rows_for(iss_raw, jobs_raw):
     # ---- the null case: the pieces are really there ---------------------------------------------------------------------------
     names = ["RemoveSdGroups", "RemoveRouteGroups", "OfferAccountRemoval", "CurUninstallStepChanged", "RemoveScheduledJobs",
              "SaveRadminNote", "RadminNoteClear", "RadminNoteSaysOn", "KeptJobCount", "InitializeSetup",
-             "SavePathNote", "PathNoteClear", "PathNoteSaysOff", "InitializeWizard"]
+             "SavePathNote", "PathNoteClear", "PathNoteSaysOff", "InitializeWizard", "CurPageChanged"]
     missing = [n for n in names if proc(code, n) == ""]
     ck("N0", "sd.iss holds every procedure this guard reads (a guard that read nothing would pass)", not missing and len(code) > 100000, "missing: %s" % missing)
 
@@ -142,9 +143,11 @@ def rows_for(iss_raw, jobs_raw):
     ck("P2", "at usUninstall the PATH is noted BEFORE RemoveFromPath takes SD's folder off it",
        in_order(first, "SavePathNote;", "RemoveFromPath;"), "")
     iw = proc(code, "InitializeWizard")
-    ck("P3", "the wizard unticks the PATH box when the note says off, before the tasks page, and ApiNoteKey is declared above it",
-       re.search(r"if PathNoteSaysOff then\s*\n\s*WizardSelectTasks\('!addtopath'\);", iw) is not None
-       and code.find("function ApiNoteKey") < code.find("procedure InitializeWizard") and code.find("function PathNoteSaysOff") < code.find("procedure InitializeWizard"), "")
+    cpc = proc(code, "CurPageChanged")
+    ck("P3", "the wizard unticks the PATH box when the note says off, ONCE, at wpSelectTasks in CurPageChanged (the task list does not exist in InitializeWizard: VM sit12), and PathNoteSaysOff is declared above it",
+       re.search(r"if \(CurPageID = wpSelectTasks\) and not PathBoxApplied then\s*\n\s*begin\s*\n\s*PathBoxApplied := True;\s*\n\s*if PathNoteSaysOff then\s*\n\s*WizardSelectTasks\('!addtopath'\);\s*\n\s*end;", cpc) is not None
+       and "WizardSelectTasks" not in iw and "PathBoxApplied: Boolean;" in code
+       and code.find("function PathNoteSaysOff") < code.find("procedure CurPageChanged"), "")
     ck("P4", "the PATH note is spent by every install and cleared where no database survives, each beside RadminNoteClear (three places)",
        len(re.findall(r"RadminNoteClear;\s*\n\s*PathNoteClear;", code)) == 3, "%d" % len(re.findall(r"RadminNoteClear;\s*\n\s*PathNoteClear;", code)))
 
@@ -190,8 +193,20 @@ def rows_for(iss_raw, jobs_raw):
        and "for I := KeepN to N - 1 do" in srep and "Memo.Top := T + WarnBottom + GapY;" in srep
        and "Memo.Height := MaxH - WarnBottom - GapY;" in srep and "Memo.Text := Trim(AfterText);" in srep
        and srep.rfind("AfterText := '';") > srep.find("WarnBottom := Y - GapY;"), "")
-    ck("W8", "the whole page goes to the plain memo only when there is no warning, more than 64 paragraphs, or the warnings alone take over 60 percent of the page",
-       "if (KeepN > 0) and (Rest = '') and (WarnBottom * 10 <= MaxH * 6) then" in srep and "for I := 0 to N - 1 do" in srep, "")
+    ck("W8", "the labels-and-memo layout is used only while the warnings are at most 60 percent of the page; the whole page goes to the plain memo only when there is no warning or more than 64 paragraphs",
+       "if (KeepN > 0) and (Rest = '') and (WarnBottom * 10 <= MaxH * 6) then" in srep and "for I := 0 to N - 1 do" in srep
+       and srep.find("else if (KeepN > 0) and (Rest = '') then") > srep.find("(WarnBottom * 10 <= MaxH * 6)")
+       and srep.find("else if (KeepN > 0) and (Rest = '') then") < srep.find("for I := 0 to N - 1 do"), "")
+    ck("W9", "when the warnings alone are over 60 percent of the page they get their OWN memo, bold and red, from the first warning's top (RELEASE_1.1 370, VM sit12 round 2: it fell back to one plain memo), the labels from the first warning are freed, what follows is a plain memo under it, and the red memo takes the whole rest if nothing follows, else six tenths",
+       "WarnLabelsFrom := N;" in srep and "WarnTop := Y;" in srep and "WarnText := WarnText + AfterText;" in srep and "WarnText := WarnText + Chunk + #13#10#13#10;" in srep
+       and "for I := WarnLabelsFrom to N - 1 do" in srep and "Avail := MaxH - WarnTop;" in srep
+       and "if Trim(AfterText) = '' then\n        WarnH := Avail\n      else\n        WarnH := (Avail * 6) div 10;" in srep
+       and "WarnMemo.Top := T + WarnTop;" in srep and "WarnMemo.Font.Style := [fsBold];" in srep and "WarnMemo.Font.Color := clRed;" in srep
+       and "WarnMemo.Text := Trim(WarnText);" in srep and "Memo.Top := T + WarnTop + WarnH + GapY;" in srep
+       and "Memo.Height := Avail - WarnH - GapY;" in srep and "Memo.Text := Trim(AfterText);" in srep, "")
+    ck("B1", "DataTreeBeforeHome reads the home screen's own program (gpl.bp.out\\tool_home, or gpl.bp\\tool_home in a development tree) and never newvoc\\set.start.default, which no newvoc carries (RELEASE_1.1 376)",
+       "not FileExists(ExpandConstant('{#DataDir}\\sdsys\\gpl.bp.out\\tool_home'))" in isetup and "not FileExists(ExpandConstant('{#DataDir}\\sdsys\\gpl.bp\\tool_home'))" in isetup
+       and "set.start.default" not in isetup, "")
     # ---- S: the owner's rule (chat, 21 Nov 26): what cannot be put back is warned about during the install WITH THE EXACT STEPS -------
     ck("S1", "the jobs line and the remote administration line each give the steps (sign in to Windows as SDSYS, start SD Core, type), the jobs' lines from KeptJobSteps and the other the command remote.sdsys on",
        code.count("sign in to Windows as SDSYS, start SD Core and type:") == 2 and "+ KeptJobSteps + #13#10#13#10;" in code
@@ -231,6 +246,18 @@ MUTANTS = [
     ("the PATH note is written after RemoveFromPath", "iss", "    SavePathNote;   { 21 Nov 26 - RELEASE_1.1 371: BEFORE RemoveFromPath, which takes the entry away }\n    RemoveFromPath;",
      "    RemoveFromPath;\n    SavePathNote;", "P2"),
     ("the wizard selects the PATH box instead of unticking it", "iss", "WizardSelectTasks('!addtopath');", "WizardSelectTasks('addtopath');", "P3"),
+    ("the PATH box is unticked every time the page is shown", "iss", "    PathBoxApplied := True;\n    if PathNoteSaysOff then", "    if PathNoteSaysOff then", "P3"),
+    ("the PATH box goes back to InitializeWizard", "iss", "procedure InitializeWizard;\nbegin\n", "procedure InitializeWizard;\nbegin\n  if PathNoteSaysOff then\n    WizardSelectTasks('!addtopath');\n", "P3"),
+    ("the red memo is not red", "iss", "      WarnMemo.Font.Color := clRed;\n", "", "W9"),
+    ("the red memo shows the whole page", "iss", "WarnMemo.Text := Trim(WarnText);", "WarnMemo.Text := Plain;", "W9"),
+    ("the red memo frees the labels above the first warning too", "iss", "for I := WarnLabelsFrom to N - 1 do", "for I := 0 to N - 1 do", "W9"),
+    ("the red memo always leaves room for a second memo", "iss", "        WarnH := Avail\n", "        WarnH := (Avail * 6) div 10\n", "W9"),
+    ("the red memo takes the whole page though text follows", "iss", "        WarnH := (Avail * 6) div 10;\n", "        WarnH := Avail;\n", "W9"),
+    ("a plain paragraph between two warnings is lost from the red memo", "iss", "        WarnText := WarnText + AfterText;      { a plain paragraph between two warnings }\n", "        ;\n", "W9"),
+    ("the old whole-page memo returns for a big warning block", "iss", "    else if (KeepN > 0) and (Rest = '') then\n    begin\n      { 21 Nov 26 - RELEASE_1.1 370", "    else if False then\n    begin\n      { 21 Nov 26 - RELEASE_1.1 370", "W8"),
+    ("a tree is from before the home screen when newvoc lacks set.start.default", "iss",
+     "                        not FileExists(ExpandConstant('{#DataDir}\\sdsys\\gpl.bp.out\\tool_home')) and\n                        not FileExists(ExpandConstant('{#DataDir}\\sdsys\\gpl.bp\\tool_home'));",
+     "                        not FileExists(ExpandConstant('{#DataDir}\\sdsys\\newvoc\\set.start.default'));", "B1"),
     ("the wizard reads the PATH note from plain HKLM", "iss", "RegQueryStringValue(HKLM64, ApiNoteKey, 'Path', V)", "RegQueryStringValue(HKLM, ApiNoteKey, 'Path', V)", "P1"),
     ("an install keeps the PATH note", "iss", "      PathNoteClear;   { 21 Nov 26 - RELEASE_1.1 371: spent by any install; the wizard already read it }\n", "", "P4"),
     ("the tree-gone path keeps the PATH note", "iss", "    PathNoteClear;   { 21 Nov 26 - RELEASE_1.1 371: a reinstall is a fresh install, the PATH box at its default }\n    Exit;", "    Exit;", "P4"),
