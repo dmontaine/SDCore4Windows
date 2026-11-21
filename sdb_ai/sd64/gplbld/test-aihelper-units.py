@@ -36,6 +36,8 @@ import importlib.util
 import json
 import os
 import shutil
+import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -409,6 +411,7 @@ def run(exe, tmp, fake):
         return
     fm = fake.FakeModel(pki, key=KEY).start()
     fw = fake.FakeModel(pki, key=KEY, cert="wrongname").start()
+    ft = None                    # the TLS 1.1 server, made below; here so that the finally can stop it whatever happens first
     st3 = os.path.join(tmp, "state3")
     for sub in ("", "keys", "state"):
         os.makedirs(os.path.join(st3, sub), exist_ok=True)
@@ -457,10 +460,37 @@ def run(exe, tmp, fake):
         conf(fw.port)
         r = jline(pipe_request(pipe3, ask_line("hello")))
         row("a certificate the CA signed for ANOTHER host name is refused", r.get("code") == "net" and r.get("msg") == "the provider's certificate was not accepted" and not fw.log, r)
+        # 21 Nov 26 - RELEASE_1.1 246 F8's last leg: a provider that speaks TLS 1.1 at most.  THE CONTROL FIRST (a test that passes because the server
+        # could not talk to anyone must not pass): a client that is allowed TLS 1.1 must complete a handshake with it, and say it was TLS 1.1.
+        try:
+            ft = fake.FakeModel(pki, key=KEY, tls_max="1.1").start()
+            cc = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            cc.check_hostname = False
+            cc.verify_mode = ssl.CERT_NONE
+            cc.minimum_version = ssl.TLSVersion.TLSv1
+            cc.maximum_version = ssl.TLSVersion.TLSv1_1
+            cc.set_ciphers("ALL:@SECLEVEL=0")
+            with socket.create_connection(("127.0.0.1", ft.port), 10) as sk:
+                with cc.wrap_socket(sk) as ts:
+                    seen = ts.version()
+            control = seen == "TLSv1.1"
+            why = seen
+        except (ValueError, ssl.SSLError, OSError) as e:
+            control, why = False, "%s: %s" % (type(e).__name__, e)
+        if not control:
+            say("  NOT MEASURED: this Python/OpenSSL cannot make or reach a TLS 1.1 server (%s); the TLS 1.1 row is not run and is not counted as passed" % why)
+        else:
+            row("CONTROL: the TLS 1.1 test server really speaks TLS 1.1 to a client allowed it", True, why)
+            conf(ft.port)
+            r = jline(pipe_request(pipe3, ask_line("hello")))
+            row("a provider that speaks TLS 1.1 at most is refused (TLS 1.2 is the helper's minimum), and no request reached it",
+                r.get("code") == "net" and not ft.log, (r, len(ft.log)))
     finally:
         stop(proc)
         fm.stop()
         fw.stop()
+        if ft is not None:
+            ft.stop()
 
 
 # ---------------------------------------------------------------------------------------------------- the mutants
@@ -489,6 +519,9 @@ MUTANTS = [
     ("sdai_main.c", "the answer is not cleaned", "    hygiene(text.p, text.n, &clean, &replaced);\n", "    clean = text;\n    replaced = 0;\n"),
     ("sdai_main.c", "no retry", "for (attempt = 1; attempt <= 2; attempt++) {", "for (attempt = 1; attempt <= 1; attempt++) {"),
     ("sdai_main.c", "the status line is written with other separators", '  sb_key(out, &first, "t");\n  sb_jstrz(out, "status");', '  sb_puts(out, "\\"t\\":\\"status\\"");\n  first = 0;'),
+    # 21 Nov 26 - the TLS 1.1 row.  OpenSSL 3 refuses TLS 1.1 at its default security level whatever the minimum says, so the mutant lowers both.
+    ("sdai_https.c", "TLS 1.1 is accepted (the minimum lowered, and the security level with it)", "!SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION)",
+     "(SSL_CTX_set_security_level(ctx, 0), !SSL_CTX_set_min_proto_version(ctx, TLS1_VERSION))"),
 ]
 
 

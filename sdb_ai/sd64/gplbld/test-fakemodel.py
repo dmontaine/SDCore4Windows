@@ -76,9 +76,10 @@ def make_pki(d):
 class FakeModel:
     """The server.  cert is the stem of the certificate to present (server, wrongname or rogue)."""
 
-    def __init__(self, pki, key="test-key-0123456789", cert="server", host="127.0.0.1"):
+    def __init__(self, pki, key="test-key-0123456789", cert="server", host="127.0.0.1", tls_max=None):
         self.pki, self.key, self.log, self.count = pki, key, [], {}
         self.models = list(MODELS)
+        self.slow_seconds = 3.0        # 21 Nov 26: how long [[slow]] waits before it answers (--serve --slow N; 246's F7 uses 30)
         fake = self
 
         class H(http.server.BaseHTTPRequestHandler):
@@ -112,7 +113,14 @@ class FakeModel:
                 self.wfile.write(out)
 
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        if tls_max == "1.1":
+            # 21 Nov 26 - RELEASE_1.1 246 F8 (design-ai-helper-20261113.md: "a TLS 1.1-only server"): a provider that speaks TLS 1.1 at most, which
+            # the helper (TLS 1.2 minimum, sdai_https.c) must refuse.  A Python or OpenSSL that cannot make one raises here; the caller says so.
+            ctx.minimum_version = ssl.TLSVersion.TLSv1
+            ctx.maximum_version = ssl.TLSVersion.TLSv1_1
+            ctx.set_ciphers("ALL:@SECLEVEL=0")
+        else:
+            ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         ctx.load_cert_chain(os.path.join(pki, cert + ".crt"), os.path.join(pki, cert + ".key"))
         self.httpd = http.server.ThreadingHTTPServer((host, 0), H)
         self.httpd.handle_error = lambda *a: None              # a client that gave up (a refused certificate) is not an error worth a traceback
@@ -138,7 +146,7 @@ class FakeModel:
             prompt = self.user_text(req)
         except (ValueError, KeyError, IndexError, TypeError):
             return self.fail(anth, 400, "bad request")
-        marks = [w for w in ("plain", "err429always", "err429", "err500", "badjson", "shape", "refuse", "ctrl", "big", "redirect", "trunc", "echo")
+        marks = [w for w in ("plain", "err429always", "err429", "err500", "badjson", "shape", "refuse", "ctrl", "big", "redirect", "trunc", "echo", "slow")
                  if "[[%s]]" % w in prompt]
         mark = marks[0] if marks else "plain"
         n = self.count[mark] = self.count.get(mark, 0) + 1
@@ -157,6 +165,8 @@ class FakeModel:
             text = "Fine.\x1b[31m red \x1b]52;c;ZXZpbA==\x07 \xfb\xfc\xfd\xfe\xff \u201cquoted\u201d \u2014 dash \u00e9 end\r\n"
         if mark == "big":
             text = "x" * 300000
+        if mark == "slow":
+            time.sleep(self.slow_seconds)       # 21 Nov 26 - RELEASE_1.1 246 F7: a slow answer, from Linux's fakemodel.py [[slow]]
         if mark == "trunc":
             stop = "length"
         if mark == "echo":
@@ -234,6 +244,25 @@ def _selftest():
         c.close()
         row("openai: a right key gets 200 and the text in choices[0].message.content", r.status == 200 and json.loads(raw)["choices"][0]["message"]["content"] == PLAIN_TEXT,
             repr((r.status, raw[:80])))
+        # 21 Nov 26 - the sitting's two marks (RELEASE_1.1 246 F7, 354): [[slow]] waits slow_seconds, [[trunc]] stops at the token limit.
+        fm.slow_seconds = 1.0
+        t0 = time.time()
+        c = http.client.HTTPSConnection("127.0.0.1", fm.port, timeout=20, context=ctx)
+        body["messages"][0]["content"] = "[[slow]] hello"
+        c.request("POST", "/v1/chat/completions", body=json.dumps(body), headers={"Content-Type": "application/json", "Authorization": "Bearer " + fm.key})
+        r = c.getresponse()
+        raw = r.read()
+        c.close()
+        waited = time.time() - t0
+        row("[[slow]] waits slow_seconds (1.0) and then answers plainly", r.status == 200 and 0.9 <= waited < 15 and json.loads(raw)["choices"][0]["message"]["content"] == PLAIN_TEXT,
+            repr((r.status, round(waited, 2))))
+        c = http.client.HTTPSConnection("127.0.0.1", fm.port, timeout=20, context=ctx)
+        body["messages"][0]["content"] = "[[trunc]] hello"
+        c.request("POST", "/v1/chat/completions", body=json.dumps(body), headers={"Content-Type": "application/json", "Authorization": "Bearer " + fm.key})
+        r = c.getresponse()
+        raw = r.read()
+        c.close()
+        row("[[trunc]] stops at the token limit (finish_reason length)", r.status == 200 and json.loads(raw)["choices"][0]["finish_reason"] == "length", repr((r.status, raw[:120])))
         fm.stop()
     finally:
         shutil.rmtree(d, ignore_errors=True)
@@ -241,8 +270,44 @@ def _selftest():
     return 0 if failed == 0 and passed > 0 else 1
 
 
+def _opt(args, name, default=None):
+    return args[args.index(name) + 1] if name in args and args.index(name) + 1 < len(args) else default
+
+
+def _serve(args):
+    """21 Nov 26 - for a SITTING, by hand: python test-fakemodel.py --serve [--dir D] [--key K] [--cert server|wrongname|rogue] [--tls11] [--slow N]
+    Makes the certificates in D (a new temporary folder when none is given; kept, never deleted), serves until Ctrl-C and prints every request
+    as it arrives.  Aim SD at it with: SET.AI PROVIDER custom, the printed URL, format openai, bearer, and SET.AI CA <the printed ca.crt>."""
+    d = _opt(args, "--dir") or tempfile.mkdtemp(prefix="fakemodel-")
+    os.makedirs(d, exist_ok=True)
+    if not os.path.isfile(os.path.join(d, "ca.crt")):
+        make_pki(d)
+    fm = FakeModel(d, key=_opt(args, "--key", "test-key-0123456789"), cert=_opt(args, "--cert", "server"), tls_max="1.1" if "--tls11" in args else None)
+    fm.slow_seconds = float(_opt(args, "--slow", "3"))
+    fm.start()
+    print("fakemodel: serving https://localhost:%d/v1/chat/completions  (and /v1/messages)   certificate: %s%s   [[slow]] waits %s s" %
+          (fm.port, _opt(args, "--cert", "server"), " (TLS 1.1 at most)" if "--tls11" in args else "", fm.slow_seconds), flush=True)
+    print("fakemodel: key %s" % fm.key, flush=True)
+    print("fakemodel: CA file %s" % os.path.join(d, "ca.crt"), flush=True)
+    print("fakemodel: marks in the prompt: [[plain]] [[err429]] [[err429always]] [[err500]] [[badjson]] [[shape]] [[refuse]] [[ctrl]] [[big]] [[redirect]] [[trunc]] [[echo]] [[slow]]", flush=True)
+    shown = 0
+    try:
+        while True:
+            time.sleep(0.5)
+            while shown < len(fm.log):
+                e = fm.log[shown]
+                shown += 1
+                print("fakemodel: %s %s  (%d bytes)  %s" % (time.strftime("%H:%M:%S"), e["path"], len(e["body"]), e["body"][-120:].decode("utf-8", "replace").replace("\n", " ")), flush=True)
+    except KeyboardInterrupt:
+        pass
+    fm.stop()
+    return 0
+
+
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         sys.exit(_selftest())
-    print("test-fakemodel.py --selftest   (a module for test-aihelper-units.py)")
+    if "--serve" in sys.argv:
+        sys.exit(_serve(sys.argv[1:]))
+    print("test-fakemodel.py --selftest | --serve [--dir D] [--key K] [--cert C] [--tls11] [--slow N]   (a module for test-aihelper-units.py)")
     sys.exit(2)
