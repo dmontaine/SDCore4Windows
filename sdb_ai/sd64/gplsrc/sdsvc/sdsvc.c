@@ -141,6 +141,7 @@
 #include "sdrunin.h" /* 13 Nov 26 - run.in's debugged child, RELEASE_1.1 253(b) */
 #include "../win32localsdsys.h"
 #include "sdsyslocal.h" /* 18 Nov 26 - "ssh -t <user>@localhost sd-sdsys", RELEASE_1.1 339 */
+#include "sdrestore.h" /* 21 Nov 26 - "sdsvc.exe -restore-kept", RELEASE_1.1 370 */
 
 #define SVC_NAME "SD"
 #define SDWIND_EXE "sdwind.exe"
@@ -967,8 +968,10 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
 int main(int argc, char *argv[]) {
   SERVICE_TABLE_ENTRYA table[] = {{(LPSTR)SVC_NAME, svc_main}, {NULL, NULL}};
 
-  (void)argc;
-  (void)argv;
+  /* 21 Nov 26 - RELEASE_1.1 370: "sdsvc.exe -restore-kept" is not the service.  It is the one-time SYSTEM task the installer registers after
+     a Keep reinstall, and it does one fixed thing as SDSYS (sdrestore.c).  Nothing but the word -restore-kept selects it. */
+  if (argc == 2 && strcmp(argv[1], "-restore-kept") == 0)
+    return sdrestore_main();
 
   if (!StartServiceCtrlDispatcherA(table)) {
     if (GetLastError() == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT) {

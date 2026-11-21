@@ -9,14 +9,16 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            may use ssh, the API, files and the AI are kept too, so after a reinstall every account has
                            the access it had.  They were removed, and a reinstall gave ssh to every account and the
                            API, files and the AI to none.  The scheduled jobs' definitions are kept as well (only
-                           their tasks are removed); the closing page of the reinstall says how many it found and that
-                           none is scheduled yet, and gives the exact steps: sign in to Windows as SDSYS, start SD Core
-                           and type one SET.JOB CHANGE line for each (name, job and schedule already filled in).  Remote
-                           administration is still shut by an uninstall; the closing page says it was on and gives the
-                           steps: sign in to Windows as SDSYS, start SD Core and type REMOTE.SDSYS ON.
+                           their tasks are removed), and the reinstall schedules them again, and opens remote
+                           administration again if it was on: Windows lets only SDSYS register those tasks, so the
+                           installer does it as SDSYS through one task it starts as SYSTEM (sdsvc.exe -restore-kept),
+                           and checks each definition and the uninstall's note first.  The closing page says what
+                           came back.  Anything that could not come back is at the top of that page in bold red with
+                           the reason and the exact steps: sign in to Windows as SDSYS, start SD Core and type one
+                           SET.JOB CHANGE line for each job, or REMOTE.SDSYS ON.
              Why         - What an administrator set should not change because SD was removed and installed again.
              Does NOT    - Keep the group that denies the console and Remote Desktop to accounts confined to SD; it
-                           is removed, as before.  Turn remote administration or a job on again by itself.
+                           is removed, as before.  Run any command as SDSYS for anyone: the helper does one fixed job.
 
 20 Nov 26  TOOL.JOBS' HELP LINES FIT THE BOX.
 

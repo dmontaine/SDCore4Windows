@@ -137,12 +137,13 @@ def rows_for(iss_raw, jobs_raw):
        and "ssh, API, files and AI access are as they were." in code
        and "API access is NOT restored." in code, "")
     ck("M3", "the jobs and remote administration warnings are built only when this was not an upgrade; the note is spent whatever it said",
-       re.search(r"KeptMsg := '';\s*\n\s*KeptCount := 0;\s*\n\s*if not TrueUpgrade then\s*\n\s*begin\s*\n\s*KeptJobs := KeptJobCount;", code) is not None
-       and "SCHEDULED JOB(S) ARE KEPT BUT NONE IS SCHEDULED. " in code
-       and "REMOTE ADMINISTRATION IS OFF. It was on before the uninstall." in code
+       re.search(r"KeptMsg := '';\s*\n\s*KeptCount := 0;\s*\n\s*RestoredMsg := '';\s*\n\s*if not TrueUpgrade then\s*\n\s*begin\s*\n\s*KeptJobs := KeptJobCount;", code) is not None
+       and "SCHEDULED JOB(S) WERE KEPT, BUT THIS INSTALLER COULD NOT " in code
+       and "REMOTE ADMINISTRATION IS OFF. It was on before the uninstall," in code
        and re.search(r"end;\s*\n\s*RadminNoteClear;", code) is not None, "")
     ck("M4", "KeptMsg reaches the closing page through WarnReport, and is no longer part of FinishReport",
-       "WarnReport := WarnReport + MarkWarn(KeptMsg);" in code and "AccessMsg +\n             'SD Core''s own system files were replaced.'" in code, "")
+       "WarnReport := WarnReport + MarkWarn(KeptMsg);" in code
+       and "AccessMsg +\n             RestoredMsg +\n             'SD Core''s own system files were replaced.'" in code, "")
     # ---- W: the owner's rule (chat, 21 Nov 26): "If there are warnings they should not be buried in other text.  They need to be explicit,
     # stand out so that they can not be missed." -------------------------------------------------------------------------------------
     srep = proc(code, "ShowFinishedReport")
@@ -162,7 +163,7 @@ def rows_for(iss_raw, jobs_raw):
        and "WarnReport := WarnReport + MarkWarn('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API." in code
        and "ApiRuleMsg := #13#10#13#10" not in code, "")
     ck("W6", "the warning block opens with a heading in capitals that says the settings are not on and that these are the steps",
-       "'WARNING: SETTINGS YOU HAD BEFORE THE UNINSTALL ARE NOT ON NOW, AND THIS INSTALLER CANNOT TURN THEM ON AGAIN. '" in code and "'DO THESE STEPS:'" in code, "")
+       "'WARNING: SETTINGS YOU HAD BEFORE THE UNINSTALL ARE NOT ON NOW, AND THIS INSTALLER COULD NOT TURN THEM ON AGAIN. '" in code and "'DO THESE STEPS:'" in code, "")
     # ---- S: the owner's rule (chat, 21 Nov 26): what cannot be put back is warned about during the install WITH THE EXACT STEPS -------
     ck("S1", "the jobs line and the remote administration line each give the steps (sign in to Windows as SDSYS, start SD Core, type), the jobs' lines from KeptJobSteps and the other the command remote.sdsys on",
        code.count("sign in to Windows as SDSYS, start SD Core and type:") == 2 and "+ KeptJobSteps + #13#10#13#10;" in code
@@ -201,7 +202,7 @@ MUTANTS = [
     ("Setup stops sampling the group", "iss", "RouteGroupsKept := Exec(", "RouteGroupsKept := not Exec(", "M1"),
     ("the box claims recreation whatever Setup found", "iss", "        if RouteGroupsKept then\n          AccessMsg :=\n            'Your database was kept, and so were its Windows groups:' + #13#10#13#10\n        else\n",
      "        if False then\n          AccessMsg :=\n            'Your database was kept, and so were its Windows groups:' + #13#10#13#10\n        else\n", "M2"),
-    ("the jobs line is built on an upgrade too", "iss", "KeptCount := 0;\n      if not TrueUpgrade then\n      begin\n        KeptJobs := KeptJobCount;", "KeptCount := 0;\n      if True then\n      begin\n        KeptJobs := KeptJobCount;", "M3"),
+    ("the jobs line is built on an upgrade too", "iss", "RestoredMsg := '';\n      if not TrueUpgrade then\n      begin\n        KeptJobs := KeptJobCount;", "RestoredMsg := '';\n      if True then\n      begin\n        KeptJobs := KeptJobCount;", "M3"),
     ("KeptMsg is dropped from the page", "iss", "WarnReport := WarnReport + MarkWarn(KeptMsg);", "", "M4"),
     ("the remote administration warning loses its command", "iss", "'    remote.sdsys on' + #13#10#13#10;", "'' + #13#10#13#10;", "S1"),
     ("the jobs warning loses its steps", "iss", "#13#10#13#10 + KeptJobSteps + #13#10#13#10;", "#13#10#13#10 + #13#10#13#10;", "S1"),

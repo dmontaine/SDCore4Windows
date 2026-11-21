@@ -3163,6 +3163,88 @@ begin
   end;
 end;
 
+{ 21 Nov 26 - RELEASE_1.1 370.  THE RESTORE: what a Keep uninstall took away and only SDSYS can put back, put back AS SDSYS.  The owner, 21 Nov
+  2026: a Keep must put the system back exactly as it was, and "Yes, build it" to an installer helper that does it as SDSYS.  MEASURED on a VM
+  that day (probe-sdsys-taskreg.ps1): an administrator and SYSTEM are refused registering a task that runs as SDSYS, but a SYSTEM task that mints
+  SDSYS's S4U token registers it.  run-restore-kept.ps1 (this installer, elevated) registers that one SYSTEM task, "sdsvc.exe -restore-kept"
+  (gplsrc/sdsvc/sdrestore.c), which starts sd-restore-kept.ps1 AS SDSYS; the script gives each kept job definition to the same validating verb as
+  an administrator's own set.job, and reopens remote administration from the uninstall's note under Linux's trust rules.  What comes back is
+  READ from its own lines below; anything that did not is warned about in red with the exact steps (KeptMsg).  Runs on a silent install too.
+  The script's output is captured to a file in Setup's own temporary folder. }
+function RunRestoreKept: String;
+var
+  Code: Integer;
+  OutFile: String;
+  S: AnsiString;
+begin
+  Result := '';
+  OutFile := ExpandConstant('{tmp}\restore-kept.txt');
+  DeleteFile(OutFile);
+  Exec(ExpandConstant('{sys}\cmd.exe'),
+       '/c ""' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe') +
+       '" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\run-restore-kept.ps1') +
+       '" -AppDir "' + ExpandConstant('{app}') + '" > "' + OutFile + '" 2>&1"',
+       '', SW_HIDE, ewWaitUntilTerminated, Code);
+  S := '';
+  if LoadStringFromFile(OutFile, S) then
+    Result := String(S);
+end;
+
+{ The integer that follows Marker in Text, or -1. }
+function RestoreNumber(const Text, Marker: String): Integer;
+var
+  P: Integer;
+  D: String;
+begin
+  Result := -1;
+  P := Pos(Marker, Text);
+  if P = 0 then
+    Exit;
+  P := P + Length(Marker);
+  D := '';
+  while (P <= Length(Text)) and (Text[P] >= '0') and (Text[P] <= '9') do
+  begin
+    D := D + Text[P];
+    P := P + 1;
+  end;
+  if D <> '' then
+    Result := StrToIntDef(D, -1);
+end;
+
+{ Every line of Text that starts with Prefix, indented four spaces, each ending in a line break, and with anything but printable ASCII
+  left out, so nothing but plain text from the helper's output is put on the page. }
+function RestoreLines(const Text, Prefix, Needle: String): String;
+var
+  Rest, Line, Clean: String;
+  P, I: Integer;
+begin
+  Result := '';
+  Rest := Text;
+  while Rest <> '' do
+  begin
+    P := Pos(#10, Rest);
+    if P = 0 then
+    begin
+      Line := Rest;
+      Rest := '';
+    end
+    else
+    begin
+      Line := Copy(Rest, 1, P - 1);
+      Rest := Copy(Rest, P + 1, Length(Rest));
+    end;
+    Line := Trim(Line);
+    if (Copy(Line, 1, Length(Prefix)) = Prefix) and ((Needle = '') or (Pos(Needle, Line) > 0)) then
+    begin
+      Clean := '';
+      for I := 1 to Length(Line) do
+        if (Line[I] >= ' ') and (Line[I] <= '~') then
+          Clean := Clean + Line[I];
+      Result := Result + '    ' + Clean + #13#10;
+    end;
+  end;
+end;
+
 { The kept rule put back: api-firewall.ps1 -Open, as ApplyApiFirewall does for a box ticked.  Not a choice made now - the
   administrator's own earlier answer, read from the machine.  A failure carries ELEVATED so IsFailureText sends it to the closing box. }
 function KeepApiFirewallOpen: String;
@@ -5197,6 +5279,10 @@ var
   { 21 Nov 26 - RELEASE_1.1 368, 369(a): what the uninstall closed and the reinstall cannot reopen (see RadminNoteSaysOn). }
   KeptMsg: String;
   KeptJobs, KeptCount: Integer;
+  { 21 Nov 26 - RELEASE_1.1 370: the restore's text, what it said, and the plain lines for what it put back. }
+  RestoreText, RestoreWhy, RestoredMsg: String;
+  RestoreRan, RadminWas: Boolean;
+  JobsDone, JobsNot: Integer;
   ApiRuleMsg: String;
   ApiScope: String;
   { 26 Sep 26 - InstallPython's answer: empty when the box was not ticked. }
@@ -5997,25 +6083,64 @@ begin
         that they can not be missed."  So every such warning goes to WarnReport (MarkWarn), which the Finished page draws first, in bold
         red; none of them is part of FinishReport.  Here: remote administration and the jobs' tasks (KeptMsg), the access groups when they
         had to be made again (AccessMsg), and the API's missing firewall rule (ApiRuleMsg). }
+      { 21 Nov 26 - RELEASE_1.1 370: THE INSTALL NOW TRIES TO PUT THEM BACK (RunRestoreKept: as SDSYS, through one SYSTEM task) and READS what
+        came back; only what did not is warned about, with the reason the restore gave and the exact steps.  What did come back is one
+        plain line in RestoredMsg.  No restore result at all (it did not run, or did not finish) counts as nothing restored. }
       KeptMsg := '';
       KeptCount := 0;
+      RestoredMsg := '';
       if not TrueUpgrade then
       begin
         KeptJobs := KeptJobCount;
-        if RadminNoteSaysOn then
+        RadminWas := RadminNoteSaysOn;
+        RestoreText := '';
+        if (KeptJobs > 0) or RadminWas then
+          RestoreText := RunRestoreKept;
+        RestoreRan := Pos('sdrestore: child exit 0', RestoreText) > 0;
+        JobsDone := RestoreNumber(RestoreText, 'RESTORE jobs: ');
+        JobsNot := RestoreNumber(RestoreText, ' scheduled again, ');
+        if RestoreRan then
+          RestoreWhy := ''
+        else
         begin
-          KeptCount := KeptCount + 1;
-          KeptMsg := KeptMsg + IntToStr(KeptCount) + '. REMOTE ADMINISTRATION IS OFF. It was on before the uninstall. To turn it on again, ' +
-            'sign in to Windows as SDSYS, start SD Core and type:' + #13#10#13#10 + '    remote.sdsys on' + #13#10#13#10;
+          RestoreWhy := RestoreLines(RestoreText, 'RESTORE-RUN:', '') + RestoreLines(RestoreText, 'sdrestore:', '');
+          if RestoreWhy = '' then
+            RestoreWhy := '    The restore did not run.' + #13#10;
+        end;
+        if RadminWas then
+        begin
+          if RestoreRan and (Pos('RESTORE remote-admin: open', RestoreText) > 0) then
+            RestoredMsg := RestoredMsg + 'Remote administration: on again, as it was before the uninstall.' + #13#10#13#10
+          else
+          begin
+            KeptCount := KeptCount + 1;
+            if RestoreRan then
+              RestoreWhy := RestoreLines(RestoreText, 'RESTORE remote-admin:', '');
+            if RestoreWhy = '' then
+              RestoreWhy := '    The restore did not open it.' + #13#10;
+            KeptMsg := KeptMsg + IntToStr(KeptCount) + '. REMOTE ADMINISTRATION IS OFF. It was on before the uninstall, and this installer ' +
+              'could not turn it on again:' + #13#10 + RestoreWhy + #13#10 +
+              'To turn it on again, sign in to Windows as SDSYS, start SD Core and type:' + #13#10#13#10 + '    remote.sdsys on' + #13#10#13#10;
+          end;
         end;
         if KeptJobs > 0 then
         begin
-          KeptCount := KeptCount + 1;
-          KeptMsg := KeptMsg + IntToStr(KeptCount) + '. ' + IntToStr(KeptJobs) + ' SCHEDULED JOB(S) ARE KEPT BUT NONE IS SCHEDULED. ' +
-            'To schedule them again, sign in to Windows as SDSYS, start SD Core and type:' + #13#10#13#10 + KeptJobSteps + #13#10#13#10;
+          if RestoreRan and (JobsDone >= 1) and (JobsNot = 0) then
+            RestoredMsg := RestoredMsg + 'Scheduled jobs: ' + IntToStr(JobsDone) + ' scheduled again, as they were before the uninstall.' + #13#10#13#10
+          else
+          begin
+            KeptCount := KeptCount + 1;
+            if RestoreRan then
+              RestoreWhy := RestoreLines(RestoreText, 'RESTORE job ', ': NOT scheduled again');
+            if RestoreWhy = '' then
+              RestoreWhy := '    Not every job was scheduled again.' + #13#10;
+            KeptMsg := KeptMsg + IntToStr(KeptCount) + '. ' + IntToStr(KeptJobs) + ' SCHEDULED JOB(S) WERE KEPT, BUT THIS INSTALLER COULD NOT ' +
+              'SCHEDULE THEM ALL AGAIN:' + #13#10 + RestoreWhy + #13#10 +
+              'To schedule them again, sign in to Windows as SDSYS, start SD Core and type:' + #13#10#13#10 + KeptJobSteps + #13#10#13#10;
+          end;
         end;
         if KeptCount > 0 then
-          KeptMsg := 'WARNING: SETTINGS YOU HAD BEFORE THE UNINSTALL ARE NOT ON NOW, AND THIS INSTALLER CANNOT TURN THEM ON AGAIN. ' +
+          KeptMsg := 'WARNING: SETTINGS YOU HAD BEFORE THE UNINSTALL ARE NOT ON NOW, AND THIS INSTALLER COULD NOT TURN THEM ON AGAIN. ' +
             'DO THESE STEPS:' + #13#10#13#10 + KeptMsg;
       end;
       RadminNoteClear;
@@ -6089,6 +6214,7 @@ begin
              { PRE_RELEASE_FIXES 135.  Directly under the promise it qualifies,
                and empty on an in-place upgrade - see the builder above. }
              AccessMsg +
+             RestoredMsg +
              'SD Core''s own system files were replaced.' + #13#10#13#10 +
              { 30 Aug 26 - THE LAST SENTENCE WENT STALE BETWEEN BEING WRITTEN AND
                BEING READ, WHICH IS THIS FILE'S OLDEST HABIT.  It said "edit

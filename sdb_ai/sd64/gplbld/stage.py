@@ -1979,6 +1979,12 @@ def main():
                    # finish-install.ps1.  It SHIPS - do NOT add it to
                    # assert-current's $neverShipped list.
                    'sd-taskfolder.ps1',
+                   # 21 Nov 26 - RELEASE_1.1 370 (owner: a Keep must put the system back as it was): what a Keep uninstall took away and
+                   # only SDSYS can put back - the jobs' tasks and remote administration.  run-restore-kept.ps1 is the installer's
+                   # (elevated): it registers one SYSTEM task that runs "sdsvc.exe -restore-kept" (sdsvc/sdrestore.c), which starts
+                   # sd-restore-kept.ps1 AS SDSYS through an S4U token.  Both SHIP - do NOT add them to assert-current's $neverShipped
+                   # list.  Their unit test (test-restorekept-units.ps1) does not.
+                   'run-restore-kept.ps1', 'sd-restore-kept.ps1',
                    # 10 Nov 26 - RELEASE_1.1 218, from Linux S.75 A6: SET.CONFIG
                    # changes one of 14 tuning parameters of sd.conf.  gpl.bp
                    # SETCONFIG runs it through !ps_script_out, so as SDSYS's
