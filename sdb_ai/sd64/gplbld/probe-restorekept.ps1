@@ -34,7 +34,12 @@ $jobsDir = Join-Path $env:ProgramData 'SD\sd-jobs'
 $madeDir = $false
 if (Test-Path -LiteralPath $app) { Remove-Item -LiteralPath $app -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $app | Out-Null
-foreach ($n in $need) { Copy-Item -LiteralPath (Join-Path $Bundle $n) -Destination (Join-Path $app $n) -Force }
+# The REAL layout: sdsvc.exe in <app>\usr\bin, the scripts in <app> (the first version of this probe put them all in one folder and hid a bug).
+New-Item -ItemType Directory -Force -Path (Join-Path $app 'usr\bin') | Out-Null
+foreach ($n in $need) {
+    $dst = $(if ($n -eq 'sdsvc.exe') { Join-Path $app 'usr\bin\sdsvc.exe' } else { Join-Path $app $n })
+    Copy-Item -LiteralPath (Join-Path $Bundle $n) -Destination $dst -Force
+}
 Say ('scratch app    : ' + $app)
 
 # --- the definitions a Keep leaves: written as an elevated administrator into an administrators-only folder ----------------------------

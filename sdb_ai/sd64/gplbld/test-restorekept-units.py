@@ -145,6 +145,9 @@ def rows_for(t):
        and 'L"%ls\\\\sd-restore-kept.ps1"' in c and r'WindowsPowerShell\\v1.0\\powershell.exe' in c
        and "FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT" in main
        and '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File' in c, "")
+    ck("C8", "the script is found at ONE fixed place: the program folder two levels above sdsvc.exe (<program folder>\\usr\\bin), and a program anywhere else is refused",
+       'L"\\\\usr\\\\bin"' in main and "_wcsicmp(appdir + len - tl, tail) != 0" in main and "this program is not in <program folder>" in main
+       and in_order(main, "_wcsicmp(appdir + len - tl, tail)", "appdir[len - tl] = L'\\0';", 'swprintf(script, MAX_PATH, L"%ls\\\\sd-restore-kept.ps1", appdir);'), "")
     ck("C5", "SDSYS by S4U, made primary, and ELEVATED or nothing: the elevation test comes before the process is created",
        in_order(main, 'win32_s4u_logon(SR_ACCOUNT)', "DuplicateTokenEx(", "TokenElevation", "TokenIsElevated", "CreateProcessAsUserW"), "")
     ck("C6", "the child is in a job that ends with this process, is ended after 180 seconds, and the last line is written only when it finished",
@@ -169,7 +172,8 @@ def rows_for(t):
     # ---- R -------------------------------------------------------------------------------------------------------------------------------
     ck("R1", "run-restore-kept.ps1: elevated only, the folder made with a protected administrators-only ACL, ONE SYSTEM task running sdsvc.exe -restore-kept, removed after",
        in_order(rk, "not elevated", "SetAccessRuleProtection($true, $false)", "S-1-5-18", "S-1-5-32-544", "New-ScheduledTaskAction -Execute $svc -Argument '-restore-kept'",
-                "NT AUTHORITY\\SYSTEM", "Start-ScheduledTask", "Unregister-ScheduledTask", "Remove-Item -LiteralPath $work") and "-RunLevel Highest" in rk, "")
+                "NT AUTHORITY\\SYSTEM", "Start-ScheduledTask", "Unregister-ScheduledTask", "Remove-Item -LiteralPath $work") and "-RunLevel Highest" in rk
+       and "$svc = Join-Path $AppDir 'usr\\bin\\sdsvc.exe'" in rk, "")
     ck("R2", "stage.py ships both scripts to the program folder", "'run-restore-kept.ps1', 'sd-restore-kept.ps1'," in t["stage"], "")
 
     # ---- D: the script run for real (dry run) on fixtures ----------------------------------------------------------------------------------
@@ -221,6 +225,8 @@ MUTANTS = [
     ("the child's command comes from the command line", "c", 'swprintf(script, MAX_PATH, L"%ls\\\\sd-restore-kept.ps1", appdir);',
      'swprintf(script, MAX_PATH, L"%ls", GetCommandLineW());', "C4"),
     ("the elevation test is gone", "c", "|| !el.TokenIsElevated", "|| 0", "C5"),
+    ("the script is looked for beside the exe, wherever it is", "c", "_wcsicmp(appdir + len - tl, tail) != 0", "0", "C8"),
+    ("the installer runs sdsvc.exe from the program folder's root", "rk", "$svc = Join-Path $AppDir 'usr\\bin\\sdsvc.exe'", "$svc = Join-Path $AppDir 'sdsvc.exe'", "R1"),
     ("the wait has no limit", "c", "#define SR_TIMEOUT_MS 180000", "#define SR_TIMEOUT_MS INFINITE", "C6"),
     ("sdrestore.c is not built", "make", "$(SVCDIR)/sdrestore.c ", "", "C7"),
     ("the script no longer checks who runs it", "sk", "$me.User.Value -ne $sdsysSid", "$false", "S1"),

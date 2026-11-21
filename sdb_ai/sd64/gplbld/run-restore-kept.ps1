@@ -22,7 +22,8 @@ $me = [Security.Principal.WindowsIdentity]::GetCurrent()
 $elevated = ([Security.Principal.WindowsPrincipal]$me).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 Out-Line ('RESTORE-RUN: ' + $me.Name + ' elevated=' + $elevated + ' app=' + $AppDir)
 if (-not $elevated) { Out-Line 'RESTORE-RUN: NOT RUN, not elevated.'; exit 0 }
-$svc = Join-Path $AppDir 'sdsvc.exe'
+# The service binary is installed in <program folder>\usr\bin, the scripts in <program folder> (sdrestore.c finds the script from there).
+$svc = Join-Path $AppDir 'usr\bin\sdsvc.exe'
 if (-not (Test-Path -LiteralPath $svc)) { Out-Line ('RESTORE-RUN: NOT RUN, ' + $svc + ' is not there.'); exit 0 }
 $script = Join-Path $AppDir 'sd-restore-kept.ps1'
 if (-not (Test-Path -LiteralPath $script)) { Out-Line ('RESTORE-RUN: NOT RUN, ' + $script + ' is not there.'); exit 0 }

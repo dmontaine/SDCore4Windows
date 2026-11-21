@@ -25,8 +25,9 @@
  * same thing for one fixed purpose, and it is in sdsvc.exe so that no new program is built, staged or checked.
  *
  * FIXED PURPOSE, AND NOTHING THE CALLER SAYS REACHES IT.  The only argument is -restore-kept (sdsvc.c's main).  It runs ONLY
- *     powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "<this program's folder>\sd-restore-kept.ps1"
- * as SDSYS, with the script found beside this program (Program Files: administrators only) and refused unless it is a plain file.  It refuses
+ *     powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "<program folder>\sd-restore-kept.ps1"
+ * as SDSYS, with the script found in the program folder two levels above this program (<program folder>\usr\bin\sdsvc.exe; Program Files:
+ * administrators only) and refused unless it is a plain file; a program anywhere else is refused.  It refuses
  * unless it is LocalSystem (a task the installer registers, run once), unless its result folder <ProgramData>\SDrestore is a real folder owned by
  * Administrators or SYSTEM (the installer makes it with an administrators-only ACL; an ordinary user who made it first owns it and is refused), and
  * unless the S4U token it gets is an ELEVATED one.  The script's output goes to <ProgramData>\SDrestore\result.txt, opened here with CREATE_NEW
@@ -176,6 +177,18 @@ int sdrestore_main(void) {
   wcscpy(appdir, exe);
   if ((slash = wcsrchr(appdir, L'\\')) != NULL)
     *slash = L'\0';
+  /* sdsvc.exe is installed in <program folder>\usr\bin and the scripts in <program folder> itself, so the program folder is two levels
+     up.  Anywhere else is refused: the script is looked for at ONE fixed place relative to this file, never beside whatever it was copied to.
+     (Found at the first real build, 21 Nov 26: the VM test had put the exe and the scripts in one folder, which the install never does.) */
+  {
+    const WCHAR* tail = L"\\usr\\bin";
+    size_t len = wcslen(appdir), tl = wcslen(tail);
+    if (len <= tl || _wcsicmp(appdir + len - tl, tail) != 0) {
+      sr_line(out, "sdrestore: NOT RUN, this program is not in <program folder>\\usr\\bin (it is in %ls)", appdir);
+      goto done;
+    }
+    appdir[len - tl] = L'\0';
+  }
   swprintf(script, MAX_PATH, L"%ls\\sd-restore-kept.ps1", appdir);
   sattr = GetFileAttributesW(script);
   if (sattr == INVALID_FILE_ATTRIBUTES || (sattr & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))) {
