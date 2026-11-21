@@ -5025,11 +5025,18 @@ var
   Page: TWinControl;
   Para: array[0..63] of TNewStaticText;
   Memo: TNewMemo;
-  Rest, Chunk, Plain: String;
-  N, I, P, Y, TextW, GapY, MaxH, L, T: Integer;
+  Rest, Chunk, Plain, AfterText: String;
+  N, I, P, Y, TextW, GapY, MaxH, L, T, KeepN, WarnBottom: Integer;
 begin
   { 21 Nov 26 - the owner's rule (see WarnReport): a paragraph that starts with !! is a WARNING and is drawn bold and red.  The marks are
-    taken out of what goes to the log and to the scrolling memo, whose plain text keeps the warning's own capital letters. }
+    taken out of what goes to the log and to the scrolling memo, whose plain text keeps the warning's own capital letters.
+    AND THE RED SURVIVES THE OVERFLOW (VM sit11, 21 Nov, the owner's screenshot of an ordinary UPGRADE page: this page is small, so the report
+    already falls back to the scrolling memo - plain, no colour - on a plain upgrade, and a Keep reinstall's page is longer).  So when the page
+    does not fit, the labels up to the LAST warning stay (the first line and the red block, as labels) and only what comes after them goes
+    into the scrolling memo, below them; the whole page goes to the memo only if the warnings alone take more than 60 percent of it. }
+  KeepN := 0;
+  WarnBottom := 0;
+  AfterText := '';
   Plain := Msg;
   StringChange(Plain, '!!', '');
 
@@ -5090,11 +5097,20 @@ begin
       Chunk := Copy(Chunk, 3, Length(Chunk));
       Para[N].Font.Style := [fsBold];
       Para[N].Font.Color := clRed;
+      Para[N].Caption := Chunk;
+      Para[N].AdjustHeight();
+      Y := Y + Para[N].Height + GapY;
+      N := N + 1;
+      KeepN := N;                  { the labels up to here stay if the page overflows }
+      WarnBottom := Y - GapY;      { and here is where they end }
+      AfterText := '';             { what follows the LAST warning starts again }
+      Continue;
     end;
     Para[N].Caption := Chunk;
     Para[N].AdjustHeight();
     Y := Y + Para[N].Height + GapY;
     N := N + 1;
+    AfterText := AfterText + Chunk + #13#10#13#10;
   end;
 
   { No trailing gap under the last paragraph. }
@@ -5105,18 +5121,37 @@ begin
     silently drop the tail either: Rest <> '' sends it to the memo too. }
   if (Y > MaxH) or (Rest <> '') then
   begin
-    for I := 0 to N - 1 do
-      Para[I].Free();
-    Memo := TNewMemo.Create(WizardForm);
-    Memo.Parent := Page;
-    Memo.Left := L;
-    Memo.Top := T;
-    Memo.Width := TextW;
-    Memo.Height := MaxH;
-    Memo.ReadOnly := True;
-    Memo.WordWrap := True;
-    Memo.ScrollBars := ssVertical;
-    Memo.Text := Plain;
+    if (KeepN > 0) and (Rest = '') and (WarnBottom * 10 <= MaxH * 6) then
+    begin
+      { 21 Nov 26 - the red block stays as labels; only what follows it is scrolled, in a memo under it. }
+      for I := KeepN to N - 1 do
+        Para[I].Free();
+      Memo := TNewMemo.Create(WizardForm);
+      Memo.Parent := Page;
+      Memo.Left := L;
+      Memo.Top := T + WarnBottom + GapY;
+      Memo.Width := TextW;
+      Memo.Height := MaxH - WarnBottom - GapY;
+      Memo.ReadOnly := True;
+      Memo.WordWrap := True;
+      Memo.ScrollBars := ssVertical;
+      Memo.Text := Trim(AfterText);
+    end
+    else
+    begin
+      for I := 0 to N - 1 do
+        Para[I].Free();
+      Memo := TNewMemo.Create(WizardForm);
+      Memo.Parent := Page;
+      Memo.Left := L;
+      Memo.Top := T;
+      Memo.Width := TextW;
+      Memo.Height := MaxH;
+      Memo.ReadOnly := True;
+      Memo.WordWrap := True;
+      Memo.ScrollBars := ssVertical;
+      Memo.Text := Plain;
+    end;
   end;
 end;
 

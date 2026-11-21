@@ -164,6 +164,14 @@ def rows_for(iss_raw, jobs_raw):
        and "ApiRuleMsg := #13#10#13#10" not in code, "")
     ck("W6", "the warning block opens with a heading in capitals that says the settings are not on and that these are the steps",
        "'WARNING: SETTINGS YOU HAD BEFORE THE UNINSTALL ARE NOT ON NOW, AND THIS INSTALLER COULD NOT TURN THEM ON AGAIN. '" in code and "'DO THESE STEPS:'" in code, "")
+    # ---- the red survives the overflow (VM sit11, 21 Nov 26, the owner's screenshot of an upgrade page that fell back to the plain memo) ----
+    ck("W7", "when the page overflows the labels up to the LAST warning stay and only what follows them is scrolled, in a memo placed under them, from text that restarts after each warning",
+       "KeepN := N;" in srep and "WarnBottom := Y - GapY;" in srep and "AfterText := '';" in srep and "AfterText := AfterText + Chunk + #13#10#13#10;" in srep
+       and "for I := KeepN to N - 1 do" in srep and "Memo.Top := T + WarnBottom + GapY;" in srep
+       and "Memo.Height := MaxH - WarnBottom - GapY;" in srep and "Memo.Text := Trim(AfterText);" in srep
+       and srep.rfind("AfterText := '';") > srep.find("WarnBottom := Y - GapY;"), "")
+    ck("W8", "the whole page goes to the plain memo only when there is no warning, more than 64 paragraphs, or the warnings alone take over 60 percent of the page",
+       "if (KeepN > 0) and (Rest = '') and (WarnBottom * 10 <= MaxH * 6) then" in srep and "for I := 0 to N - 1 do" in srep, "")
     # ---- S: the owner's rule (chat, 21 Nov 26): what cannot be put back is warned about during the install WITH THE EXACT STEPS -------
     ck("S1", "the jobs line and the remote administration line each give the steps (sign in to Windows as SDSYS, start SD Core, type), the jobs' lines from KeptJobSteps and the other the command remote.sdsys on",
        code.count("sign in to Windows as SDSYS, start SD Core and type:") == 2 and "+ KeptJobSteps + #13#10#13#10;" in code
@@ -212,6 +220,11 @@ MUTANTS = [
     ("MarkWarn marks nothing", "iss", "Result := Result + '!!' + Chunk + #13#10#13#10;", "Result := Result + Chunk + #13#10#13#10;", "W4"),
     ("the missing-firewall-rule warning goes back into the text", "iss", "WarnReport := WarnReport + MarkWarn('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API.", "ApiRuleMsg := #13#10#13#10 + ('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API.", "W5"),
     ("the warning block loses its heading", "iss", "'DO THESE STEPS:'", "'THESE:'", "W6"),
+    ("an overflow scrolls the whole page again", "iss", "if (KeepN > 0) and (Rest = '') and (WarnBottom * 10 <= MaxH * 6) then", "if False then", "W8"),
+    ("the memo is drawn over the red block", "iss", "Memo.Top := T + WarnBottom + GapY;", "Memo.Top := T;", "W7"),
+    ("the red labels are freed with the rest", "iss", "for I := KeepN to N - 1 do", "for I := 0 to N - 1 do", "W7"),
+    ("the memo repeats what came before the last warning", "iss", "AfterText := '';             { what follows the LAST warning starts again }", "", "W7"),
+    ("the warnings may take the whole page and still stay labels", "iss", "(WarnBottom * 10 <= MaxH * 6)", "(WarnBottom * 10 <= MaxH * 10)", "W8"),
     ("SafeJobWord lets capitals through", "iss", "if not (((C >= 'a') and (C <= 'z')) or", "if not (((C >= 'A') and (C <= 'z')) or", "S2"),
     ("KeptJobSteps trusts any job id", "iss", "and ((JobId = 'backup-all') or (JobId = 'update-accounts')) and SafeJobWord(Sched, True) then", "and SafeJobWord(Sched, True) then", "S3"),
 ]
