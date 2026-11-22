@@ -198,6 +198,11 @@ int main(int argc, char** argv) {
   snprintf(buf, sizeof(buf), "x\r\nx\r\nsdu_%s\r\nx\r\n\r\n", g_me);
   write_file(reg, buf);
 
+  /* C12b, RELEASE_1.1 387 (Linux T1645Z): an unknown mode is audited mode=other, and the typed word is never written */
+  ask("SDCREDOWN1 frobnicate\nEND\n", ans);
+  row("C12b", strncmp(ans, "ER ", 3) == 0 && strstr(g_last_audit, " mode=other reason=cred-own-takes-query-verify-or-set") != NULL &&
+      strstr(g_last_audit, "frobnicate") == NULL, "an unknown mode is refused and audited mode=other, never the typed word", g_last_audit);
+
   /* C12 */
   {
     int bad = 0;
@@ -351,6 +356,7 @@ MUTANTS = [
     ("grant may make instances", "sdsvc/sdcredown.c",
      "#define CREDOWN_PIPE_GRANT (FILE_READ_DATA | FILE_WRITE_DATA",
      "#define CREDOWN_PIPE_GRANT (WRITE_DAC | FILE_READ_DATA | FILE_WRITE_DATA", "C14"),
+    ("unknown mode written as typed", "sdsvc/sdcredown.c", '    snprintf(mode, sizeof(mode), "other");', "", "C12b"),
     ("reason not one word", "sdsvc/sdcredown.c", "  cr_reason(why, word, sizeof(word));", '  snprintf(word, sizeof(word), "%s", why);', "C4b"),
 ]
 

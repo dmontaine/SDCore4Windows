@@ -17,7 +17,8 @@
  *           cred_own(), d147a5c), agreed with the Linux audit session (mail 2026-11-22T1900).
  * 22 Nov 26 Windows port - RELEASE_1.1 387 (Linux S.298, mail T1430Z): the refusal's reason= is ONE word, as Linux's cred_reason
  *           writes it - the message in lower case, every character that is not a letter or a digit a '-', runs of '-' made one, none
- *           at either end, cut at 60 - so the audit line keeps its key=value shape and the two ports write the same words.
+ *           at either end, cut at 60 - so the audit line keeps its key=value shape and the two ports write the same words.  A mode
+ *           that is not query, verify or set (or not known yet) is written mode=other, as Linux (mail T1645Z); never the typed word.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -259,7 +260,7 @@ int sdcredown_handle(const char* sysdir, const char* account, const char* reques
   char req[CREDOWN_REQUEST_MAX + 1];
   char* line[12];
   int nl = 0;
-  char mode[16] = "?";
+  char mode[16] = "other";        /* RELEASE_1.1 387: a mode not (yet) known is "other", as Linux's sd-elevate */
   char path[MAX_PATH];
   char cdir[MAX_PATH];
   char cfile[MAX_PATH];
@@ -316,7 +317,7 @@ int sdcredown_handle(const char* sysdir, const char* account, const char* reques
   snprintf(mode, sizeof(mode), "%.15s", line[0] + strlen(CREDOWN_MAGIC));
   if ((strcmp(mode, "query") != 0) && (strcmp(mode, "verify") != 0) && (strcmp(mode, "set") != 0)) {
     say(why, sizeof(why), "cred-own takes query, verify or set");
-    snprintf(mode, sizeof(mode), "?");
+    snprintf(mode, sizeof(mode), "other");            /* RELEASE_1.1 387 (Linux T1645Z): as sd-elevate, the typed word is never written */
     goto refuse;
   }
   for (i = 1; i < nl - 1; i++) {
@@ -614,10 +615,10 @@ static void cr_serve_one(HANDLE h, HANDLE ev) {
 
   if (!whole) {
     snprintf(answer, sizeof(answer), "ER the request did not arrive whole");
-    snprintf(audit_msg, sizeof(audit_msg), "cred-own refused account=? mode=? reason=the-request-did-not-arrive-whole");
+    snprintf(audit_msg, sizeof(audit_msg), "cred-own refused account=? mode=other reason=the-request-did-not-arrive-whole");
   } else if (!cr_client(h, user, sizeof(user), account, sizeof(account))) {
     snprintf(answer, sizeof(answer), "ER the caller's Windows user could not be named");
-    snprintf(audit_msg, sizeof(audit_msg), "cred-own refused account=? mode=? reason=the-caller-s-windows-user-could-not-be-named");
+    snprintf(audit_msg, sizeof(audit_msg), "cred-own refused account=? mode=other reason=the-caller-s-windows-user-could-not-be-named");
   } else {
     (void)sdcredown_handle(cr_sysdir, account, req, answer, sizeof(answer), audit_msg, sizeof(audit_msg));
   }
