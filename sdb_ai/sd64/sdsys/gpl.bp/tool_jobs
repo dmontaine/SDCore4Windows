@@ -35,6 +35,7 @@
 * 9 Nov 26 dm  S.186: '/' finds a row by typing in either view ($tk_findrow; the owner: "Letters stay, '/' finds").
 * 15 Nov 26 dm  S.244, the owner's page rules: N's and C's job is a choice, not typed (1); the schedule opens empty with the one in force (or the default) beside it,
 *              an empty entry keeping it (2).  job.fields is the two fields, once for both forms.
+* 22 Nov 26 dm  S.300: the status line shows the verb's last message whole ($tk_capt), not only the last of its lines.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -951,10 +952,7 @@ run.sent:
    end
    out = change(change(out, char(13) : char(10), @fm), char(13), '')
    gosub drop.wait.lines.out
-   said = ''
-   for oi = dcount(out, @fm) to 1 step -1
-      if said = '' and trim(out<oi>) # '' then said = trim(out<oi>)
-   next oi
+   call $tk_capt('last', out, '', said)                ;* S.300: the whole last message
    msg = (if said # '' then said[1, 130] else 'ran, status ' : st)
    okind = (if st = 0 then 'ok' else 'refuse')
    otext = sent : '  ' : trim(change(out, @fm, ' '))

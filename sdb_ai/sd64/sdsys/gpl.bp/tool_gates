@@ -29,6 +29,7 @@
 *              ssh with a key, '-' for a group or other account and for a user account whose Windows user SD did not make (its keys are its own; the cell and the refusal
 *              say so).  It reaches beyond SD, so turning it ON asks for the account's name.  Nineteen cells: the name column is 10 wide (the cell box has it whole) and
 *              the suspension mark is 'susp' with no space before it (the last cell is padded), so the row still fits the 134 columns.
+* 22 Nov 26 dm  S.300: the status line shows the verb's last message whole ($tk_capt), not only the last of its lines.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -784,13 +785,7 @@ run.queue:
       if err # '' then
          msg = err
       end else
-         said = ''                                               ;* the verb's last line: for several words it is the closing line (which were carried out)
-         for oi = dcount(out, @fm) to 1 step -1
-            if trim(out<oi>) # '' then
-               said = trim(out<oi>)
-               exit
-            end
-         next oi
+         call $tk_capt('last', out, '', said)                    ;* the verb's last message, whole (S.300): for several words it is the closing one (which were carried out)
          msg = (if said # '' then said[1, 130] else 'ran, status ' : stat)
       end
       for k = 1 to NG

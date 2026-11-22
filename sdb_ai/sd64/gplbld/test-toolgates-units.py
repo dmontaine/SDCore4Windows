@@ -111,7 +111,7 @@ def checks(raw):
     ck("TG12", "SDSYS is not a row (modify.account refuses it), and an account whose gates could not be read is not shown", "if id # 'sdsys' then" in pg and "call $tk_gates(names<i>, g, ainfo, gerr)\n      if gerr = '' then" in pg)
     rq = block(pg, "run.queue")
     ck("TG13", "after a command the queue of that account is cleared, the machine is read again and the page is drawn again, and what it shows is the verb's own words",
-       re.search(r"call \$tk_run\(allow, sent, out, stat, err\)[\s\S]*?said = trim\(out<oi>\)[\s\S]*?aq<av, k> = ''[\s\S]*?gosub read\.all\s*\n\s*gosub draw\.all", rq) is not None)
+       re.search(r"call \$tk_run\(allow, sent, out, stat, err\)[\s\S]*?call \$tk_capt\('last', out, '', said\)[\s\S]*?aq<av, k> = ''[\s\S]*?gosub read\.all\s*\n\s*gosub draw\.all", rq) is not None)
     ck("TG14", "a cell takes its state from $tk_gates (administrator check inside), a queued cell shows the state it would have with a star, and nothing else decides whether a gate is on",
        "d = (if aq<av, k> # '' then aq<av, k> else s0)" in pg and "ct = (if d = 1 then 'ON' else 'off') : (if aq<av, k> # '' then '*' else '')" in pg and "s0 = ast<av, k>" in pg and "if gids<k> = g<j, 1> then ast<an, k> = g<j, 2>" in pg)
     heads = {}

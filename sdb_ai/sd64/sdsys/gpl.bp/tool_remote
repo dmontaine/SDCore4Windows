@@ -46,6 +46,8 @@
 *              (1, 2); the word the boxes want is shown as open and taken in either case (5).
 * 21 Nov 26 Windows port - RELEASE_1.1 382 (owner): A's form asks only for the door; when the listener moved, $tk_restart's box says why a restart
 *              is needed, that everyone is signed out, and offers Restart or Not now (the form's "Restart SD if needed" field is gone).
+* 22 Nov 26 Windows port - from Linux 68856fc1 (S.300, RELEASE_1.1 380): the status line shows the verb's last message whole ($tk_capt), not only
+*              the last of its lines.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -768,13 +770,8 @@ confirm.and.run:
          msg = err
       end else
          msg = sent[1, 60] : ' ran (status ' : stat : ')'
-         lastl = ''
-         for k = 1 to dcount(out, @fm)
-            ol = trim(out<k>)
-            if ol # '' then
-               if field(sent, ' ', 1) # 'local.sdsys' or ol[1, 12] # 'local.sdsys ' then lastl = ol     ;* RELEASE_1.1 339: local.sdsys ends a refusal with 15183; the helper's own line is before it
-            end
-         next k
+         cskip = (if field(sent, ' ', 1) = 'local.sdsys' then 'local.sdsys ' else '')    ;* RELEASE_1.1 339: local.sdsys ends a refusal with 15183; the helper's own line is before it
+         call $tk_capt('last', out, cskip, lastl)      ;* S.300: the whole last message
          if lastl # '' then msg = msg : ': ' : lastl
       end
    end else

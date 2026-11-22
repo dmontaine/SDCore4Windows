@@ -8,6 +8,8 @@
 * 22 Oct 26 dm  New (S.75, TK-0.2).
 * 9 Nov 26 dm  S.186: a refused word says which character is wrong (15040 with $tk_badch: a capital letter, a space, the character &), not only the word.
 * 21 Nov 26 Windows port - RELEASE_1.1 380: the CR a message's own line break leaves in the capture is dropped (drop.cr); the lines are kept.
+* 22 Nov 26 Windows port - from Linux 68856fc1 (S.300, RELEASE_1.1 380): out has no CR; a status line takes a whole message from $tk_capt
+*               ('first' or 'last').  $tk_capt('clean') replaces drop.cr.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -83,22 +85,14 @@ $include tk.h
 
    execute s trapping aborts capturing out
    status = @system.return.code
-   gosub drop.cr
+   call $tk_capt('clean', out, '', cap)               ;* 22 Nov 26 (S.300): every line kept, the CR of a message's own break dropped ($tk_capt has the rule)
+   out = cap
 
 * 9 Nov 26 (S.186): every command run or refused here goes into the page's log of commands, which Ctrl-O shows on a page that has no output pane of its own ($tk_std)
 run.done:
    lg.kind = (if err # '' then 'refuse' else 'ok')
    lg.text = s : @fm : (if err # '' then err else out)
    call $tk_out('log', '', lg.kind, lg.text, '')
-   return
-
-* 21 Nov 26 Windows port - RELEASE_1.1 380.  A LINE BREAK WRITTEN INTO A MESSAGE COMES BACK AS A NEW LINE THAT STARTS WITH A CR.  messages.c turns a
-* message's "\n" into LF and CR (for the screen), and the capture splits at the LF, so the CR leads the next piece.  Measured on VM sit12 (ZZCAP):
-* 10136 came back as "... when SD is next" and "<13>started.", and the page's status line drew the CR as "M".  Cause found by the Linux agent
-* (mail 2026-11-22T0530; a first fix here joined the pieces as if the capture had wrapped, which flattened every multi-line message).  The CR is
-* dropped and every line kept, as Linux's S.300 will (its commit is the template for joining a message whole on a status line).
-drop.cr:
-   out = convert(char(13), '', out)
    return
 end
 

@@ -22,6 +22,7 @@
 *              now says which character ($tk_badch).  '/' finds an account by typing ($tk_findrow; the owner: "Letters stay, '/' finds").
 * 15 Nov 26 dm  S.244, the owner's page rules: C's kind and doors are choices, not typed (1); X is "type x, get a prompt for the name and click run" (4) - one dialog,
 *              delete.account ... no.query through $tk_run, no terminal; run.sent is the run half of confirm.and.run, which X shares.
+* 22 Nov 26 dm  S.300: the status line shows the verb's last message whole ($tk_capt), not only the last of its lines.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -496,10 +497,7 @@ run.sent:
       msg = err
    end else
       msg = sent[1, 60] : ' ran (status ' : stat : ')'
-      lastl = ''
-      for k = 1 to dcount(out, @fm)
-         if trim(out<k>) # '' then lastl = trim(out<k>)
-      next k
+      call $tk_capt('last', out, '', lastl)            ;* S.300: the whole last message
       if lastl # '' then msg = msg : ': ' : lastl
    end
    return

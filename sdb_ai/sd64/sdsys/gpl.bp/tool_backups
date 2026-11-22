@@ -16,6 +16,7 @@
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
 * 15 Nov 26 dm  S.244 (2), the owner: "Every field" opens empty.  The backup directory's question opens empty with the directory in force in it (Ctrl-R puts it in);
 *               an empty answer changes nothing.  (5): the word the restore box wants is shown as restore, and taken in either case.
+* 22 Nov 26 dm  S.300: the status line shows the verb's last message whole ($tk_capt), not only the last of its lines.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -476,10 +477,7 @@ confirm.and.run:
          msg = err
       end else
          msg = sent[1, 60] : ' ran (status ' : stat : ')'
-         lastl = ''
-         for k = 1 to dcount(out, @fm)
-            if trim(out<k>) # '' then lastl = trim(out<k>)
-         next k
+         call $tk_capt('last', out, '', lastl)         ;* S.300: the whole last message
          if lastl # '' then msg = msg : ': ' : lastl
       end
    end else

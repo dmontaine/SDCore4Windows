@@ -1,0 +1,74 @@
+* TK_CAPT
+* The full-screen toolkit, shared base: what a captured message is (S.300; SD Core for Windows' row 380).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 22 Nov 26 dm  New (S.300).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_capt('clean', out, '', res)      $tk_run and $tk_runx, right after the EXECUTE: res is out with every line kept and no CR
+*   call $tk_capt('first', out, skip, res)    a status line: the whole first message of out, on one line
+*   call $tk_capt('last', out, skip, res)     a status line: the whole last message of out, on one line; skip, when not null, is how a message
+*                                             begins that is passed over (tool.remote: the closing line that only points at the lines above)
+*
+*   THE RULE.  messages.c turns a line break written in a message into LF and CR, so in a capture every line of a message but its first begins with
+*   a CR, and that is the only mark of where a message's own break is.  EXECUTE ... CAPTURING does not wrap.  So: a line that begins with CR goes
+*   on with the message before it; any other line begins a message; an empty line ends one.  A status line joins a message's lines with one
+*   space; every other reader (an output pane, the log of commands, a list) gets the lines as they were written, without the CR.
+*
+*   The CR is gone from what $tk_run returns, so 'clean' keeps the captured text in a common block for 'first' and 'last', which use it only when
+*   the out they are given is the one that was cleaned; for any other text each line is a message of its own.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_capt(op, out, skip, res)
+$catalog $tk_capt
+
+   common /$tkcapt/ tc.out, tc.raw        ;* the last capture cleaned, and as captured ($ name: no user program can set it)
+
+   res = ''
+   if op = 'clean' then
+      tc.raw = out
+      res = convert(char(13), '', out)
+      tc.out = res
+      return
+   end
+   if op # 'first' and op # 'last' then return
+
+   text = out
+   if ('S' : tc.out) = ('S' : out) then text = tc.raw       ;* 'S': compared as text (a common's variables start as the number 0)
+
+   cur = ''
+   np = dcount(text, @fm)
+   for pi = 1 to np
+      piece = text<pi>
+      goes.on = (piece[1, 1] = char(13))
+      piece = trim(convert(char(13), '', piece))
+      if piece # '' and goes.on and cur # '' then
+         cur = cur : ' ' : piece
+      end else
+         gosub message.ends
+         if op = 'first' and res # '' then exit
+         cur = piece
+      end
+   next pi
+   gosub message.ends
+   return
+
+* cur in: a whole message, or null.  res out.
+message.ends:
+   if cur = '' then return
+   if skip # '' then
+      if cur[1, len(skip)] = skip then return
+   end
+   if op = 'last' or res = '' then res = cur
+   return
+end
+
+* END-CODE

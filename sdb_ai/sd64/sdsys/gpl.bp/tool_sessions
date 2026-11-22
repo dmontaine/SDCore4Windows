@@ -21,6 +21,7 @@
 * 9 Nov 26 dm  S.186: View > Mouse, the same on every page (the case act:std.mouse, through $tk_std); '/' finds a row of the list in focus by typing
 *              ($tk_findrow; the owner: "Letters stay, '/' finds").
 * 14 Nov 26 Windows port - from Linux c4ce87e9 (RELEASE_1.1 307): the row's key line says F6 changes list, not Tab.
+* 22 Nov 26 dm  S.300: the status line shows the verb's first message whole ($tk_capt), not only the first of its lines.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -696,13 +697,7 @@ audit.run:
 
 * The first non-empty line the command printed, for the status line (the one that matters: LOGOUT of a session that was not running prints a long message that starts with it)
 first.line:
-   said = ''
-   for oi = 1 to dcount(out, @fm)
-      if trim(out<oi>) # '' then
-         said = trim(out<oi>)
-         exit
-      end
-   next oi
+   call $tk_capt('first', out, '', said)               ;* S.300: the whole first message, not only its first line
    return
 
 * LOGOUT n: the number is typed again to confirm

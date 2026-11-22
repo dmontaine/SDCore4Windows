@@ -20,6 +20,7 @@
 *              ($tk_badch for the character; why.bad for a first character or a keyword).
 * 10 Nov 26 dm  S.205: F11 is no longer the filter's second key: a terminal keeps it for its own full screen, and / is the key the page shows.
 * 10 Nov 26 dm  S.138: a line longer than its box is wrapped at every width; it used to be cut at the reference width.
+* 22 Nov 26 dm  S.300: the status line shows the verb's first message whole ($tk_capt), not only the first of its lines.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -1040,13 +1041,7 @@ run.sent:
    return
 
 first.line:
-   said = ''
-   for oi2 = 1 to dcount(out, @fm)
-      if trim(out<oi2>) # '' then
-         said = trim(out<oi2>)
-         exit
-      end
-   next oi2
+   call $tk_capt('first', out, '', said)               ;* S.300: the whole first message, not only its first line
    return
 
 * The lines of the gate warning, when bp-edit is off for the session

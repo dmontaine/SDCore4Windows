@@ -119,8 +119,8 @@ def checks(raw):
     ck("SS10", "the key table has exactly: help, switch, logout, unlock, inhibit, refresh, quit - and the Esc row that opens the menu bar (S.88 U2; the bar runs nothing, a choice is one of those keys); L belongs to the sessions list and U to the locks list, in the table and in the dispatch",
        acts == sorted(["help", "switch", "logout", "unlock", "inhibit", "refresh", "quit", "menu", "output", "find"]) and "'l', 'logout', 'logout', 'Sessions'" in pg and "'u', 'unlock', 'unlock', 'Locks'" in pg
        and "case nm = 'l' and pane = 1" in pg and "case nm = 'u' and pane = 2" in pg, " ".join(acts))
-    ck("SS11", "after a command the lists are read again and the whole page is drawn again, and what the status line shows is the verb's own first line",
-       len(re.findall(r"call \$tk_run\(allow, sent, out, stat, err\)[\s\S]*?gosub first\.line[\s\S]*?gosub read\.all\s*\n\s*gosub draw\.all", pg)) == 3 and "trim(out<oi>) # ''" in block(pg, "first.line") and "for oi = 1 to dcount(out, @fm)" in block(pg, "first.line"))
+    ck("SS11", "after a command the lists are read again and the whole page is drawn again, and what the status line shows is the verb's own first message, whole (S.300)",
+       len(re.findall(r"call \$tk_run\(allow, sent, out, stat, err\)[\s\S]*?gosub first\.line[\s\S]*?gosub read\.all\s*\n\s*gosub draw\.all", pg)) == 3 and "call $tk_capt('first', out, '', said)" in block(pg, "first.line"))
     ck("SS12", "the page has a [?] and F1, ? and a click show tool.sessions.page, whose record exists with a title, a documentation page and a body",
        pg.count("'tool.sessions.page'") == 2 and "call $tk_help('mark', ssn.x + ssn.w - 5, ssn.y + 1, 0, 0)" in pg and "call $tk_help('hit', mev, ssn.x + ssn.w - 5, ssn.y + 1, hit.m)" in pg
        and raw["help"].split("\n")[0].strip() != "" and raw["help"].split("\n")[1].strip() == "administrator-02a-locks-and-the-sessions-screen" and raw["help"].split("\n")[2].strip() != "")

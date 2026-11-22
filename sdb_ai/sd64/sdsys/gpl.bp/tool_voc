@@ -19,6 +19,7 @@
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
 * 10 Nov 26 dm  S.205: F11 is no longer the filter's second key: a terminal keeps it for its own full screen, and / is the key the page shows.
 * 10 Nov 26 dm  S.138: a line longer than its box is wrapped at every width; it used to be cut at the reference width.
+* 22 Nov 26 dm  S.300: the status line shows the verb's first message whole ($tk_capt), not only the first of its lines.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -664,13 +665,7 @@ do.delete:
       msg = rerr
       return
    end
-   said = ''
-   for oi = 1 to dcount(out, @fm)
-      if trim(out<oi>) # '' then
-         said = trim(out<oi>)
-         exit
-      end
-   next oi
+   call $tk_capt('first', out, '', said)               ;* S.300: the whole first message, not only its first line
    msg = (if said # '' then said else sent : ' ran')
    gosub read.all
    gosub draw.all
