@@ -147,7 +147,8 @@ class FakeModel:
             prompt = self.user_text(req)
         except (ValueError, KeyError, IndexError, TypeError):
             return self.fail(anth, 400, "bad request")
-        marks = [w for w in ("plain", "err429always", "err429", "err500", "badjson", "shape", "refuse", "ctrl", "big", "redirect", "trunc", "echo", "slow")
+        marks = [w for w in ("plain", "err429always", "err429", "err500", "badjson", "shape", "refuse", "ctrl", "big", "redirect", "truncempty", "trunc", "echo",
+                             "slow")
                  if "[[%s]]" % w in prompt]
         mark = marks[0] if marks else "plain"
         n = self.count[mark] = self.count.get(mark, 0) + 1
@@ -170,6 +171,9 @@ class FakeModel:
             time.sleep(self.slow_seconds)       # 21 Nov 26 - RELEASE_1.1 246 F7: a slow answer, from Linux's fakemodel.py [[slow]]
         if mark == "trunc":
             stop = "length"
+        if mark == "truncempty":            # 22 Nov 26 - RELEASE_1.1 354's own case: cut at the length limit before a visible word
+            stop = "length"
+            text = ""
         if mark == "echo":
             text = body.decode("utf-8")
         if mark == "refuse":
