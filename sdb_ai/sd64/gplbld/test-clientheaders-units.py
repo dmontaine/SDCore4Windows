@@ -20,6 +20,7 @@
 #               P:\git-private\sdclientlib-binaries, else --lib DIR; without one row 1 says it was skipped), and the SV_ status values
 #               against a fixed table of the eight.  The row that compared syscom/sdclilib.h with the GPL header, and the mutant that added
 #               a function to the GPL source, went with them.  Row 9 loads sdclient.py against the clean-room DLL.
+# 22 Nov 26 Windows port - RELEASE_1.1 362: with no P:, the set a development bundle carries in Projects\Project_Other\sdclientlib-binaries.
 # END-HISTORY
 #
 # THE AUTHORITY is syscom/sdclilib.h, which this check holds against the functions the clean-room library exports.  Each of the
@@ -75,6 +76,9 @@ def cleanroom_lib():
     if env:
         return os.path.join(env, "sdclilib.dll") if os.path.isdir(env) else env
     base = os.path.join("P:" + os.sep, "git-private", "sdclientlib-binaries")
+    if not os.path.isdir(base):   # a tree a development bundle installed: its set, beside the repositories (RELEASE_1.1 362)
+        base = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, os.pardir, os.pardir,
+                                            "Project_Other", "sdclientlib-binaries"))
     # newest by its COMMIT.txt, not by name: a set's name starts with its commit hash, which does not sort by date
     sets = sorted((d for d in (os.listdir(base) if os.path.isdir(base) else [])
                    if os.path.isfile(os.path.join(base, d, "win64", "sdclilib.dll")) and os.path.isfile(os.path.join(base, d, "COMMIT.txt"))),
