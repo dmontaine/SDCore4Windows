@@ -207,10 +207,12 @@ try {
                           (Get-RulePort $rule) + ' and the API is on port ' + $Port +
                           ', so only this computer may reach the API')
         } elseif (Test-RuleOpen $rule) {
-            Write-Output 'api-firewall: state is ON - other computers on your network may reach the API'
+            # 21 Nov 26 - RELEASE_1.1 381: ON and LOCAL say "at the firewall" as OFF does; REMOTE.API OFF printed sd.conf's
+            # "state : OFF" over this "state is LOCAL", and two states read as a contradiction.
+            Write-Output 'api-firewall: state is ON at the firewall - other computers on your network may reach the API'
             Write-BlockWarning   # 19 Nov 26 - RELEASE_1.1 317: unless a Block rule says otherwise, and then it is named
         } else {
-            Write-Output 'api-firewall: state is LOCAL - only this computer may reach the API'
+            Write-Output 'api-firewall: state is LOCAL at the firewall - only this computer may reach the API'
         }
         exit 0
     }

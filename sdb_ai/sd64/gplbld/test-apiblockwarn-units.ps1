@@ -107,7 +107,7 @@ Run-All
 if ($script:last.Count -ne 5) { Write-Output ('FAIL: ' + $script:last.Count + ' live cases recorded, 5 expected'); exit 1 }
 
 Write-Output "`n=== the script's text"
-$showOn = [regex]::Match($text, "(?s)state is ON - other computers on your network may reach the API'\s*\r?\n\s*Write-BlockWarning")
+$showOn = [regex]::Match($text, "(?s)state is ON at the firewall - other computers on your network may reach the API'\s*\r?\n\s*Write-BlockWarning")
 if ($showOn.Success) { $script:pass++; Write-Output '  [PASS] T1 -Show ON calls Write-BlockWarning' } else { $script:fail++; Write-Output '  [FAIL] T1 -Show ON does not call Write-BlockWarning' }
 $openOn = [regex]::Match($text, '(?s)other computers MAY reach the SD API on port \$Port"\s*\r?\n\s*Write-BlockWarning')
 if ($openOn.Success) { $script:pass++; Write-Output '  [PASS] T1 -Open calls Write-BlockWarning' } else { $script:fail++; Write-Output '  [FAIL] T1 -Open does not call Write-BlockWarning' }
