@@ -6301,7 +6301,7 @@ begin
           end;
         end;
         if KeptCount > 0 then
-          KeptMsg := 'WARNING: SOME SETTINGS FROM BEFORE THE UNINSTALL ARE NOT ON NOW.' + #13#10#13#10 + KeptMsg;
+          KeptMsg := 'WARNING: SOME SETTINGS NEED TO BE FIXED.' + #13#10#13#10 + KeptMsg;   { 21 Nov 26 (370 round 5): the owner's heading; the old one left "NOW." alone on a line }
       end;
       RadminNoteClear;
       PathNoteClear;   { 21 Nov 26 - RELEASE_1.1 371: spent by any install; the wizard already read it }

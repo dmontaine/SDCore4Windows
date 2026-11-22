@@ -186,7 +186,7 @@ def rows_for(iss_raw, jobs_raw):
        and "WarnReport := WarnReport + MarkWarn('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API." in code
        and "ApiRuleMsg := #13#10#13#10" not in code, "")
     ck("W6", "the warning block opens with one short heading in capitals that says the settings are not on (21 Nov 26, the owner's layout, round 4)",
-       "KeptMsg := 'WARNING: SOME SETTINGS FROM BEFORE THE UNINSTALL ARE NOT ON NOW.' + #13#10#13#10 + KeptMsg;" in code
+       "KeptMsg := 'WARNING: SOME SETTINGS NEED TO BE FIXED.' + #13#10#13#10 + KeptMsg;" in code   # 21 Nov 26 (round 5): the owner's heading
        and "DO THESE STEPS" not in code, "")
     # ---- the red survives the overflow (VM sit11, 21 Nov 26, the owner's screenshot of an upgrade page that fell back to the plain memo) ----
     ck("W7", "when the page overflows the labels up to the LAST warning stay and only what follows them is scrolled, in a memo placed under them, from text that restarts after each warning",
@@ -280,7 +280,7 @@ MUTANTS = [
     ("the scrolling memo shows the marks", "iss", "Memo.Text := Plain;", "Memo.Text := Msg;", "W3"),
     ("MarkWarn marks nothing", "iss", "Result := Result + '!!' + Chunk + #13#10#13#10;", "Result := Result + Chunk + #13#10#13#10;", "W4"),
     ("the missing-firewall-rule warning goes back into the text", "iss", "WarnReport := WarnReport + MarkWarn('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API.", "ApiRuleMsg := #13#10#13#10 + ('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API.", "W5"),
-    ("the warning block loses its heading", "iss", "KeptMsg := 'WARNING: SOME SETTINGS FROM BEFORE THE UNINSTALL ARE NOT ON NOW.' + #13#10#13#10 + KeptMsg;", "KeptMsg := KeptMsg;", "W6"),
+    ("the warning block loses its heading", "iss", "KeptMsg := 'WARNING: SOME SETTINGS NEED TO BE FIXED.' + #13#10#13#10 + KeptMsg;", "KeptMsg := KeptMsg;", "W6"),
     ("an overflow scrolls the whole page again", "iss", "if (KeepN > 0) and (Rest = '') and (WarnBottom * 10 <= MaxH * 6) then", "if False then", "W8"),
     ("the memo is drawn over the red block", "iss", "Memo.Top := T + WarnBottom + GapY;", "Memo.Top := T;", "W7"),
     ("the red labels are freed with the rest", "iss", "for I := KeepN to N - 1 do", "for I := 0 to N - 1 do", "W7"),
