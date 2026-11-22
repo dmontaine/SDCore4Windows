@@ -209,7 +209,7 @@ def rows_for(iss_raw, jobs_raw):
        and "set.start.default" not in isetup, "")
     # ---- S: the owner's rule (chat, 21 Nov 26): what cannot be put back is warned about during the install WITH THE EXACT STEPS -------
     ck("S1", "the jobs line and the remote administration line each give the steps (sign in to Windows as SDSYS, start SD Core, type), the jobs' lines from KeptJobSteps and the other the command remote.sdsys on",
-       code.count("sign in to Windows as SDSYS, start SD Core and type:") == 2 and "+ KeptJobSteps + #13#10#13#10;" in code
+       code.count("sign in to Windows as SDSYS, start SD Core and type:") == 2 and "start SD Core and type:' + #13#10 + KeptJobSteps + #13#10#13#10;" in code
        and "'    remote.sdsys on' + #13#10#13#10;" in code, "")
     sjw = proc(code, "SafeJobWord")
     kjs = proc(code, "KeptJobSteps")
@@ -269,7 +269,8 @@ MUTANTS = [
     ("the jobs line is built on an upgrade too", "iss", "RestoredMsg := '';\n      if not TrueUpgrade then\n      begin\n        KeptJobs := KeptJobCount;", "RestoredMsg := '';\n      if True then\n      begin\n        KeptJobs := KeptJobCount;", "M3"),
     ("KeptMsg is dropped from the page", "iss", "WarnReport := WarnReport + MarkWarn(KeptMsg);", "", "M4"),
     ("the remote administration warning loses its command", "iss", "'    remote.sdsys on' + #13#10#13#10;", "'' + #13#10#13#10;", "S1"),
-    ("the jobs warning loses its steps", "iss", "#13#10#13#10 + KeptJobSteps + #13#10#13#10;", "#13#10#13#10 + #13#10#13#10;", "S1"),
+    ("the jobs warning loses its steps", "iss", "type:' + #13#10 + KeptJobSteps + #13#10#13#10;", "type:' + #13#10 + #13#10#13#10;", "S1"),
+    ("a blank line comes back between the sentence and the steps", "iss", "type:' + #13#10 + KeptJobSteps + #13#10#13#10;", "type:' + #13#10#13#10 + KeptJobSteps + #13#10#13#10;", "S1"),
     ("the warnings are drawn after the sign-out line", "iss", "      WarnReport +\n      'You must sign out or restart before using SD Core.' + #13#10#13#10 +", "      'You must sign out or restart before using SD Core.' + #13#10#13#10 +\n      WarnReport +", "W1"),
     ("a warning paragraph is no longer red", "iss", "      Para[N].Font.Color := clRed;\n", "", "W2"),
     ("the scrolling memo shows the marks", "iss", "Memo.Text := Plain;", "Memo.Text := Msg;", "W3"),

@@ -6308,7 +6308,7 @@ begin
               RestoreWhy := RestoreJobReasons(RestoreText);   { 21 Nov 26 (370): a damaged definition is said once, by KeptJobSteps }
             KeptMsg := KeptMsg + IntToStr(KeptCount) + '. ' + IntToStr(KeptJobs) + ' SCHEDULED JOB(S) WERE KEPT, BUT THIS INSTALLER COULD NOT ' +
               'SCHEDULE THEM ALL AGAIN:' + #13#10 + RestoreWhy + #13#10 +
-              'To schedule them again, sign in to Windows as SDSYS, start SD Core and type:' + #13#10#13#10 + KeptJobSteps + #13#10#13#10;
+              'To schedule them again, sign in to Windows as SDSYS, start SD Core and type:' + #13#10 + KeptJobSteps + #13#10#13#10;   { 21 Nov 26 (370): the steps directly under, the owner's layout }
           end;
         end;
         if KeptCount > 0 then
