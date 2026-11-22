@@ -11,6 +11,8 @@
 *           the message briefly displayed and then turned off"): Restart closes the page ($tk_close, which also gives the terminal back), clears
 *           the screen, shows one line, and waits here for SD to end this session; the page is never drawn again over a restart.  ctx is the
 *           first argument for that.
+* 22 Nov 26 Windows port - RELEASE_1.1 390 (Linux S.301, 5be75db4): one audit line each time a restart is asked for, sd restart app=<the page>
+*           status=asked|refused, lower case, written after restart-sd.ps1 answered and so before SD stops (asked = it exited 0).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -40,6 +42,7 @@ subroutine tk_restart(ctx, why, res, msg)
 $catalog $tk_restart
 
 $include int$keys.h
+$include tk.h
 
 deffun ps_script_out(script, want.out) calling '!ps_script_out'
 
@@ -55,6 +58,7 @@ deffun ps_script_out(script, want.out) calling '!ps_script_out'
       return
    end
 
+   app = ctx<TK.C.APP>
    call $tk_close(ctx)
    display @(-1) :
    display 'SD is restarting.  Everyone using SD is signed out, and this window closes.'
@@ -63,6 +67,7 @@ deffun ps_script_out(script, want.out) calling '!ps_script_out'
    ps := @fm : 'exit $LASTEXITCODE'
    rs = ps_script_out(ps, @true)
    rc = rs<1>
+   void kernel(K$AUDIT, 'sd restart app=' : downcase(app) : ' status=' : (if rc = 0 then 'asked' else 'refused'))   ;* 22 Nov 26: Linux S.301
    if rc = 0 then
 *     The SD service is stopping: this session is ended with the rest.  It is not drawn again meanwhile.
       for w = 1 to 60

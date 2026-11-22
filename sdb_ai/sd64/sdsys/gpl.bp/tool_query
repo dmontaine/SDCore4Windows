@@ -724,7 +724,7 @@ wrap.note:
 draw.all:
    gosub sync.layout
    cw2 = ctx<TK.C.W>
-   chh = ctx<TK.C.H> - 4
+   chh = (if ctx<TK.C.AIROW> then ctx<TK.C.BODYH> else ctx<TK.C.H> - 4)        ;* 22 Nov 26: with the AI line the clear stops above it and its rule (H - 4 reached both)
    screen clear at 0,1 size cw2,chh
    begin case
       case view = 'results'

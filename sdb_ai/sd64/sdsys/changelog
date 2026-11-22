@@ -3,6 +3,28 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+22 Nov 26  THE AI LINE STAYS ON A PAGE THAT DRAWS ITSELF AGAIN.
+
+             What        - On fourteen administrator pages (tool.accounts, tool.ai, tool.audit, tool.backups, tool.bulk,
+                           tool.catalog, tool.config, tool.files, tool.gates, tool.menus, tool.query, tool.remote,
+                           tool.sessions, tool.test) the AI line stays after F5, a change of view or a command.
+             Why         - Since the AI line moved up a row to make room for its rule, those pages' own clear of
+                           their body reached the line, and nothing put it back.
+
+22 Nov 26  TOOL.CONFIG OFFERS A RESTART ONLY WHEN ONE WOULD CHANGE SOMETHING, AND A RESTART ASKED FOR IS AUDITED.
+
+             What        - The "Restart SD?" box comes up after a change only when the file then differs from what SD
+                           is running with.  Each restart asked for from a page writes one audit line,
+                           sd restart app=<page> status=asked, or status=refused when it could not be started.
+             Why         - Setting a value back to the one SD already runs with offered a restart that would change
+                           nothing; and a restart, which signs out everyone, left no line in the trail.
+
+22 Nov 26  TOOL.BULK AND TOOL.ENTRIES SHOW A MESSAGE OF SEVERAL LINES WHOLE.
+
+             What        - What the page's own SELECT, or the CREATE.FILE of its undo file, said is shown whole on
+                           the status line, its lines joined by a space, as on the other pages.
+             Why         - Only the first line of such a message was shown.
+
 22 Nov 26  A REFUSED OWN-PASSWORD CHANGE NAMES ITS REASON IN ONE WORD.
 
              What        - The audit line "cred-own refused" ends with reason= and one word made of the refusal, such

@@ -36,6 +36,8 @@
 * 21 Nov 26 Windows port - RELEASE_1.1 382 (owner): after a change to a parameter that takes effect at a restart, $tk_restart's box asks
 *               whether to restart SD now (why, everyone signed out, Restart or Not now).
 * 22 Nov 26 dm  S.300: the status line shows the verb's last message whole ($tk_capt), not only the last of its lines.
+* 22 Nov 26 Windows port - RELEASE_1.1 390 (Linux S.301): the restart box is offered only when the file and the running SD then differ;
+*               RELEASE_1.1 389 (Linux S.305's defect): the body clear stops above the AI line.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -450,7 +452,7 @@ lay.rect:
 
 draw.all:
    cw2 = ctx<TK.C.W>
-   chh = ctx<TK.C.H> - 5
+   chh = (if ctx<TK.C.AIROW> then ctx<TK.C.BODYH> else ctx<TK.C.H> - 5)        ;* 22 Nov 26: with the AI line the clear stops above it (S.305 moved the line up a row and H - 5 wiped it)
    screen clear at 0,body.y size cw2,chh
    screen box at top.x,top.y size top.w,top.h title 'Configuration'
    ttl = 'Parameters'
@@ -879,8 +881,12 @@ change.param:
    call $tk_capt('last', out, '', lastl)               ;* S.300: the whole last message
    if stat = 0 and ('S' : trim(now.f)) = ('S' : nv) then
       msg = k : ' in sd.conf: ' : old.f : ' -> ' : now.f : '; SD is running with ' : now.r : (if k.eff = 'restart' then ' until it is restarted' else ' (sessions started now use ' : now.f : ')')
-*     21 Nov 26 - RELEASE_1.1 382 (owner): a change that takes effect only at a restart asks, in a box, whether to restart SD now
-      if k.eff = 'restart' then
+*     21 Nov 26 - RELEASE_1.1 382 (owner): a change that takes effect only at a restart asks, in a box, whether to restart SD now.
+*     22 Nov 26 - RELEASE_1.1 390 (Linux S.301): only when the file and the running SD now differ (the row's own * mark): a value set back to
+*     what SD is running with needs no restart, and none is offered.
+      differs = 0
+      if rj > 0 then differs = pdiff<rj>
+      if k.eff = 'restart' and differs then
          why = k : ' is now ' : now.f : ' in sd.conf, but SD reads it only when it starts: until SD restarts, it keeps running with ' : now.r : '.'
          call $tk_frame(ctx, keys, panes<view>, msg)                   ;* the status line under the box says what was done (owner, round 8)
          call $tk_restart(ctx, why, rres, rmsg)

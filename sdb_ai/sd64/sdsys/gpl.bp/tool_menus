@@ -273,7 +273,7 @@ lay.rect:
 
 draw.all:
    cw = ctx<TK.C.W>
-   chh = ctx<TK.C.H> - 5
+   chh = (if ctx<TK.C.AIROW> then ctx<TK.C.BODYH> else ctx<TK.C.H> - 5)        ;* 22 Nov 26: with the AI line the clear stops above it (S.305 moved the line up a row and H - 5 wiped it)
    screen clear at 0,body.y size cw,chh
    screen box at acl.x,acl.y size acl.w,acl.h title 'Accounts'
    screen box at mnu.x,mnu.y size mnu.w,mnu.h title 'Menu'

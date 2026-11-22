@@ -23,6 +23,8 @@
 * 15 Nov 26 dm  S.244 (2), the owner: "Every field" opens empty.  The condition's value, an operation's text or number and the attribute number open empty with the
 *               value in force shown in the question (Ctrl-R puts it in) and an empty answer keeps it; the replace form's first text keeps it the same way, its
 *               second is an answer when empty.  ask.text is the one question of the three text operations.
+* 22 Nov 26 dm  S.304: what the page's own SELECT and the undo file's CREATE.FILE said is taken as the first MESSAGE ($tk_capt), not the first line: a message
+*               written on several lines was shown cut after its first.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -921,14 +923,7 @@ run.select:
    end
    clearselect
    execute ssent trapping aborts capturing sout rtnlist slv
-   sout = change(change(change(sout, char(13) : char(10), @fm), char(10), @fm), char(13), '')
-   sline = ''
-   for oi = 1 to dcount(sout, @fm)
-      if trim(sout<oi>) # '' then
-         sline = trim(sout<oi>)
-         exit
-      end
-   next oi
+   call $tk_capt('first', sout, '', sline)             ;* S.304: the select's first message whole, not only its first line
    suffix = ' record(s) selected to list 0'
    sn = ''
    if len(sline) > len(suffix) then
@@ -1230,8 +1225,7 @@ undo.file:
          msg = ucw : ': nothing was applied'
       end
    end else
-      mkout = change(change(change(mkout, char(13) : char(10), @fm), char(10), @fm), char(13), '')
-      mkw = trim(mkout<1>)
+      call $tk_capt('first', mkout, '', mkw)           ;* S.304: CREATE.FILE's first message whole
       msg = 'the undo file could not be made: ' : mkw[1, 100]
    end
    return
@@ -1572,7 +1566,7 @@ get.rects:
 
 draw.all:
    cw2 = ctx<TK.C.W>
-   chh = ctx<TK.C.H> - 5
+   chh = (if ctx<TK.C.AIROW> then ctx<TK.C.BODYH> else ctx<TK.C.H> - 5)        ;* 22 Nov 26: with the AI line the clear stops above it (S.305 moved the line up a row and H - 5 wiped it)
    screen clear at 0,1 size cw2,chh
    screen box at fx,fy size fw,fh title 'File'
    screen box at sx,sy size sw,sh title 'Which records'

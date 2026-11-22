@@ -239,7 +239,7 @@ def checks(raw):
                              "screen box at ob.x,ob.y size ob.w,ob.h", "screen box at tb.x,tb.y size tb.w,tb.h", "VISF = fb.h - 3", "VISC = cb.h - 3", "RVIS = wb.h - 6",
                              "hx = nb.x + nb.w - 5 ; hy = nb.y + 1", "at fb.x + 1,fb.y + dr attr ra width fb.w - 2", "at cb.x + 1,cb.y + 1 + dr attr ra width cb.w - 2", "at nb.x + 1,nb.y + 1 + dr attr ra width nb.w - 4",
                              "at sb.x + 1,sb.y + 1 + dr attr ra width sb.w - 2", "at ob.x + 1,ob.y + dr attr ra width ob.w - 2", "for dr = 1 to 5", "at tb.x + 2,tb.y + dr attr"))
-       and "chh = ctx<TK.C.H> - 4" in pg, "")
+       and "chh = (if ctx<TK.C.AIROW> then ctx<TK.C.BODYH> else ctx<TK.C.H> - 4)" in pg, "")     # 22 Nov 26: with the AI line the clear stops above it (it was H - 4 always, which reached the line and its rule)
     ck("TQ20", "the page waits on the keyboard only through the base: the key read is screen key, the end of the input and the cursor lock end it, and the base is closed on the way out",
        "screen key returning nm" in pg and "if status() = ER$EOF then exit" in pg and "case nm = 'guardquit'\n            exit" in pg and pg.find("call $tk_close(ctx)") > pg.find("repeat") and "input " not in code.replace("input.", ""), "")
     ck("TQ21", "the help record names a page of the documentation, and the page asks for it by that name from the key and from the mouse (the key is the record's name)",
@@ -373,7 +373,7 @@ MUTANTS = [
     ("the file rows overrun their border", "TQ19", sub("page", "VISF = fb.h - 3", "VISF = fb.h - 2")),
     ("the page waits with no key reader of the library", "TQ20", sub("page", "screen key returning nm", "input nm, 1")),
     ("the end of the input is not seen", "TQ20", sub("page", "            if status() = ER$EOF then exit\n", "")),
-    ("the help key names a record that does not exist", "TQ21", sub("help", "29c2-sd-tcl-tool-query", "")),
+    ("the help key names a record that does not exist", "TQ21", sub("help", "user-29c2-sd-tcl-tool-query", "")),     # 22 Nov 26: the record's whole page line (Linux 5be75db4): taking off only "29c2-..." left "user-", which TQ21 does not see
     ("the help button asks for another record", "TQ21", sub("page", "      call $tk_help('box', 'tool.query.page', hm, 0, 0)\n      if hm # '' then msg = hm\n      return\n   end\n   if mev<1>", "      call $tk_help('box', 'tool.query.nopage', hm, 0, 0)\n      if hm # '' then msg = hm\n      return\n   end\n   if mev<1>")),
     ("the sentence may be longer", "TQ22", sub("page", "MAXSENT = 600", "MAXSENT = 6000")),
     ("the sort comes after the columns", "TQ23", sub("page", "      if nso > 0 then verb = 'sort'\n", "")),

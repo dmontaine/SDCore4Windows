@@ -658,7 +658,7 @@ fit.lines:
 
 draw.all:
    cw2 = ctx<TK.C.W>
-   chh = ctx<TK.C.H> - 5
+   chh = (if ctx<TK.C.AIROW> then ctx<TK.C.BODYH> else ctx<TK.C.H> - 5)        ;* 22 Nov 26: with the AI line the clear stops above it (S.305 moved the line up a row and H - 5 wiped it)
    screen clear at 0,1 size cw2,chh
    ttl = 'Programs in ' : @who
    screen box at lx,ly size lw,lh title ttl

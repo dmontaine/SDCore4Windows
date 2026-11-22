@@ -71,6 +71,7 @@
 * 10 Nov 26 dm  S.205: F11 is no longer the filter's second key: a terminal keeps it for its own full screen, and / is the key the page shows.
 * 15 Nov 26 dm  S.244 (3), the owner: G's find and replace "as ONE dialog with two fields" - global.form asks the field, the change (a choice, (1)) and the two texts
 *               on one $tk_form, a refusal said in it; the preview, the box and the run are as they were.
+* 22 Nov 26 dm  S.304: what the undo file's CREATE.FILE said is taken as its first MESSAGE ($tk_capt), not its first line.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -2319,8 +2320,7 @@ undo.file:
          msg = ucw : ': nothing was changed'
       end
    end else
-      mkout = change(change(change(mkout, char(13) : char(10), @fm), char(10), @fm), char(13), '')
-      mkw = trim(mkout<1>)
+      call $tk_capt('first', mkout, '', mkw)           ;* S.304: CREATE.FILE's first message whole
       msg = 'the undo file could not be made: ' : mkw[1, 100]
    end
    return

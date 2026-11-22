@@ -324,7 +324,7 @@ lay.rect:
 
 draw.all:
    cw = ctx<TK.C.W>
-   chh = ctx<TK.C.H> - 5
+   chh = (if ctx<TK.C.AIROW> then ctx<TK.C.BODYH> else ctx<TK.C.H> - 5)        ;* 22 Nov 26: with the AI line the clear stops above it (S.305 moved the line up a row and H - 5 wiped it)
    screen clear at 0,body.y size cw,chh
    screen box at pr.x,pr.y size pr.w,pr.h title 'AI provider - one for every account'
    screen box at dt.x,dt.y size dt.w,dt.h title 'The row under the cursor'
