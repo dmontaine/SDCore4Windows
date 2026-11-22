@@ -23,6 +23,8 @@
 *           added; !ps_script is now a wrapper that calls it with capture off.
 * 27 Sep 26 Windows port - every script now starts by setting PSModulePath to
 *           Windows PowerShell's own module folders.  RELEASE_1.1 111.
+* 21 Nov 26 Windows port - an already elevated session skips the helper and
+*           its 1.5 s pipe wait.  RELEASE_1.1 373.
 * END-HISTORY
 *
 *
@@ -152,7 +154,11 @@ deffun elevate(action, arg) calling '!elevate'
 *  AN ELEVATED SESSION SENDS THE SCRIPT TO ITS HELPER INSTEAD OF RUNNING IT
 *  HERE.  9 is "no helper for this session" and is the only answer that means
 *  "not handled" rather than a result.
-   if kernel(K$ADMINISTRATOR, -1) then
+*  21 Nov 26 (RELEASE_1.1 373) - NOT WHEN THIS PROCESS IS ALREADY ELEVATED.  Such a session never has a helper (sd-elevate.ps1 -Start
+*  exits at once for an elevated caller), so every call started a PowerShell that waited 1.5 s on a pipe that was not there
+*  (Test-Helper) and answered 9: measured on VM sit12, REMOTE.SDSYS's report 4.2 s through SD against 0.3 s run directly.  The
+*  fall-through below runs the script with this process's own, elevated, token - the same privilege the helper would have given.
+   if kernel(K$ADMINISTRATOR, -1) and not(kernel(K$OS.ELEVATED, 0)) then
       rc = elevate('RUN', ps.path)
       if rc # 9 then
          if want.out then
