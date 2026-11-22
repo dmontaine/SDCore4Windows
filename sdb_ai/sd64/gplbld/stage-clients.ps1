@@ -22,6 +22,9 @@ the old programs written for qm will not work out of the box with sd because of 
 stays in the private store and is NOT staged.  A <To>\Windows32 an earlier run left is removed when it holds only the files
 that run wrote (anything else stops the run), so it cannot reach a package.
 
+22 Nov 26 - RELEASE_1.1 362 (the development bundles): a machine set up from a bundle has no P:.  The bundle carries the newest
+set's Windows half (COMMIT.txt and win64\) in <Projects>\Project_Other\sdclientlib-binaries, which is used when P:'s store is not there.
+
 Exit 0: the folder written and every copy matches.  1: a check failed (nothing is claimed).  2: cannot run (no set, bad -To).
 #>
 param(
@@ -35,6 +38,8 @@ function Fail([string] $t) { Say "stage-clients: FAILED - $t"; exit 1 }
 function Cannot([string] $t) { Say "stage-clients: CANNOT RUN - $t"; exit 2 }
 
 $Sets = 'P:\git-private\sdclientlib-binaries'
+$BundleSets = Join-Path (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)))) 'Project_Other\sdclientlib-binaries'
+if (-not (Test-Path -LiteralPath $Sets -PathType Container) -and (Test-Path -LiteralPath $BundleSets -PathType Container)) { $Sets = $BundleSets }
 $Layout = [ordered]@{
     'Windows64' = @{ Src = 'win64'; Files = @('sdclilib.dll', 'sdclient.dll', 'libsdclilib.dll.a', 'libsdclient.dll.a') }
 }
