@@ -76,7 +76,7 @@ def make_pki(d):
 class FakeModel:
     """The server.  cert is the stem of the certificate to present (server, wrongname or rogue)."""
 
-    def __init__(self, pki, key="test-key-0123456789", cert="server", host="127.0.0.1", tls_max=None):
+    def __init__(self, pki, key="test-key-0123456789", cert="server", host="127.0.0.1", tls_max=None, port=0):
         self.pki, self.key, self.log, self.count = pki, key, [], {}
         self.models = list(MODELS)
         self.slow_seconds = 3.0        # 21 Nov 26: how long [[slow]] waits before it answers (--serve --slow N; 246's F7 uses 30)
@@ -122,7 +122,8 @@ class FakeModel:
         else:
             ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         ctx.load_cert_chain(os.path.join(pki, cert + ".crt"), os.path.join(pki, cert + ".key"))
-        self.httpd = http.server.ThreadingHTTPServer((host, 0), H)
+        # 22 Nov 26: a fixed port (--serve --port N) lets a sitting restart the server with another certificate without SDSYS setting the URL again.
+        self.httpd = http.server.ThreadingHTTPServer((host, port), H)
         self.httpd.handle_error = lambda *a: None              # a client that gave up (a refused certificate) is not an error worth a traceback
         self.httpd.socket = ctx.wrap_socket(self.httpd.socket, server_side=True)
         self.port = self.httpd.server_address[1]
@@ -282,7 +283,8 @@ def _serve(args):
     os.makedirs(d, exist_ok=True)
     if not os.path.isfile(os.path.join(d, "ca.crt")):
         make_pki(d)
-    fm = FakeModel(d, key=_opt(args, "--key", "test-key-0123456789"), cert=_opt(args, "--cert", "server"), tls_max="1.1" if "--tls11" in args else None)
+    fm = FakeModel(d, key=_opt(args, "--key", "test-key-0123456789"), cert=_opt(args, "--cert", "server"), tls_max="1.1" if "--tls11" in args else None,
+                   port=int(_opt(args, "--port", "0")))
     fm.slow_seconds = float(_opt(args, "--slow", "3"))
     fm.start()
     print("fakemodel: serving https://localhost:%d/v1/chat/completions  (and /v1/messages)   certificate: %s%s   [[slow]] waits %s s" %
@@ -309,5 +311,5 @@ if __name__ == "__main__":
         sys.exit(_selftest())
     if "--serve" in sys.argv:
         sys.exit(_serve(sys.argv[1:]))
-    print("test-fakemodel.py --selftest | --serve [--dir D] [--key K] [--cert C] [--tls11] [--slow N]   (a module for test-aihelper-units.py)")
+    print("test-fakemodel.py --selftest | --serve [--dir D] [--key K] [--cert C] [--tls11] [--slow N] [--port N]   (a module for test-aihelper-units.py)")
     sys.exit(2)
