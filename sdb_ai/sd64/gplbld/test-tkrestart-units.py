@@ -2,8 +2,10 @@
 """test-tkrestart-units.py - the restart box's audit line and when tool.config offers it (RELEASE_1.1 390, Linux S.301).
 
 Linux took our row 382's restart box as its S.301 and added two points, carried here 22 Nov 2026:
-  R1  $tk_restart writes ONE audit line each time a restart is asked for, "sd restart app=<the page> status=asked|refused", lower
-      case, AFTER the restart script answered (so before SD stops) and before the wait; the page's name is taken before $tk_close.
+  R1  $tk_restart writes an audit line each time a restart is asked for, "sd restart app=<the page> status=asked", lower case, BEFORE
+      the restart step (VM sit15, 22 Nov: written after it, the line was lost - our restart step returns only once SD is stopping, and
+      the audit writer and the session go with it; Linux's helper returns first, so Linux writes its one line after); a restart that
+      could not be started adds "status=refused"; the page's name is taken before $tk_close.
   R2  tool.config offers the box only when the file and the running SD then differ (the row's own * mark, pdiff): a value set back to
       what SD runs with needs no restart.
 Linux's own test-tkrestart-units.py drives its sd-elevate sd-restart, which Windows has not; this is the Windows form, the same file in
@@ -21,7 +23,10 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GPLBP = os.path.normpath(os.path.join(HERE, os.pardir, "sdsys", "gpl.bp"))
-AUDIT = "void kernel(K$AUDIT, 'sd restart app=' : downcase(app) : ' status=' : (if rc = 0 then 'asked' else 'refused'))"
+# 22 Nov 26 (VM sit15): the "asked" line is written BEFORE the restart step - written after it, the line was lost, because our restart step
+# returns only once SD is stopping and the audit writer and the session go with it - and a refusal adds a second, "refused", line after it.
+AUDIT = "void kernel(K$AUDIT, 'sd restart app=' : downcase(app) : ' status=asked')"
+REFUSED = "if rc # 0 then void kernel(K$AUDIT, 'sd restart app=' : downcase(app) : ' status=refused')"
 
 
 def read(name):
@@ -43,11 +48,12 @@ def checks(tkr, cfg):
     c = code(tkr)
     pa = c.find("rs = ps_script_out(ps, @true)")
     pu = c.find(AUDIT)
+    pr = c.find(REFUSED)
     pw = c.find("if rc = 0 then")
-    out.append(("R1a", "tk_restart writes exactly one sd restart audit line, asked or refused, the page name in lower case",
-                c.count("'sd restart app='") == 1 and pu >= 0))
-    out.append(("R1b", "the line is written after the restart script answered and before the wait",
-                0 <= pa < pu < pw))
+    out.append(("R1a", "tk_restart writes the sd restart audit line (asked) once, and a refused line only when the restart was not started",
+                c.count("'sd restart app='") == 2 and c.count(AUDIT) == 1 and c.count(REFUSED) == 1))
+    out.append(("R1b", "the asked line is written BEFORE the restart step (after it, it was lost: VM sit15), the refused one after its answer",
+                0 <= pu < pa < pr < pw))
     pc = c.find("call $tk_close(ctx)")
     pp = c.find("app = ctx<TK.C.APP>")
     out.append(("R1c", "the page's name is taken from its context before $tk_close", 0 <= pp < pc and "$include tk.h" in c))
@@ -60,9 +66,10 @@ def checks(tkr, cfg):
 
 
 MUTANTS = [
-    ("the audit line removed", "tk", lambda t: t.replace(AUDIT, "null")),
-    ("the audit line moved before the restart script", "tk",
-     lambda t: t.replace("   " + AUDIT, "", 1).replace("   rs = ps_script_out(ps, @true)", "   " + AUDIT + "\n   rs = ps_script_out(ps, @true)", 1)),
+    ("the asked line removed", "tk", lambda t: t.replace(AUDIT, "null")),
+    ("the asked line moved after the restart step (the sit15 defect)", "tk",
+     lambda t: t.replace("   " + AUDIT + "\n", "", 1).replace("   rc = rs<1>\n", "   rc = rs<1>\n   " + AUDIT + "\n", 1)),
+    ("the refused line written whatever the answer", "tk", lambda t: t.replace(REFUSED, REFUSED.replace("if rc # 0 then ", ""), 1)),
     ("the page name taken after $tk_close", "tk",
      lambda t: t.replace("   app = ctx<TK.C.APP>\n   call $tk_close(ctx)", "   call $tk_close(ctx)\n   app = ctx<TK.C.APP>", 1)),
     ("tool.config asks whether or not the value differs", "cfg", lambda t: t.replace("if k.eff = 'restart' and differs then", "if k.eff = 'restart' then", 1)),

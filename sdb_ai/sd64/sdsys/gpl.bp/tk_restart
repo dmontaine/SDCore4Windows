@@ -11,8 +11,11 @@
 *           the message briefly displayed and then turned off"): Restart closes the page ($tk_close, which also gives the terminal back), clears
 *           the screen, shows one line, and waits here for SD to end this session; the page is never drawn again over a restart.  ctx is the
 *           first argument for that.
-* 22 Nov 26 Windows port - RELEASE_1.1 390 (Linux S.301, 5be75db4): one audit line each time a restart is asked for, sd restart app=<the page>
-*           status=asked|refused, lower case, written after restart-sd.ps1 answered and so before SD stops (asked = it exited 0).
+* 22 Nov 26 Windows port - RELEASE_1.1 390 (Linux S.301, 5be75db4): an audit line each time a restart is asked for, sd restart app=<the page>
+*           status=asked, lower case, written BEFORE restart-sd.ps1 is started; a restart that then could not be started writes a second line,
+*           status=refused.  An OS-forced difference from Linux, which writes its one line after its helper answered: restart-sd.ps1 -Detach
+*           returns only once SD has begun to stop (RELEASE_1.1 340), and the audit writer (the SD service) and this session stop with it.  The
+*           first form wrote the line after it and lost it: VM sit15, restart done 15:25:23-15:25:34, no line in the trail.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -63,11 +66,14 @@ deffun ps_script_out(script, want.out) calling '!ps_script_out'
    display @(-1) :
    display 'SD is restarting.  Everyone using SD is signed out, and this window closes.'
 
+*  22 Nov 26 (RELEASE_1.1 390): the line BEFORE the restart is started - restart-sd.ps1 -Detach returns only once SD is stopping, and the
+*  audit writer and this session go with it (VM sit15 lost a line written after it).  A refusal adds a second line.
+   void kernel(K$AUDIT, 'sd restart app=' : downcase(app) : ' status=asked')
    ps  =       '& ' : char(39) : kernel(K$WINPATH, '/restart-sd.ps1') : char(39) : ' -Detach'
    ps := @fm : 'exit $LASTEXITCODE'
    rs = ps_script_out(ps, @true)
    rc = rs<1>
-   void kernel(K$AUDIT, 'sd restart app=' : downcase(app) : ' status=' : (if rc = 0 then 'asked' else 'refused'))   ;* 22 Nov 26: Linux S.301
+   if rc # 0 then void kernel(K$AUDIT, 'sd restart app=' : downcase(app) : ' status=refused')
    if rc = 0 then
 *     The SD service is stopping: this session is ended with the rest.  It is not drawn again meanwhile.
       for w = 1 to 60

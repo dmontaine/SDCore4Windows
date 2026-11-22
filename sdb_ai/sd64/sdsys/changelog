@@ -14,8 +14,9 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
 22 Nov 26  TOOL.CONFIG OFFERS A RESTART ONLY WHEN ONE WOULD CHANGE SOMETHING, AND A RESTART ASKED FOR IS AUDITED.
 
              What        - The "Restart SD?" box comes up after a change only when the file then differs from what SD
-                           is running with.  Each restart asked for from a page writes one audit line,
-                           sd restart app=<page> status=asked, or status=refused when it could not be started.
+                           is running with.  Each restart asked for from a page writes an audit line,
+                           sd restart app=<page> status=asked, before SD stops; one that could not be started adds
+                           a second line, status=refused.
              Why         - Setting a value back to the one SD already runs with offered a restart that would change
                            nothing; and a restart, which signs out everyone, left no line in the trail.
 
