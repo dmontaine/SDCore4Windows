@@ -7,6 +7,7 @@
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 22 Oct 26 dm  New (S.75, TK-0.2).
 * 9 Nov 26 dm  S.186: a refused word says which character is wrong (15040 with $tk_badch: a capital letter, a space, the character &), not only the word.
+* 21 Nov 26 Windows port - RELEASE_1.1 380: a line the capture wrapped is joined back to the line it came from (join.wrapped).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -82,12 +83,33 @@ $include tk.h
 
    execute s trapping aborts capturing out
    status = @system.return.code
+   gosub join.wrapped
 
 * 9 Nov 26 (S.186): every command run or refused here goes into the page's log of commands, which Ctrl-O shows on a page that has no output pane of its own ($tk_std)
 run.done:
    lg.kind = (if err # '' then 'refuse' else 'ok')
    lg.text = s : @fm : (if err # '' then err else out)
    call $tk_out('log', '', lg.kind, lg.text, '')
+   return
+
+* 21 Nov 26 Windows port - RELEASE_1.1 380.  ON WINDOWS THE CAPTURE WRAPS A LONG LINE, AND THE PIECE AFTER THE WRAP STARTS WITH A CR.  Measured on VM
+* sit12 (ZZCAP): REMOTE.API OFF NO.RESTART's 10136 came back as a 77-character line ending "when SD is next" and a line "<13>started.", so every
+* page that shows the command's last line showed "Mstarted.".  Such a piece is joined back to the line before it, with the space the wrap
+* took; any other CR is dropped.  A line that holds no CR is left as it is.
+join.wrapped:
+   jo = ''
+   jn = 0
+   jc = dcount(out, @fm)
+   for ji = 1 to jc
+      jl = out<ji>
+      if jl[1, 1] = char(13) and jn > 0 then
+         jo<jn> = jo<jn> : ' ' : convert(char(13), '', jl)
+      end else
+         jn += 1
+         jo<jn> = convert(char(13), '', jl)
+      end
+   next ji
+   out = jo
    return
 end
 
