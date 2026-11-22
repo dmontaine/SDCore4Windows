@@ -815,6 +815,11 @@ foreach ($t in @($PfTree, $PdTree)) {
             Write-Host "   taking ownership of $t so its closed folders can be deleted (a few seconds)..."
             & "$env:SystemRoot\System32\takeown.exe" /F $t /R /D Y 2>&1 | Out-Null
             & "$env:SystemRoot\System32\icacls.exe" $t /grant '*S-1-5-32-544:(OI)(CI)F' /T /C /Q 2>&1 | Out-Null
+            # 22 Nov 26 - AND A SECOND PASS WITHOUT (OI)(CI), FOR THE FILES.  On a file icacls takes the folder-only inheritance flags,
+            # says "processed", and adds nothing: the AI's sealed key (ai\keys\<provider>, SYSTEM and NT SERVICE\sd-ai only) kept
+            # Administrators out, and two cycles of 22 Nov stopped here ("still there: ai") once a key had been stored.  Measured with
+            # sdfake\ai-left2.ps1: after the pass above the file still had no Administrators entry; a plain :F grant on it gave one.
+            & "$env:SystemRoot\System32\icacls.exe" $t /grant '*S-1-5-32-544:F' /T /C /Q 2>&1 | Out-Null
         }
         Remove-Item -LiteralPath $t -Recurse -Force -ErrorAction SilentlyContinue
     }
