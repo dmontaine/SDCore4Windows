@@ -1,0 +1,1 @@
+Changing an SD password needs an elevated session. A Windows administrator starts SD Core with Run as administrator; anyone else asks the SD administrator (SDSYS) to change it.

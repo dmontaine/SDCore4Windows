@@ -42,6 +42,7 @@
  */
 
 #include <windows.h>
+#include <shellapi.h> /* 21 Nov 26: SHELLEXECUTEINFOW, for own_window()'s SDSYS step (RELEASE_1.1 374) */
 #include <string.h>
 #include <wchar.h>
 
@@ -322,6 +323,9 @@ static int mode_switch_for_runtime(const char* q, int n) {
      - ssh (SSH_CONNECTION or SSH_CLIENT), session 0, or input or output not a
        console: there is no desktop window to open.
    Otherwise it does not return:
+     - 21 Nov 26, RELEASE_1.1 374: the Windows user SDSYS on a UAC-limited
+       token is started again elevated (Windows asks for consent) and this
+       process ends; declined, it goes on below and LOGIN refuses it.
      - a CLASSIC console window (ConsoleWindowClass) whose only client is this
        process - the Start Menu shortcut's conhost.exe, or the window opened
        below - becomes SD's: 140 by 43 to start (GetLargestConsoleWindowSize
@@ -355,6 +359,61 @@ static const WCHAR* cmdline_args(void) {
   }
   while (*c == L' ' || *c == L'\t') c++;
   return c;
+}
+
+/* 21 Nov 26 Windows port - RELEASE_1.1 374.  Is this process the Windows user SDSYS on a UAC-limited token?  SDSYS is an
+   administrator, so a desktop session of it starts limited, and LOGIN admits SDSYS only from an elevated process (message 10002).
+   Measured on VM sit12, signed in to Windows as SDSYS: the Start menu's SD was refused and stopped; an elevated PowerShell running
+   sd.exe worked.  TokenElevationTypeLimited only: a full token needs nothing, and a token with no linked administrator half (UAC off,
+   or SDSYS taken out of Administrators) would turn "runas" into a request for SOMEBODY ELSE's credentials, whose session this is not.
+   The name is compared ordinally (English only; no locale folding). */
+static int sdsys_limited(void) {
+  WCHAR name[64];
+  DWORD len = 64;
+  HANDLE tok;
+  TOKEN_ELEVATION_TYPE type = TokenElevationTypeDefault;
+  DWORD got = 0;
+  int limited = 0;
+
+  if (!GetUserNameW(name, &len) || CompareStringOrdinal(name, -1, L"SDSYS", -1, TRUE) != CSTR_EQUAL)
+    return 0;
+  if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok)) {
+    if (GetTokenInformation(tok, TokenElevationType, &type, sizeof(type), &got) && type == TokenElevationTypeLimited)
+      limited = 1;
+    CloseHandle(tok);
+  }
+  return limited;
+}
+
+typedef BOOL(WINAPI* sei_fn)(SHELLEXECUTEINFOW*);
+
+/* Start this program again elevated, with the same arguments, in the same directory: Windows shows its consent (UAC) for it.  TRUE
+   when the elevated copy was started, and this one then has nothing to do.  shell32 is loaded here, as user32 is in own_window(), so
+   the server links nothing new. */
+static int start_elevated(const WCHAR* exe) {
+  HMODULE shell32 = LoadLibraryA("shell32.dll");
+  sei_fn run = NULL;
+  SHELLEXECUTEINFOW sei;
+  WCHAR dir[MAX_PATH];
+  DWORD dn = GetCurrentDirectoryW(MAX_PATH, dir);
+  int started = 0;
+
+  if (shell32 != NULL)
+    run = (sei_fn)(void (*)(void))GetProcAddress(shell32, "ShellExecuteExW");
+  if (run != NULL) {
+    memset(&sei, 0, sizeof(sei));
+    sei.cbSize = sizeof(sei);
+    sei.fMask = SEE_MASK_NOASYNC; /* the launch is finished before this process ends */
+    sei.lpVerb = L"runas";
+    sei.lpFile = exe;
+    sei.lpParameters = cmdline_args();
+    sei.lpDirectory = (dn > 0 && dn < MAX_PATH) ? dir : NULL;
+    sei.nShow = SW_SHOWNORMAL;
+    started = run(&sei) ? 1 : 0;
+  }
+  if (shell32 != NULL)
+    FreeLibrary(shell32);
+  return started;
 }
 
 static void size_own_window(HANDLE out, int want_cols, int want_rows, int buffer_rows) {
@@ -401,6 +460,19 @@ void own_window(const WCHAR* title) {
     return;
   if (GetModuleFileNameW(NULL, exe, MAX_PATH) == 0 || GetModuleFileNameW(NULL, exe, MAX_PATH) >= MAX_PATH)
     return;
+
+  /* 21 Nov 26 Windows port - RELEASE_1.1 374 (owner, chat 21 Nov: sd.exe starts itself elevated for the Windows user SDSYS).  The
+     Start menu's SD runs unelevated for everybody (one shortcut, all users), and SDSYS's session needs an elevated process: so SDSYS,
+     and only SDSYS, is started again through UAC's consent and this copy ends before it hosts anything or binds the shared segment.
+     LOGIN still decides; this only asks Windows for the token LOGIN requires.  Declined, the session runs here as before and LOGIN
+     refuses it with 10002 under the line below.  A hosted session (SD_OWN_WINDOW), ssh and session 0 have returned above. */
+  if (sdsys_limited()) {
+    DWORD done;
+    const WCHAR* msg = L"SDSYS needs an elevated session, and it was not started elevated.\r\n";
+    if (start_elevated(exe))
+      ExitProcess(0);
+    WriteConsoleW(out, msg, (DWORD)wcslen(msg), &done, NULL);
+  }
 
   w = GetConsoleWindow();
   user32 = LoadLibraryA("user32.dll");

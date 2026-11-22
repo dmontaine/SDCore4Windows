@@ -568,6 +568,17 @@ Write-Host ''
 # "required" here is: ask, verify a credential actually appeared, and ask again
 # if it did not, up to $maxTries.  After that it prints the one command that
 # puts it right rather than looping forever at somebody who has decided not to.
+# 21 Nov 26 - RELEASE_1.1 378.  Does this $cred record hold a credential, by the test set_acc_password and LOGIN use: field 5
+# (CRED$STOREDKEY) not empty.  No file is no credential.  A file this window cannot read keeps the old answer, "set", so a password
+# nobody here has seen is never offered for replacement; this window is elevated and $cred grants Administrators full control.
+function Test-SdCredentialSet {
+    param([Parameter(Mandatory = $true)] [string] $Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    try   { $fields = @(Get-Content -LiteralPath $Path -ErrorAction Stop) }
+    catch { return $true }
+    return (($fields.Count -ge 5) -and ($fields[4].Trim() -ne ''))
+}
+
 function Set-AttachedAccountPassword {
     param(
         [Parameter(Mandatory = $true)] [string] $Account,
@@ -586,7 +597,10 @@ function Set-AttachedAccountPassword {
     # has been using; asking again would replace a working password with a
     # freshly invented one, which is the fault the sixteenth pass had to fix for
     # SDSYS.  Here it is CHECKABLE, so it is checked rather than reasoned about.
-    if (Test-Path -LiteralPath $credFile) {
+    # 21 Nov 26 - RELEASE_1.1 378: SET BY SD'S OWN TEST, NOT BY THE FILE BEING THERE.  set_acc_password and LOGIN count a credential
+    # only when the record's field 5 (CRED$STOREDKEY, int$keys.h) is not empty, so a record of another version or an empty file read
+    # as "no password" there and as "already set" here.  A field mark is a line in a directory-file record, so field 5 is line 5.
+    if (Test-SdCredentialSet -Path $credFile) {
         Write-Wrapped -Text "The account $Account already has an SD Core password."
         Write-Host ''
         return $true

@@ -3,6 +3,20 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+21 Nov 26  SIGNED IN TO WINDOWS AS SDSYS, THE START MENU'S SD ASKS FOR ELEVATION ITSELF; MODIFY.PASSWORD SAYS AT ONCE WHEN IT
+           CANNOT WORK.
+
+             What        - Signed in to Windows as SDSYS, starting SD from the Start menu (or typing sd at an ordinary
+                           prompt) brings up Windows' consent prompt and opens SD elevated, in SDSYS.  It used to open
+                           an unelevated window that refused SDSYS and stopped.  MODIFY.PASSWORD in a session that was
+                           not started elevated now says so before it asks for anything: it used to say the account had
+                           no password, take the new one twice and then fail with status 3035.  The installer's
+                           closing window decides whether your account already has an SD password the way SD does.
+             Why         - SDSYS's session needs an elevated process, and the password store is open to
+                           administrators only.
+             Does NOT    - Elevate anybody but SDSYS, or let an unelevated session change a password: a Windows
+                           administrator starts SD with Run as administrator; anyone else asks SDSYS.
+
 21 Nov 26  MAKING A WINDOWS ACCOUNT SAYS WHAT IT IS DOING BEFORE IT WAITS, AND THE INSTALLER'S PASSWORD PROMPT IGNORES KEYS TYPED AHEAD.
 
              What        - CREATE.ACCOUNT USER (and so REMOTE.SDSYS ON, the first time) prints "Making the change (a few
