@@ -11,6 +11,7 @@
 *               body one row shorter, the last one, which is YSTAT - 1 where $tk_ai draws the line; the panes that stretch give the row up (the shrinking below), so no page declares
 *               it.  A page that has not is laid out exactly as before.  A pane that stretches and declared no least height may give that one row ('normalise'), else the row would
 *               have come out of the pane that does not stretch.
+* 22 Nov 26 dm  S.305 (the owner: "blank line with a horizontal line rule like the line below the status line"): the AI line takes TK.AIROWS rows, the line and the rule under it.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -151,7 +152,7 @@ body:
    ctx<TK.C.XBODY> = TK.XBODY
    ctx<TK.C.YBODY> = TK.YBODY
    ctx<TK.C.BODYW> = ctx<TK.C.W> - 2 * TK.XBODY
-   ctx<TK.C.BODYH> = ctx<TK.C.YSTAT> - TK.YBODY - (if ctx<TK.C.AIROW> then 1 else 0)     ;* S.97 stage 1: a page that gave the AI line a row has one row less, and only then
+   ctx<TK.C.BODYH> = ctx<TK.C.YSTAT> - TK.YBODY - (if ctx<TK.C.AIROW> then TK.AIROWS else 0)     ;* S.97 stage 1: a page that gave the AI line its rows has that many less, and only then
    return
 
 * The cursor lock in its layout mode: the keys are not the page's while the window is smaller than the floor, wherever the cursor is
@@ -259,7 +260,7 @@ lay.panes:
    bh = ctx<TK.C.BODYH> + 0
    xb = ctx<TK.C.XBODY> + 0
    yb = ctx<TK.C.YBODY> + 0
-   if bw >= rbw and bh >= rbh - (if ctx<TK.C.AIROW> then 1 else 0) then ctx<TK.C.MODE> = 'full' else ctx<TK.C.MODE> = 'compact'     ;* the AI line's row is not a row the reference body lacks
+   if bw >= rbw and bh >= rbh - (if ctx<TK.C.AIROW> then TK.AIROWS else 0) then ctx<TK.C.MODE> = 'full' else ctx<TK.C.MODE> = 'compact'     ;* the AI line's rows are not rows the reference body lacks
    pd = ctx<TK.C.PANES>
    np = dcount(pd, @vm)
    if np = 0 then
@@ -395,7 +396,7 @@ normalise:
       v = pd<1, i, TK.P.MINH>
       if v = '' then
          v = ph<i>
-         if ctx<TK.C.AIROW> and pvs<i> > 0 and v > 1 then v -= 1          ;* S.97 stage 1: the AI line's row is given up by a pane that stretches, though its page declared no least height
+         if ctx<TK.C.AIROW> and pvs<i> > 0 then v = (if v > TK.AIROWS then v - TK.AIROWS else 1)     ;* S.97 stage 1: the AI line's rows are given up by a pane that stretches, though its page declared no least height
       end
       pmh<i> = v + 0
       v = pd<1, i, TK.P.MINW>

@@ -524,9 +524,9 @@ def checks(raw):
              "only among the failing bands unless the height failed; until nothing collapses",
        ordered(lp, "loop", "gosub structure", "gosub fit.width", "gosub fit.height", "if hfail # '' or vfail then", "if shown<i> and ppr<i> > 0 then", "can = vfail",
                "if ppr<i> >= bestp then", "if best then shown<best> = 0", "until not(best) do"), lp[:300])
-    ck("T6", "the mode is full when the body is at least the reference body both ways (one row less when the page gave the AI line a row: S.97 stage 1), else compact; "
+    ck("T6", "the mode is full when the body is at least the reference body both ways (TK.AIROWS less when the page gave the AI line its rows: S.97 stage 1, S.305), else compact; "
              "a collapsed pane's rectangle is 0, 0, 0, 0, 0; the cut also stops a pane at its band's foot",
-       "if bw >= rbw and bh >= rbh - (if ctx<TK.C.AIROW> then 1 else 0) then ctx<TK.C.MODE> = 'full' else ctx<TK.C.MODE> = 'compact'" in lp and "rects<1, i> = 0 : @sm : 0 : @sm : 0 : @sm : 0 : @sm : 0" in lp
+       "if bw >= rbw and bh >= rbh - (if ctx<TK.C.AIROW> then TK.AIROWS else 0) then ctx<TK.C.MODE> = 'full' else ctx<TK.C.MODE> = 'compact'" in lp and "rects<1, i> = 0 : @sm : 0 : @sm : 0 : @sm : 0 : @sm : 0" in lp
        and "if ry + rh > y + hb then rh = y + hb - ry" in label(lay, "cut"), "")
     cd = label(lay, "check.decl")
     ck("T7", "the declaration is checked before it is kept (12546 with the pane and the attribute) and against the reference body (12547), and a refused one leaves no panes in the context",
@@ -678,7 +678,7 @@ MUTANTS = [
     ("the collapse takes the first of equals", "T5", sub("tk_layout", "if ppr<i> >= bestp then", "if ppr<i> > bestp then")),
     ("a never-collapse pane collapses", "T5", sub("tk_layout", "if shown<i> and ppr<i> > 0 then", "if shown<i> then")),
     ("the mode is always full", "T6", sub("tk_layout", "else ctx<TK.C.MODE> = 'compact'", "else ctx<TK.C.MODE> = 'full'")),
-    ("a row short is full for every page, not only one with the AI line", "T6", sub("tk_layout", "bh >= rbh - (if ctx<TK.C.AIROW> then 1 else 0)", "bh >= rbh - 1")),
+    ("a row short is full for every page, not only one with the AI line", "T6", sub("tk_layout", "bh >= rbh - (if ctx<TK.C.AIROW> then TK.AIROWS else 0)", "bh >= rbh - TK.AIROWS")),
     ("a refused declaration keeps its panes", "T7", sub("tk_layout", "         if perr # '' then\n            ctx<TK.C.PANES> = ''\n", "         if perr # '' then\n")),
     ("the fit is not checked", "T7", sub("tk_layout", "      if need > rbw then perr = sysmsg(12547, app, TK.MINW, TK.MINH)\n", "")),
     ("a slot moves", "W1", sub("tk.h", "$define TK.C.AI        11", "$define TK.C.AI        12")),

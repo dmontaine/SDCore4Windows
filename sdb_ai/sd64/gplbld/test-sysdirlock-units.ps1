@@ -51,7 +51,9 @@ $Locked = @('syscom','terminfo','terminfo.src','helptext','dir_dict','licence','
 $LockedLate = @('start.default','examples.bp','examples.bp.out')
 $Fixed  = @('accounts','$map','messages','newvoc','bp','cat','voc',
             'voc_removed','voc_removed.saved','config.table','voc_template')
-$Elsewhere = @('audit','dumps','pstmp','batch.jobs','batch.jobs.dic','gcat','gpl.bp.out','bin','$cred')
+# 22 Nov 26 - $aikey: the AI key's hand-over folder, made on first use by tool_ai hand.key (and a sitting's script the same way) with its
+# own protected ACL, SDSYS and SYSTEM only (icacls /inheritance:r); found by L7 on the host after the 22 Nov sitting.
+$Elsewhere = @('audit','dumps','pstmp','batch.jobs','batch.jobs.dic','gcat','gpl.bp.out','bin','$cred','$aikey')
 $Open   = @('$ipc','errlog','prt')   # 14 Nov 26: $hold and $hold.dic locked too (Linux 755, mail 17:35)
 
 $iss    = Join-Path $PSScriptRoot 'sd.iss'

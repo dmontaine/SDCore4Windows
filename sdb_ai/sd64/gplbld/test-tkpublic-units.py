@@ -40,7 +40,7 @@ WRAP = {
 }
 NAMES = tuple(WRAP)
 FORBIDDEN = ("tk_run", "tk_runx", "tk_gates", "tk_gate_info", "tk_ai", "tk_aipage", "tk_aidocs", "tk_aiwall", "tk_help", "tk_ownfile", "tk_explain", "tk_word", "tk_brk")
-NOT_IN_PUBLIC = {"TK.C.AI", "TK.C.AIROW", "TK.K.AI"}
+NOT_IN_PUBLIC = {"TK.C.AI", "TK.C.AIROW", "TK.K.AI", "TK.AIROWS"}
 STATEMENTS = r"(?m)^\s*(execute|os\.execute|write|writev|writeu|delete|deletelist|open|openseq|openpath|read|readv|readu|readseq|writeseq|chain|perform|sh|screen)(?=\s)|\bkernel\(|\bsysmsg\("
 
 

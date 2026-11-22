@@ -3,6 +3,17 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+22 Nov 26  A RULE SEPARATES THE AI LINE FROM THE STATUS LINE.
+
+             What        - On the home screen and on each tool page with an AI line, a horizontal rule, like the one
+                           below the status line, is drawn between the AI line and the status line.  On the home screen
+                           the status line keeps saying how to use the AI line while you type or edit in it.
+             Why         - With the paper theme the black AI line and the black status line read as one bar, and Ctrl-U
+                           in the line looked as if it had wiped out the status line, because any key cleared its message
+                           on the home screen.
+             Does NOT    - Change a page for an account without the AI, or the IDE and the dictionary form, where the
+                           form's border already separates the two.  With the AI on, the page's body is one row shorter.
+
 22 Nov 26  A PAGE'S STATUS LINE SHOWS THE WHOLE MESSAGE OF THE COMMAND IT RAN.
 
              What        - tool.accounts, tool.backups, tool.config, tool.gates, tool.jobs and tool.remote show the

@@ -321,7 +321,12 @@ def checks(raw):
         if g["hint"][1] != fr["YSTAT"] - 1 or g["hint"][3] != 1 or g["header"][3] != 4:
             bad.append("%dx%d hint %r header %r" % (W, H, g["hint"], g["header"]))
     ck("D3", "at every size of %s the three panes tile the body - full width, one under another from its first row to its last, no overlap, no gap - the panel takes every row "
-       "beyond the reference, the header stays 4 rows and the hint row is YSTAT - 1 (the AI line's row)" % ", ".join("%dx%d" % s for s in SIZES), not bad, "; ".join(bad[:6]))
+       "beyond the reference, the header stays 4 rows and the hint row is YSTAT - 1 (no AI; D4 is the AI's)" % ", ".join("%dx%d" % s for s in SIZES), not bad, "; ".join(bad[:6]))
+    ck("D4", "S.305: with the AI on the hint pane is TK.AIROWS high and the panel that much less one (the line on YSTAT - 2, the rule on YSTAT - 1), declared again after each $tk_ai 'init' "
+       "(start, switch, F5), and a key that edits the line keeps the status line's message",
+       re.search(r"if ctx<TK\.C\.AI> then\s+pd<2, TK\.P\.H> = pd<2, TK\.P\.H> - \(TK\.AIROWS - 1\)\s+pd<3, TK\.P\.H> = TK\.AIROWS\s+end", src) is not None
+       and len(re.findall(r"call \$tk_ai\('init', ctx, '', ''\)\s+gosub declare\.panes", src)) == src.count("call $tk_ai('init'") == 3
+       and re.search(r"case out = 'ask'\s+gosub ask\.ai\s+case 1\s+msg = sysmsg\(12643\)", src) is not None)
 
     # ---- the tile grid
     ncol, tw, xcol = columns(1, 138, p)
@@ -463,6 +468,8 @@ def oldpage(**kw):
 
 
 MUTANTS = [
+    ("the rule has no row on the home screen", "D4", sub("      pd<3, TK.P.H> = TK.AIROWS\n", "")),
+    ("an edit of the AI line clears the status line", "D4", sub("      case 1\n         msg = sysmsg(12643)", "      case 1\n         msg = ''")),
     ("the panel is declared a row shorter", "D2", sub("pd<2> = 'panel' : @vm : 2 : @vm : 1 : @vm : 34 :", "pd<2> = 'panel' : @vm : 2 : @vm : 1 : @vm : 33 :")),
     ("the header is declared three rows", "D2", sub("pd<1> = 'header' : @vm : 1 : @vm : 1 : @vm : 4 :", "pd<1> = 'header' : @vm : 1 : @vm : 1 : @vm : 3 :")),
     ("the panel does not stretch down", "D3", sub("138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch'", "138 : @vm : '' : @vm : '' : @vm : 1 : @vm : 'stretch'")),
@@ -487,7 +494,7 @@ MUTANTS = [
     ("a resize leaves the identity where it was", "T5", sub("   gosub set.title                                        ;* the identity's column", "   null                                        ;* the identity's column")),
     ("reopen does not declare the panes", "T6", sub("   call $tk_ai('init', ctx, '', '')                       ;* the account may be another, and the window another size\n   gosub declare.panes\n",
                                                     "   call $tk_ai('init', ctx, '', '')                       ;* the account may be another, and the window another size\n")),
-    ("the page lowers its floor", "T6", sub("   call $tk_open('home', '', ctx, err)\n   if err # '' then\n      display err\n      stop", "   call $tk_open('home', '', ctx, err, 100, 30)\n   if err # '' then\n      display err\n      stop")),
+    ("the page lowers its floor", "T6", sub("   call $tk_open('home', '', ctx, err)\n   if err # '' then\n      hrefused = 1", "   call $tk_open('home', '', ctx, err, 100, 30)\n   if err # '' then\n      hrefused = 1")),
     ("the hint row is lh - 4 again", "T1", sub("screen text '' at 0,hny width lw", "screen text '' at 0,lh - 4 width lw")),
     ("a click on the AI line is read at the old row", "T8", sub("ctx<TK.C.AI> and my = hny", "ctx<TK.C.AI> and my = 39")),
     ("the panel's last row is fixed", "T7", sub("   py1 = py0 + ph - 1\n", "   py1 = 38\n")),

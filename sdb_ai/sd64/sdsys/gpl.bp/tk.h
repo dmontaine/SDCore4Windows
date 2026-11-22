@@ -14,6 +14,7 @@
 * 30 Oct 26 dm  S.88 F0a: ctx slot 27 (TK.C.BAR), the menu bar's record of what it drew.  No slot before 27 moved.
 * 1 Nov 26 dm   S.97 stage 1: ctx slot 28 (TK.C.AIROW), the row the AI line takes from the body, and key-table value 10 (TK.K.AI), an action offered to the AI.  Nothing before them moved.
 * 1 Nov 26 dm   S.97 stage 4: TK.K.AI may be 2 (offered, and it makes or compiles something).  No slot moved.
+* 22 Nov 26 dm  S.305: TK.AIROWS, the rows the AI line takes (the line and the rule under it).  No slot moved.
 * END-HISTORY
 *
 * THE MINIMUM WINDOW is 140 columns by 43 lines (the owner's ruling of 20 Oct 2026).  The 43rd line is the function-key row, outside the window below its border.
@@ -46,7 +47,7 @@ $define TK.C.YSTAT     7       ;* the row of the status line
 $define TK.C.YBORD     8       ;* the row of the border
 $define TK.C.YKEYS     9       ;* the row of the function keys
 $define TK.C.GEN       10      ;* a number the app raises to have $tk_frame write all of the frame again (after the screen was cleared or repainted under it)
-$define TK.C.AI        11      ;* 1 when the AI line is drawn on row YSTAT - 1 (set by $tk_ai 'init'; the AI is on for this account and the helper has a provider, model and key), else null
+$define TK.C.AI        11      ;* 1 when the AI line is drawn on row YSTAT - TK.AIROWS (set by $tk_ai 'init'; the AI is on for this account and the helper has a provider, model and key), else null
 *   Slots 12 to 26 are the layout service's ($tk_layout, 28 Oct 2026).  $tk_open fills them; $tk_layout 'refresh' makes them the window's again after a resize.
 $define TK.C.FLOORW    12      ;* the app's floor: the smallest window it is laid out for (TK.MINW unless the app declared another to $tk_open)
 $define TK.C.FLOORH    13
@@ -55,7 +56,7 @@ $define TK.C.WINH      15
 $define TK.C.XBODY     16      ;* the body: the cells between the menu bar (row 0) and the status line, less a column at each side
 $define TK.C.YBODY     17
 $define TK.C.BODYW     18
-$define TK.C.BODYH     19      ;* YSTAT - YBODY rows: the body ends on the row above the status line (the AI line's row when the AI is on, as the pages have always drawn)
+$define TK.C.BODYH     19      ;* YSTAT - YBODY rows: the body ends on the row above the status line ; TK.AIROWS fewer on a page that gave the AI line its rows
 $define TK.C.MODE      20      ;* full: every pane has at least its declared size; compact: the layout is smaller than 140 by 43 and a pane was made smaller or collapsed
 $define TK.C.EPOCH     21      ;* the frame cache's epoch: a new number from each $tk_open, cleared by $tk_close; $tk_frame forgets what it wrote when it differs
 $define TK.C.YMENU     22      ;* the row of the menu bar (0)
@@ -66,13 +67,15 @@ $define TK.C.PANEERR   26      ;* null, or why the last 'declare' was refused (t
 *   Slots 27 and up are the menu bar's ($tk_menubar, 30 Oct 2026, S.88 F0a).  No slot before 27 moved.
 $define TK.C.BAR       27      ;* what $tk_menubar last drew on row 0: the width, the generation, the epoch, the pane and the menus; it draws again only when this differs
 *   Slot 28 is the AI line's on a page of the toolkit ($tk_aipage, 1 Nov 2026, S.97 stage 1).
-$define TK.C.AIROW     28      ;* 1 when the page has given the AI line a row: $tk_aipage 'init' sets it when the AI is usable, and $tk_layout then takes the LAST row of the body for the line (BODYH is one less; the stretching panes give the row up), else null and the page is laid out as it always was
+$define TK.C.AIROW     28      ;* 1 when the page has given the AI line its rows: $tk_aipage 'init' sets it when the AI is usable, and $tk_layout then takes the LAST TK.AIROWS rows of the body for them (BODYH is that much less; the stretching panes give them up), else null and the page is laid out as it always was
 *   Slot 29 is the focus marks' ($tk_frame, 1 Nov 2026, S.99: the owner's [*] / [-] of 19 Oct, the IDE's, on the pages).
 $define TK.C.FOCI      29      ;* the panes that can take the focus: a value to each, the layout pane's id (TK.P.ID) and, as the second subvalue, the name the page gives $tk_frame for it; null: no marks
 *
 * THE BODY'S ORIGIN.  ONE NUMBER EACH: a menu bar of its own on row 0 that pushes every body down a row is TK.YBODY 2 (and the reference body below is a row shorter).
 $define TK.XBODY       1       ;* the body starts in column 1 and ends a column short of the right edge: BODYW = W - 2 * TK.XBODY
 $define TK.YBODY       1       ;* the first row of the body: BODYH = YSTAT - TK.YBODY
+* THE AI LINE'S ROWS (S.305; the owner, 22 Nov 2026, of the black line on the black status line: "blank line with a horizontal line rule like the line below the status line"):
+$define TK.AIROWS      2       ;* the line on YSTAT - TK.AIROWS, and under it on YSTAT - 1 a rule like the border's, so that the line and the status line are not one bar
 * THE SMALLEST FLOOR an app may declare to $tk_open: under 100 by 30 there is ED (plan section 12).  A floor is never larger than TK.MAXW by TK.MAXH.
 $define TK.LEASTW      100
 $define TK.LEASTH      30

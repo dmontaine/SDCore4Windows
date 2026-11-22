@@ -70,6 +70,9 @@
 *               prompt stays one after the Terminal tile and EXIT (hflag 2), so Ctrl-Q still goes back to the prompt; Alt-X is gone: Ctrl-Q is the one key that leaves.
 * 15 Nov 26 dm  S.242 stage 6 (owner: "Home screen tile"): Receive files, in the person's own tools, only where RECEIVE would open a transfer (xfer.usable asks what RECEIVE
 *               asks, in its order); it runs RECEIVE and waits for a key after.  Not on the administrator's page (SDSYS has no transfer).
+* 22 Nov 26 dm  S.305 (the owner: "blank line with a horizontal line rule like the line below the status line"): with the AI on the hint pane is TK.AIROWS high
+*               (the line, the rule) and the panel a row shorter; the panes are declared after $tk_ai 'init', at the start and at F5 too.
+*               A key that edits the line no longer clears the status line's message (the owner saw Ctrl-U "wipe out the status line").
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -94,8 +97,8 @@
 *   back one level and give the focus and the scroll back as they were, 8 levels are the most, and a menu that is already open above is refused (no page can open itself).  A menu with no
 *   tile (all turned off) has no folder tile.  No tile of the delivered page opens a sub-menu yet: a table that wants one declares a folder tile and gives its groups the menu name.
 *
-*   THE LAYOUT (S.88 L2) is the toolkit's layout service: three panes, the header (rows 1 to 4 at 140 by 43), the panel of tiles (rows 5 to 38) and the hint row (39, the AI line's
-*   when the AI is on), declared at their 140 by 43 sizes; a bigger window gives the panel every row and column it has beyond that, and the header and the hint row every column.
+*   THE LAYOUT (S.88 L2) is the toolkit's layout service: three panes, the header (rows 1 to 4 at 140 by 43), the panel of tiles (rows 5 to 38) and the hint row (39; when the AI is on
+*   the AI line, 38, and the rule under it, 39, and the panel ends on 37), declared at their 140 by 43 sizes; a bigger window gives the panel every row and column it has beyond that, and the header and the hint row every column.
 *   The tile columns are worked out from the panel's width: two columns to a pair, one column between the two of a pair and three between pairs, as many as fit, and the columns
 *   left over widen every tile alike (at 140 by 43 six columns of 21, at x 3 25 49 71 95 117).  A band with one group spreads it over every column; the groups of a band of several
 *   share the columns beyond their own in whole pairs.  The header tiles stand on the last two columns, the Back tile on the first.  A resize is $tk_layout 'refresh', then all of it again.
@@ -220,6 +223,8 @@ $define H.TOP.PAGE 'this is the top page'                                 ;* why
 
    aif = 0                                                ;* 1 while the AI line has the focus
    call $tk_ai('init', ctx, '', '')
+   gosub declare.panes                                    ;* S.305: the AI line has a row more than the hint row
+   gosub geometry
 
    gosub build.page
    gosub layout
@@ -294,13 +299,18 @@ finish:
 * ------------------------------------------------------------------------------------------------- the geometry and the page
 
 * The page as panes of the layout service ($tk_layout, S.88 L2), each at its size in the 140 by 43 layout (body 138 by 39 at 1,1): the header (rows 1 to 4: the identity, the
-* clock and the header tiles on rows 1 to 3), the panel of tiles (rows 5 to 38) and the hint row (39, YSTAT - 1: the AI line's row when the AI is on).  The panel takes every row
+* clock and the header tiles on rows 1 to 3), the panel of tiles (rows 5 to 38) and the hint row (39, YSTAT - 1).  With the AI on the hint pane is the AI line's TK.AIROWS
+* rows (its first is the line, YSTAT - TK.AIROWS) and the panel is that much shorter, so it is declared again whenever $tk_ai 'init' has run.  The panel takes every row
 * and column a bigger window has beyond that; the header and the hint row take every column.  perr returns null, or why the service refused the declaration.
 declare.panes:
    pd = ''
    pd<1> = 'header' : @vm : 1 : @vm : 1 : @vm : 4 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
    pd<2> = 'panel' : @vm : 2 : @vm : 1 : @vm : 34 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
    pd<3> = 'hint' : @vm : 3 : @vm : 1 : @vm : 1 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   if ctx<TK.C.AI> then
+      pd<2, TK.P.H> = pd<2, TK.P.H> - (TK.AIROWS - 1)     ;* S.305: the rule under the AI line is the panel's last row
+      pd<3, TK.P.H> = TK.AIROWS
+   end
    perr = ''
    call $tk_layout('declare', ctx, pd, perr)
    return
@@ -1287,6 +1297,8 @@ ai.key:
          gosub ai.tile.back
       case out = 'ask'
          gosub ask.ai
+      case 1
+         msg = sysmsg(12643)                              ;* S.305: an edit (Ctrl-U too) leaves the line with the focus, so the status line still says how to use it, as on every page
    end case
    return
 
@@ -1466,6 +1478,8 @@ reopen:
 rebuild:
    aif = 0
    call $tk_ai('init', ctx, '', '')                       ;* F5 also reads whether the AI is on now
+   gosub declare.panes                                    ;* S.305: and the rows follow it
+   gosub geometry
    want.id = ''
    want.top = 0
    gosub enter.level

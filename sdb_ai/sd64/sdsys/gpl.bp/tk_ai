@@ -51,6 +51,9 @@
 * 8 Nov 26 dm   S.175 (the owner: "it is showing the standard prefix text, it is not supposed to"): the preview no longer shows SD's own text (the fixed instruction,
 *               the actions, the form's fields, the page's description, the documentation passages); the size still counts it; the person's data and request are shown.
 * 10 Nov 26 dm  S.138: 'Waiting for the answer' no longer stays on the row behind the answer on a page with no AI line.
+* 22 Nov 26 Windows port - from Linux 6109e6e7 (S.305, RELEASE_1.1 385; the owner, of the paper theme: "the black background ai line above a black
+*               background status line is confusing"; the look he chose: "blank line with a horizontal line rule like the line below the status line"):
+*               the line is a row higher and paint draws a rule under it.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -62,7 +65,7 @@
 *                              sees no AI bar).  The app calls it after $tk_open and again when the account changes.
 *   move    (ctx)              the window changed size: puts the line where the new ctx<TK.C.W> and ctx<TK.C.YSTAT> say, and nothing else.  The request typed in it, the cursor in
 *                              it and its focus are kept; the status is not read again (init does all of that anew).  It draws nothing: the next draw does.
-*   draw    (ctx, focused)     draws the line on row YSTAT - 1: the label, then the entry; empty and not focused it shows a dim hint.
+*   draw    (ctx, focused)     draws the line on row YSTAT - TK.AIROWS (the label, then the entry; empty and not focused it shows a dim hint) and the rule under it on YSTAT - 1.
 *   show    (ctx)              (S.97 stage 1) what $tk_frame calls on a page of the toolkit: draws the line, with the focus it has, only when something it shows has changed.  focused (-> a)
 *                              is 1 when the line is on and has the focus.
 *   key     (ctx, nm -> out)   a key for the line while it has the focus: Esc gives the focus back (out 'leave'); Tab, Shift-Tab, Up and Down also give it back and come back
@@ -190,7 +193,7 @@ $include tk.h
       case op = 'mouse'
          b = ''
          if ai.on then
-            if a<1> = 'press' and a<2> = 1 and a<4> = ctx<TK.C.YSTAT> - 1 then b = 'focus'
+            if a<1> = 'press' and a<2> = 1 and a<4> = ctx<TK.C.YSTAT> - TK.AIROWS then b = 'focus'     ;* the line, not the rule under it
          end
       case op = 'text'
          a = ''
@@ -354,7 +357,7 @@ place.widget:
    lw = ctx<TK.C.W>
    gosub label.text
    ai.w{'ax'} = 3 + len(ai.label)
-   ai.w{'ay'} = ctx<TK.C.YSTAT> - 1
+   ai.w{'ay'} = ctx<TK.C.YSTAT> - TK.AIROWS
    ai.w{'w'} = lw - 3 - len(ai.label) - 3
    return
 
@@ -366,9 +369,11 @@ label.text:
 paint:
    gosub place.widget                                     ;* (3 Nov 26) the label is longer while a follow-up is kept: the entry stands after it
    lw = ctx<TK.C.W>
-   y = ctx<TK.C.YSTAT> - 1
+   y = ctx<TK.C.YSTAT> - TK.AIROWS
    keep.cur = ''
    call $sl_curat('get', keep.cur)
+   call $sl_line('h', 0, hc)                              ;* S.305: the rule under the line, drawn as $tk_frame draws the border under the status line
+   screen text str(hc, lw) at 0,ctx<TK.C.YSTAT> - 1
    screen text '' at 0,y width lw
    screen text ai.label at 3,y attr (if ai.focus then 'bold' else 'desktop')
    if ai.w{'value'} = '' and not(ai.focus) then
@@ -416,7 +421,7 @@ on.key:
 
 run.ask:
    lw = ctx<TK.C.W>
-   y = ctx<TK.C.YSTAT> - 1
+   y = ctx<TK.C.YSTAT> - (if ai.line then TK.AIROWS else 1)     ;* the wait is written on the line (S.305); an app without one has the row over the status line
    if a<7> # '' then y = a<7> + 0
    if a<6> # '' then
       raw = a<6>                                          ;* an app without the line passes the request
