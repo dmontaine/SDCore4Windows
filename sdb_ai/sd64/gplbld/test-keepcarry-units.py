@@ -219,7 +219,9 @@ def rows_for(iss_raw, jobs_raw):
     ck("S3", "KeptJobSteps prints set.job change NAME JOB SCHEDULE only for a plain name, the job backup-all or update-accounts and a plain schedule; anything else is named as damaged, never echoed from the file",
        "if SafeJobWord(Name, False) and ((JobId = 'backup-all') or (JobId = 'update-accounts')) and SafeJobWord(Sched, True) then" in kjs
        and "'    set.job change ' + Name + ' ' + JobId + ' ' + Sched" in kjs
-       and "its definition is damaged" in kjs and "Copy(Line, 1, 4) = 'job='" in kjs and "Copy(Line, 1, 9) = 'schedule='" in kjs
+       and "'    The scheduled job named \"' + Name + '\" has a damaged definition.  Make it again with:' + #13#10 +" in kjs
+       and "'        set.job change ' + Name + ' <job> <schedule>' + #13#10" in kjs   # 21 Nov 26: the owner's wording, the command on its own line
+       and "Copy(Line, 1, 4) = 'job='" in kjs and "Copy(Line, 1, 9) = 'schedule='" in kjs
        and "FILE_ATTRIBUTE_DIRECTORY) = 0" in kjs and "'radmin-'" in kjs, "")
     return rows
 

@@ -3203,7 +3203,9 @@ begin
           if SafeJobWord(Name, False) and ((JobId = 'backup-all') or (JobId = 'update-accounts')) and SafeJobWord(Sched, True) then
             Result := Result + '    set.job change ' + Name + ' ' + JobId + ' ' + Sched + #13#10
           else if SafeJobWord(Name, False) then
-            Result := Result + '    ' + Name + ': its definition is damaged; make it again with set.job change ' + Name + ' <job> <schedule>' + #13#10
+            { 21 Nov 26 - RELEASE_1.1 370, the owner's words on VM sit12: the sentence first, the command on a line of its own. }
+            Result := Result + '    The scheduled job named "' + Name + '" has a damaged definition.  Make it again with:' + #13#10 +
+                               '        set.job change ' + Name + ' <job> <schedule>' + #13#10
           else
             Result := Result + '    one definition has a name that is not plain; delete that file from ' + ExpandConstant('{#DataDir}\sd-jobs') + #13#10;
         end;
