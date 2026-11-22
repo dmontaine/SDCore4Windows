@@ -17,8 +17,10 @@
     -Readme      README.txt of the package (the owner reads it before anything is distributed; this script does not write one)
     -Books       a folder holding the whole-book PDFs <Product>-<ver>-*.pdf, copied to documentation\
     -Clients     a folder of client folders (Linux64, Linux64-openssl4, Windows64, bindings; never Windows32), copied to clients\.  Each must
-                 hold a COMMIT.txt whose sha256 lines name every other file in it, and match them.  P:\sdcore-mail\transfer\clients is
-                 where both agents keep the current sets.
+                 hold a COMMIT.txt whose sha256 lines name every other file in it, and match them.  Windows64 comes from
+                 stage-clients.ps1's output (the clean-room set) and nowhere else: its COMMIT.txt must say so, and a folder
+                 holding a qmclilib / qmclient file is refused.  P:\sdcore-mail\transfer\clients is NOT a source (its
+                 Windows64 was the GPL-built library, Linux mail 2026-11-22T1010).
     -SshServer   a folder with OpenSSH-Win64-*.msi, copied to ssh-server\ (the installer installs from it when the box is ticked)
     -Python      a folder with python-*-amd64.exe, copied to python\ (the installer offers to run it)
     -ConfSample  Solo only: sd-solo-setup.conf.sample, beside the installer
@@ -228,6 +230,16 @@ if ($Clients) {
         foreach ($l in (Get-Content -LiteralPath $ct)) { if ($l -match '^([0-9a-f]{64})\s+(\S+)\s*$') { $listed[($Matches[2] -replace '^\./', '')] = $Matches[1] } }
         $files = @(Get-ChildItem -LiteralPath $s.FullName -File | Where-Object { $_.Name -ne 'COMMIT.txt' })
         if ($files.Count -eq 0) { Die "$($s.FullName) holds no client file" }
+        # 22 Nov 26 - RELEASE_1.1 383 and Linux mail T1010: no 32-bit QM file anywhere, and Windows64 only as stage-clients.ps1
+        # writes it (its COMMIT.txt's first line), so the GPL-built library a stale folder holds cannot ship.
+        $qm = @($files | Where-Object { $_.Name -match '^(lib)?qmcli(ent|lib)' })
+        if ($qm.Count) { Die ("$($s.Name) holds the 32-bit QM client (" + (($qm | ForEach-Object Name) -join ', ') + '), which is not shipped (RELEASE_1.1 383)') }
+        if ($s.Name -eq 'Windows64') {
+            $head = @(Get-Content -LiteralPath $ct -TotalCount 1)
+            if (-not ($head.Count -and $head[0] -like 'SD Core clean-room client library (not GPL)*')) {
+                Die "$($s.FullName)\COMMIT.txt is not stage-clients.ps1's (first line: $($head -join '')); stage the clean-room set with stage-clients.ps1"
+            }
+        }
         foreach ($f in $files) {
             if (-not $listed.ContainsKey($f.Name)) { Die "$($s.Name)\$($f.Name) is not in its COMMIT.txt" }
             if ((Hash $f.FullName) -ne $listed[$f.Name]) { Die "$($s.Name)\$($f.Name) does not match the sha256 in its COMMIT.txt" }
@@ -329,7 +341,7 @@ Say "Made $zipf"
 Say ("  {0} files ({1} chapter PDFs), built from {2} ({3}){4}" -f $got.Count, $nPdf, $commit, $branch, $(if ($Label -eq 'test') { ' - TEST PACKAGE, NOT FOR DISTRIBUTION' } else { '' }))
 if (-not $Readme) { Say '  NOT INCLUDED: README.txt (-Readme FILE; the owner reads it before anything is distributed)' }
 if (-not $Books) { Say '  NOT INCLUDED: documentation\ (-Books DIR; the whole-book PDFs, mkbook.py and mkbookpdf.ps1 in the docs repository)' }
-if (-not $Clients) { Say '  NOT INCLUDED: clients\ (-Clients DIR; P:\sdcore-mail\transfer\clients holds the current sets)' }
+if (-not $Clients) { Say '  NOT INCLUDED: clients\ (-Clients DIR; Windows64 from stage-clients.ps1 -To <dir>, never transfer\clients)' }
 if (-not $SshServer) { Say '  NOT INCLUDED: ssh-server\ (-SshServer DIR)' }
 if (-not $Python) { Say '  NOT INCLUDED: python\ (-Python DIR)' }
 if ($product -eq 'Solo' -and -not $ConfSample) { Say '  NOT INCLUDED: sd-solo-setup.conf.sample (-ConfSample FILE)' }
