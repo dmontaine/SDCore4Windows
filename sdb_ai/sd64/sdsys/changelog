@@ -3,6 +3,15 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+22 Nov 26  A PAGE'S KEYS WORK WHILE THE CURSOR IS IN THE AI LINE.
+
+             What        - With the cursor in the AI line, a key the line does not use - Ctrl-Q, Ctrl-T, F1, F5, F10,
+                           Alt and a letter - moves the focus back to the page and does what it does there, as a mouse
+                           click on the page already did.  The keys that edit the line still edit it.
+             Why         - Those keys did nothing while the cursor was in the line, though the key bar listed them:
+                           Ctrl-Q could not leave the page until Esc was pressed first.
+             Does NOT    - Keep a request typed in the line when Ctrl-Q leaves the page.
+
 22 Nov 26  A RULE SEPARATES THE AI LINE FROM THE STATUS LINE.
 
              What        - On the home screen and on each tool page with an AI line, a horizontal rule, like the one

@@ -17,6 +17,8 @@
 * 8 Nov 26 dm  S.176 (the owner, 8 Nov 26: one key moves between the boxes on every page, "F6 for boxes is fine"): the op 'ring', F6 / Shift-F6 round a page's boxes with
 *              the AI line as the stop after the last; 'key' leaves F6 and Shift-F6 to the page while the line has the focus; the rows are a menu-only AI > Ask the AI (the
 *              page sees it as act:ai) and an F6 'box' row for a page that has no F6 row of its own ($tk_fkeys shows a key once).
+* 22 Nov 26 dm  RELEASE_1.1 386 (the owner: Ctrl-Q and Ctrl-T did nothing while the cursor was in the AI line, "however mouse clicks work - let's fix it"):
+*              a key the line has no use for gives the focus back and is the page's (out null), so the menu bar and the page's own keys see it.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -31,7 +33,8 @@
 *   keys   (ctx, keys)          a page that made its key table anew: F6 and AI > Ask the AI are added again when the page has a line (nothing is asked, nothing laid out).
 *   key    (ctx, keys, pane, a -> out)   a = the key name.  Call it for every key BEFORE the menu bar sees it.  While the line has the focus it takes the keys: the person's text goes
 *                               into the line, Esc, Tab, Back-tab, Up and Down give the focus back, and Enter on a request asks; F6 and Shift-F6 are the page's (its ring
-*                               gives the focus on).  out is null when the key is not the line's;
+*                               gives the focus on), and so is any key the line has no use for (Ctrl-Q, Ctrl-T, F1, F10 ...): the line gives the focus back
+*                               and the key is the page's, as a click is (RELEASE_1.1 386).  out is null when the key is not the line's;
 *                               'taken' (the line used it) with <3> 1 when the screen was covered (the preview, the wait and the answer) and the page must draw all of itself again,
 *                               and <4> a message for the status line; 'replay' when the AI proposed an action: <2> is the key of that action in this pane, and the page runs its own
 *                               handler for that key exactly as if the person had pressed it; <5> the argument the model gave with it (S.97 stage 4), which the page may offer as the
@@ -116,6 +119,8 @@ $include tk.h
             call $tk_ai('key', ctx, nm, ko)
             out = 'taken' : @fm : '' : @fm : '' : @fm : sysmsg(12643)          ;* the status line keeps saying how to use the line while it has the focus
             begin case
+               case ko = 'pass'
+                  out = ''                                                    ;* RELEASE_1.1 386: the line gave the focus back; the key is the page's (its own handler sets the message)
                case ko = 'ask'
                   gosub ask
                case ko = 'leave' or ko = 'tab' or ko = 'btab' or ko = 'up' or ko = 'down'

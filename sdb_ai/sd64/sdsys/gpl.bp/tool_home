@@ -73,6 +73,9 @@
 * 22 Nov 26 dm  S.305 (the owner: "blank line with a horizontal line rule like the line below the status line"): with the AI on the hint pane is TK.AIROWS high
 *               (the line, the rule) and the panel a row shorter; the panes are declared after $tk_ai 'init', at the start and at F5 too.
 *               A key that edits the line no longer clears the status line's message (the owner saw Ctrl-U "wipe out the status line").
+* 22 Nov 26 dm  RELEASE_1.1 386 (the owner: Ctrl-Q and Ctrl-T did nothing with the cursor in the AI line; "however mouse clicks work - let's fix it"):
+*               a key the line has no use for gives the focus back to the tile, and the loop takes it again (ai.again) for the menu bar and the
+*               page, as a click does.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -222,6 +225,7 @@ $define H.TOP.PAGE 'this is the top page'                                 ;* why
    rc.on = 0                                              ;* 1 when the Recent group is on for this page (set by add.recent)
 
    aif = 0                                                ;* 1 while the AI line has the focus
+   ai.again = ''                                          ;* RELEASE_1.1 386: a key the AI line gave back, for the loop to take as the page's
    call $tk_ai('init', ctx, '', '')
    gosub declare.panes                                    ;* S.305: the AI line has a row more than the hint row
    gosub geometry
@@ -240,7 +244,12 @@ $define H.TOP.PAGE 'this is the top page'                                 ;* why
          call $sl_curat(0, ctx<TK.C.YSTAT>)                  ;* the cursor waits at the start of the status line: in a window made smaller it is off the screen, and the library's cursor lock takes the keyboard
       end
       nm = ''
-      screen key timeout 30 returning nm
+      if ai.again # '' then
+         nm = ai.again                                    ;* RELEASE_1.1 386: the key the AI line gave back is the page's now
+         ai.again = ''
+      end else
+         screen key timeout 30 returning nm
+      end
       mr = ''
       if nm # '' and not(aif) then
          busy = (cur.menu # '')                           ;* the Esc rule: in a sub-menu Esc is the page's (back one page; the key table binds it), on the top page the bar's
@@ -1295,6 +1304,11 @@ ai.key:
       case out = 'down'
          aif = 0
          gosub ai.tile.back
+      case out = 'pass'
+         * RELEASE_1.1 386: a key the line has no use for (Ctrl-Q, Ctrl-T, F1, F10 ...) gave the focus back: the loop takes it again as the page's, the bar's first, as a click is
+         aif = 0
+         gosub ai.tile.back
+         ai.again = nm
       case out = 'ask'
          gosub ask.ai
       case 1

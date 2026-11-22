@@ -54,6 +54,8 @@
 * 22 Nov 26 Windows port - from Linux 6109e6e7 (S.305, RELEASE_1.1 385; the owner, of the paper theme: "the black background ai line above a black
 *               background status line is confusing"; the look he chose: "blank line with a horizontal line rule like the line below the status line"):
 *               the line is a row higher and paint draws a rule under it.
+* 22 Nov 26 dm  RELEASE_1.1 386 (the owner: "i can not quit the page while the cursor is in the ai line"; "ctrl T does not work either"; "however mouse
+*               clicks work - let's fix it, linux can ask for modifications"): a key the line has no use for gives the focus back and is the page's (out 'pass').
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -69,8 +71,9 @@
 *   show    (ctx)              (S.97 stage 1) what $tk_frame calls on a page of the toolkit: draws the line, with the focus it has, only when something it shows has changed.  focused (-> a)
 *                              is 1 when the line is on and has the focus.
 *   key     (ctx, nm -> out)   a key for the line while it has the focus: Esc gives the focus back (out 'leave'); Tab, Shift-Tab, Up and Down also give it back and come back
-*                              as out 'tab' 'btab' 'up' 'down' for the app to move its own focus; Enter on a non-empty line is out 'ask'; any other key edits the line (the
-*                              library's entry widget: left, right, home, end, delete, ctrl-u ...).
+*                              as out 'tab' 'btab' 'up' 'down' for the app to move its own focus; Enter on a non-empty line is out 'ask'; a key that edits the line (the
+*                              library's entry widget: left, right, home, end, delete, ctrl-u ...) edits it; any other key (Ctrl-Q, Ctrl-T, a function key, Alt and a
+*                              letter) gives the focus back and is out 'pass': the app acts on it as its own key, as a click on the page would (RELEASE_1.1 386).
 *   focus   (ctx, on)          gives the line the focus (1) or takes it away (0) and draws it.
 *   mouse   (ctx, mev -> out)  out 'focus' when a press of the left button lands on the line.
 *   text    (ctx -> out)       the line's text.
@@ -414,6 +417,11 @@ on.key:
          call $sl_entry('key', ai.w, scr, nm, r)
          gosub entry.cursor
          call $sl_scr('put', scr)
+         if r<1> = 'unhandled' then                       ;* RELEASE_1.1 386: a key the line has no use for (Ctrl-Q, Ctrl-T, F1 ...) is the page's, as a click is
+            ai.focus = 0
+            gosub paint
+            b = 'pass'
+         end
    end case
    return
 
