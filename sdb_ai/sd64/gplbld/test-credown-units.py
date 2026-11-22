@@ -153,6 +153,9 @@ int main(int argc, char** argv) {
   ask("SDCREDOWN1 verify\n" K3 "\nEND\n", ans);
   row("C4", strstr(ans, "ER the current password is not correct") == ans && g_audits == i + 1 &&
       strstr(g_last_audit, "cred-own refused account=") == g_last_audit, "verify with a wrong key is refused and audited", ans);
+  /* C4b, RELEASE_1.1 387 (Linux S.298): the reason is ONE word, Linux's cred_reason form, so the line ends with it whole */
+  snprintf(name, sizeof(name), "cred-own refused account=%s mode=verify reason=the-current-password-is-not-correct", g_me);
+  row("C4b", strcmp(g_last_audit, name) == 0, "the refusal's reason is one lower-case word joined by '-' (Linux's form)", g_last_audit);
   ask("SDCREDOWN1 verify\n" K1 "\nEND\n", ans);
   row("C5", strcmp(ans, "OK the current password is correct") == 0, "verify with the right key", ans);
 
@@ -348,6 +351,7 @@ MUTANTS = [
     ("grant may make instances", "sdsvc/sdcredown.c",
      "#define CREDOWN_PIPE_GRANT (FILE_READ_DATA | FILE_WRITE_DATA",
      "#define CREDOWN_PIPE_GRANT (WRITE_DAC | FILE_READ_DATA | FILE_WRITE_DATA", "C14"),
+    ("reason not one word", "sdsvc/sdcredown.c", "  cr_reason(why, word, sizeof(word));", '  snprintf(word, sizeof(word), "%s", why);', "C4b"),
 ]
 
 

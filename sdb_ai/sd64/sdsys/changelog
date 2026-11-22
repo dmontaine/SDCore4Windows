@@ -3,6 +3,13 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+22 Nov 26  A REFUSED OWN-PASSWORD CHANGE NAMES ITS REASON IN ONE WORD.
+
+             What        - The audit line "cred-own refused" ends with reason= and one word made of the refusal, such
+                           as the-current-password-is-not-correct, as SD Core for Linux writes it.
+             Why         - The reason was written as words with spaces, so the line did not keep the name=value shape
+                           the rest of the audit trail has, and the two products' lines did not match.
+
 22 Nov 26  A PAGE'S KEYS WORK WHILE THE CURSOR IS IN THE AI LINE.
 
              What        - With the cursor in the AI line, a key the line does not use - Ctrl-Q, Ctrl-T, F1, F5, F10,

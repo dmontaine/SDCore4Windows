@@ -15,6 +15,9 @@
  * START-HISTORY:
  * 21 Nov 26 Windows port - written.  RELEASE_1.1 379, the Windows form of Linux's "sudo sd-elevate cred-own" (gplbld/sd-elevate
  *           cred_own(), d147a5c), agreed with the Linux audit session (mail 2026-11-22T1900).
+ * 22 Nov 26 Windows port - RELEASE_1.1 387 (Linux S.298, mail T1430Z): the refusal's reason= is ONE word, as Linux's cred_reason
+ *           writes it - the message in lower case, every character that is not a letter or a digit a '-', runs of '-' made one, none
+ *           at either end, cut at 60 - so the audit line keeps its key=value shape and the two ports write the same words.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -96,6 +99,42 @@ static void say(char* out, size_t outlen, const char* fmt, ...) {
   va_start(ap, fmt);
   vsnprintf(out, outlen, fmt, ap);
   va_end(ap);
+}
+
+/* RELEASE_1.1 387: a refusal's message as the audit's reason word, Linux's cred_reason exactly (sd-elevate): lower case, each
+   character that is not a-z or 0-9 a '-', runs of '-' made one, none left at the start or the end, then the first 60 characters. */
+static void cr_reason(const char* msg, char* out, size_t outlen) {
+  char tmp[512];
+  size_t n = 0;
+  size_t i;
+  size_t start = 0;
+  size_t end;
+  size_t len;
+  char c;
+
+  for (i = 0; (msg != NULL) && (msg[i] != '\0') && (n < sizeof(tmp) - 1); i++) {
+    c = msg[i];
+    if ((c >= 'A') && (c <= 'Z'))
+      c = (char)(c - 'A' + 'a');
+    if (!(((c >= 'a') && (c <= 'z')) || ((c >= '0') && (c <= '9'))))
+      c = '-';
+    if ((c == '-') && (n > 0) && (tmp[n - 1] == '-'))
+      continue;
+    tmp[n++] = c;
+  }
+  tmp[n] = '\0';
+  while ((start < n) && (tmp[start] == '-'))
+    start++;
+  end = n;
+  while ((end > start) && (tmp[end - 1] == '-'))
+    end--;
+  len = end - start;
+  if (len > 60)
+    len = 60;
+  if (len >= outlen)
+    len = outlen - 1;
+  memcpy(out, tmp + start, len);
+  out[len] = '\0';
 }
 
 /* ======================================================================
@@ -233,6 +272,7 @@ int sdcredown_handle(const char* sysdir, const char* account, const char* reques
   char old_salt[CREDOWN_LINE_MAX + 2] = "";
   char old_iter[CREDOWN_LINE_MAX + 2] = "";
   char why[256] = "";
+  char word[64] = "";             /* RELEASE_1.1 387: why as the audit's one reason word */
   char data[8 * (CREDOWN_LINE_MAX + 2)];
   const char* cur;
   const char* ver;
@@ -474,7 +514,8 @@ refuse:
   if (why[0] == '\0')
     say(why, sizeof(why), "the request could not be read");
   say(answer, alen, "ER %s", why);
-  say(audit_msg, amlen, "cred-own refused account=%s mode=%s reason=%s", (account != NULL) ? account : "?", mode, why);
+  cr_reason(why, word, sizeof(word));
+  say(audit_msg, amlen, "cred-own refused account=%s mode=%s reason=%s", (account != NULL) ? account : "?", mode, word);
   return -1;
 }
 
@@ -573,10 +614,10 @@ static void cr_serve_one(HANDLE h, HANDLE ev) {
 
   if (!whole) {
     snprintf(answer, sizeof(answer), "ER the request did not arrive whole");
-    snprintf(audit_msg, sizeof(audit_msg), "cred-own refused account=? mode=? reason=the request did not arrive whole");
+    snprintf(audit_msg, sizeof(audit_msg), "cred-own refused account=? mode=? reason=the-request-did-not-arrive-whole");
   } else if (!cr_client(h, user, sizeof(user), account, sizeof(account))) {
     snprintf(answer, sizeof(answer), "ER the caller's Windows user could not be named");
-    snprintf(audit_msg, sizeof(audit_msg), "cred-own refused account=? mode=? reason=the caller's Windows user could not be named");
+    snprintf(audit_msg, sizeof(audit_msg), "cred-own refused account=? mode=? reason=the-caller-s-windows-user-could-not-be-named");
   } else {
     (void)sdcredown_handle(cr_sysdir, account, req, answer, sizeof(answer), audit_msg, sizeof(audit_msg));
   }
