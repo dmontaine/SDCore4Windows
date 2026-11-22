@@ -22,7 +22,7 @@
  * WHY THE SERVICE.  $cred is SYSTEM and Administrators only, so an unelevated session can neither read nor write its own record,
  * and a standard Windows user could never change its own SD password.  Linux lets every SD user run one root helper on ONE record,
  * the caller's; the SD service is the LocalSystem process SD already has, so it serves that door here (../win32credown.h has the
- * wire).  Linux's conditions, which are this file's rules (the audit session's a-e):
+ * wire).  The Linux audit session's conditions a-e (mail 2026-11-22T1900, d corrected in T0320), which are this file's rules:
  *
  *   a. WHO is the token's.  The account is the Windows user of the thread that opened the pipe (ImpersonateNamedPipeClient at
  *      identification level, then RevertToSelf; a revert that fails ends the service), lower case.  Nothing in the request names
@@ -33,7 +33,10 @@
  *   c. ONE RECORD.  Only <sysdir>\$cred\<account>, and only for an account whose register record is a plain file, not
  *      SUSPENDED, whose group is sdu_<account> (a person's own account, as Linux's register check).
  *   d. AUDIT.  The service writes the lines (sdaudit_write), lower case before each "=": "cred-own set account=<a>" and
- *      "cred-own refused account=<a> mode=<m> reason=<why>".  A query that only answers is not audited, as on Linux.
+ *      "cred-own refused account=<a> mode=<m> reason=<why>".  A query that only answers is not audited.  NOT LINUX'S (Linux's
+ *      correction, mail 2026-11-22T0320, of its T1900 condition d): Linux's cred_own() writes one SYSLOG line on a successful set
+ *      and nothing to SD's audit trail, and a refusal only to stderr.  This is a difference from the template, the stricter
+ *      one, made on that wrong word and flagged in the parity audit; Linux row S.298 is open to gain the same lines.
  *   e. DELIVERED ON, as Linux's: it changes nothing but the caller's own password, after proving the current one.
  *
  * WHO MAY OPEN THE PIPE.  The server's own user, Administrators, and the grants (sdusers in the service), each with read, write and

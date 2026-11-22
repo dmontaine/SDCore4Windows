@@ -611,7 +611,8 @@
    GPL.BP/INT$KEYS.H carries the same numbers. */
 #define K_RUNIN_CHILD        84
 #define K_RUNIN_DEBUG        85
-/* 21 Nov 26 Windows port - RELEASE_1.1 379 (Linux sd-elevate cred-own; WINDOWS ONLY, in the same gap, Linux asked to reserve it).
+/* 21 Nov 26 Windows port - RELEASE_1.1 379 (Linux sd-elevate cred-own; WINDOWS ONLY, in 58-89, Windows' range by PAL-7; Linux reserved
+   it, mail 2026-11-22T0320.  90-99 are Linux's: 91 is its K_LOGIN_UID, so never 90 or 91 here).
    kernel(K$CRED.OWN, mode {: @fm : line ...}) from a $internal program: asks the SD service (win32credown.h) about the SESSION'S
    OWN account's SD password - "query", "verify" <FM> stored key, "set" <FM> the seven lines of win32credown.h.  Answers "OK" <FM>
    text or "ER" <FM> reason.  The service names the account from this process's token; nothing here names one.  An unelevated
