@@ -14,7 +14,8 @@
 #   voc          227/262: which HOME tile verbs SDSYS's VOC holds (the console look is the sheet's)
 #   api          243 (12950/12944), 278 (the restart question: local from off asks; on twice asks once), 266 (an API session's
 #                @WHO lower case), 247 (an API session's line stamped with its own user)
-#   runin201     201: compile.dict, a trigger, no.catalog (sitting 2's block 1, through the seat)
+#   api331       331: remote.sdsys api on a /24 stored as the network, the file's ACL, an ordinary API account's 2001, off (needs fixtures)
+#   runin201    201: compile.dict, a trigger, no.catalog (sitting 2's block 1, through the seat)
 #   job222       222: a backup-all job run by Task Scheduler as SDSYS
 #   print219     219: SPOOLER set to a "Microsoft Print To PDF" printer on a file port (never paper), and a refusal leg
 #   audit247     247 (the writer's pipe, its DACL, remote clients refused, a forged claim stamped with the real user, an injected
@@ -42,6 +43,7 @@
 #
 # START-HISTORY:
 # 13 Nov 26  New, for the Core VM witness sitting.  Parse-checked; not run (it needs the VM).
+# 22 Nov 26  api331 (RELEASE_1.1 331's VM owed after sit5): a /24 stored as the network, the file's ACL, zzwitapi's 2001, off.  Not run.
 # END-HISTORY
 
 param(
@@ -54,7 +56,7 @@ $ErrorActionPreference = 'Continue'
 . (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 . (Join-Path $PSScriptRoot 'sdtestuser.ps1')
 
-$known = @('context', 'fixtures', 'voc', 'api', 'runin201', 'job222', 'print219', 'audit247', 'logto275', 'gates266', 'shared260',
+$known = @('context', 'fixtures', 'voc', 'api', 'api331', 'runin201', 'job222', 'print219', 'audit247', 'logto275', 'gates266', 'shared260',
            'ai246', 'runin253', 'mark', 'runinchild', 'afterconsole', 'cleanup')
 if ($List) { Write-Host ('sections: ' + ($known -join ',')); exit 0 }
 $sections = Resolve-WitSections $Only $known
@@ -94,7 +96,7 @@ $FixUsers = @(
 
 # --------------------------------------------------------------------------------------------- gates before any section
 
-$seatSections = @('fixtures', 'voc', 'api', 'runin201', 'job222', 'print219', 'audit247', 'logto275', 'gates266', 'shared260', 'ai246', 'runin253', 'cleanup', 'context')
+$seatSections = @('fixtures', 'voc', 'api', 'api331', 'runin201', 'job222', 'print219', 'audit247', 'logto275', 'gates266', 'shared260', 'ai246', 'runin253', 'cleanup', 'context')
 $needSeat = @($sections | Where-Object { $seatSections -contains $_ }).Count -gt 0
 $needCurrent = @($sections | Where-Object { @('runinchild', 'afterconsole', 'mark', 'cleanup') -notcontains $_ }).Count -gt 0
 
@@ -307,6 +309,91 @@ if ($sections -contains 'api') {
         elseif ($stamped.Count -eq $al.Count) { Add-WitResult '247' 'an API session''s audit lines carry its own Windows user' 'PASS' ($stamped.Count.ToString() + ' line(s) user=' + $vm + '\zzwitapi') }
         else { Add-WitResult '247' 'an API session''s audit lines carry its own Windows user' 'FAIL' (($al.Count - $stamped.Count).ToString() + ' of ' + $al.Count + ' lines name another user') }
     }
+}
+
+# ===================================================================================================== api331 (331)
+# 22 Nov 26 - RELEASE_1.1 331's VM owed after sit5 (Linux S.256): a /24 is stored as the NETWORK (Linux's ipaddress, strict=False), the
+# file sd-tls\sdsys-api grants only SYSTEM and Administrators (Linux: root 0600), an ordinary API account (zzwitapi, made by -Only
+# fixtures) that runs remote.sdsys api is refused with 2001 and changes nothing, and off removes the file.  192.0.2.0/24 is TEST-NET-1,
+# so nobody is admitted while it is on.  The API is put LOCAL first when it is off (as the api section does) so zzwitapi can sign in.
+if ($sections -contains 'api331') {
+    Write-Wit ''
+    Write-Wit '=== api331: remote.sdsys api on a range, the file and its ACL, an ordinary API account, off (row 331)'
+    $apiFile = Join-Path $script:WitDataDir 'sd-tls\sdsys-api'
+    $notDone = @('did not succeed', 'not an address or a range', 'Command requires administrator', 'needs at least one address', 'nothing was changed', 'is not in your VOC')
+    $netBytes = 'on\n192.0.2.0/24\n'
+    $readFile = {
+        try { $b = [IO.File]::ReadAllBytes($apiFile) } catch { return '<no file>' }
+        return ([Text.Encoding]::ASCII.GetString($b)).Replace("`r", '\r').Replace("`n", '\n')
+    }
+    Write-Wit ('  the file: ' + $apiFile + '   there before: ' + (Test-Path -LiteralPath $apiFile))
+    $r = Invoke-WitSd -Commands @('remote.sdsys api') -Label 'the report before (as delivered: off)' -TimeoutSec 120
+    Set-WitVerdict '331' 'before: remote.sdsys api reports off' $r.Text 'sdsys over the API from other computers: off' @('Command requires administrator', 'did not succeed', 'on, from')
+
+    $mark = Get-WitAuditMark
+    $r = Invoke-WitSd -Commands @('remote.sdsys api on 192.0.2.77/24') -Label 'on, a /24 named by an address inside it' -TimeoutSec 120
+    Set-WitVerdict '331' 'remote.sdsys api on 192.0.2.77/24 is done (15117)' $r.Text 'The API is open for sdsys from 192\.0\.2\.77/24' $notDone
+    Set-WitVerdict '331' 'the helper stores the network, not the address: "on, from 192.0.2.0/24"' $r.Text 'sdsys over the API from other computers: on, from 192\.0\.2\.0/24\s*(\r?\n|$)' @('on, from 192\.0\.2\.77')
+    $got = & $readFile
+    Set-WitCompare '331' 'the file holds exactly "on" and the network, LF line ends' $netBytes $got -Evidence $apiFile
+
+    $acl = $null
+    try { $acl = Get-Acl -LiteralPath $apiFile -ErrorAction Stop } catch { }
+    if ($null -eq $acl) { Add-WitResult '331' 'the file grants only SYSTEM and Administrators (Linux: root 0600)' 'NOT-MEASURED' ('Get-Acl could not read ' + $apiFile) }
+    else {
+        $rules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+        Write-WitRaw 'sdsys-api: owner, SDDL and access rules' ((@('owner ' + $acl.Owner, $acl.Sddl) + @($rules | ForEach-Object { [string]$_.AccessControlType + ' ' + $_.IdentityReference.Value + ' ' + [string]$_.FileSystemRights + ' inherited=' + $_.IsInherited })) -join "`n")
+        $sids = @($rules | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique)
+        if ($rules.Count -eq 0) { Add-WitResult '331' 'the file grants only SYSTEM and Administrators (Linux: root 0600)' 'FAIL' 'the DACL has no rule at all' }
+        else { Set-WitCompare '331' 'the file grants only SYSTEM and Administrators (Linux: root 0600)' 'S-1-5-18,S-1-5-32-544' ($sids -join ',') -Evidence ('S-1-5-18 SYSTEM, S-1-5-32-544 Administrators; ' + $rules.Count + ' rule(s)') }
+        try { $dacl = Get-Acl -LiteralPath (Split-Path -Parent $apiFile) -ErrorAction Stop; Write-WitRaw 'the folder sd-tls, for comparison' ('owner ' + $dacl.Owner + "`n" + $dacl.Sddl) } catch { }
+    }
+    $r = Invoke-WitSd -Commands @('remote.sdsys api') -Label 'the report after on' -TimeoutSec 120
+    Set-WitVerdict '331' 'remote.sdsys api reports on, from 192.0.2.0/24' $r.Text 'sdsys over the API from other computers: on, from 192\.0\.2\.0/24' @('Command requires administrator', 'did not succeed')
+    $al = @(Get-WitAuditSince $mark | Where-Object { $_ -match 'remote\.sdsys api' })
+    Write-WitRaw 'audit: remote.sdsys api lines' ($al -join "`n")
+    Set-WitVerdict '331' 'the audit has remote.sdsys api on from=192.0.2.77/24 status=0' ($al -join "`n") 'remote\.sdsys api on from=192\.0\.2\.77/24 status=0' @('status=[1-9-]')
+
+    # An ordinary API account.  Its own account, its own rights: remote.sdsys is in every account's VOC and refuses anyone but the administrator.
+    $port = Get-ApiPort
+    if ($port -eq 0) {
+        Write-Wit '  the API is off: putting it LOCAL for zzwitapi (answer N to the restart question, then the SD service is restarted; about 20 seconds)'
+        $null = Invoke-WitSd -Commands @('remote.api local', 'N') -Label 'API to LOCAL (answer N)' -TimeoutSec 180
+        $port = Get-ApiPort
+        try { Restart-Service -Name SD -ErrorAction Stop; Write-Wit ('  service SD: ' + (Get-Service SD).Status) } catch { Write-Wit ('  Restart-Service SD failed: ' + $_.Exception.Message) }
+        Start-Sleep -Seconds 3
+    }
+    $lis = @()
+    if ($port -ne 0) { $lis = @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | ForEach-Object { $_.LocalAddress + ':' + $_.LocalPort + ' pid ' + $_.OwningProcess }) }
+    Write-Wit ('  sd.conf APIPORT ' + $port + '; listening: ' + ($lis -join ', '))
+    $apiPw = Get-Fix 'zzwitapi'
+    $py = Get-Command python.exe -ErrorAction SilentlyContinue
+    $probe = Join-Path $PSScriptRoot 'scram-probe.py'
+    $c2001 = 'an ordinary API account (zzwitapi) running remote.sdsys api is refused with 2001'
+    if ($apiPw -eq '' -or $null -eq $py -or $lis.Count -eq 0) {
+        Add-WitResult '331' $c2001 'NOT-MEASURED' ('zzwitapi''s password on file: ' + ($apiPw -ne '') + ' (run -Only fixtures first); python: ' + ($null -ne $py) + '; listener: ' + $lis.Count)
+    } else {
+        $env:SD_SCRAM_PASSWORD = $apiPw
+        $ssl = 'C:\sdtools\bin\libssl-3-x64.dll'
+        if (Test-Path -LiteralPath $ssl) { $env:SD_PROBE_LIBSSL = $ssl }
+        Write-Wit ('  > python ' + $probe + ' --user zzwitapi --account zzwitapi --port ' + $port + ' -- WHO "REMOTE.SDSYS API"   (SD_PROBE_LIBSSL=' + $env:SD_PROBE_LIBSSL + ')')
+        $po = & $py.Source $probe --user zzwitapi --account zzwitapi --port $port -- WHO 'REMOTE.SDSYS API' 2>&1 | ForEach-Object { [string]$_ }
+        Remove-Item Env:\SD_SCRAM_PASSWORD -ErrorAction SilentlyContinue
+        $pt = $po -join "`n"
+        Write-WitRaw 'scram-probe' $pt
+        if ($pt -notmatch 'SCRAM: server signature VERIFIED') { Add-WitResult '331' $c2001 'NOT-MEASURED' 'the API login did not succeed (no "SCRAM: server signature VERIFIED")' }
+        elseif ($pt -notmatch '(?m)^[\s|]*\d+\s+zzwitapi\b') { Add-WitResult '331' $c2001 'NOT-MEASURED' 'the control failed: WHO in the same session did not answer zzwitapi, so the second command proves nothing' }
+        else { Set-WitVerdict '331' $c2001 $pt 'Command requires administrator privileges' @('sdsys over the API from other computers', 'is not in your VOC', 'Verb not found', 'The API is open for sdsys') }
+        Set-WitCompare '331' 'the ordinary account changed nothing: the file is as it was' $netBytes (& $readFile) -Evidence $apiFile
+    }
+
+    $mark = Get-WitAuditMark
+    $r = Invoke-WitSd -Commands @('remote.sdsys api off') -Label 'off' -TimeoutSec 120
+    Set-WitVerdict '331' 'remote.sdsys api off reports off' $r.Text 'sdsys over the API from other computers: off' @('did not succeed', 'Command requires administrator', 'on, from')
+    Set-WitCompare '331' 'after off the file is gone' 'False' ([string](Test-Path -LiteralPath $apiFile)) -Evidence $apiFile
+    $al = @(Get-WitAuditSince $mark | Where-Object { $_ -match 'remote\.sdsys api' })
+    Write-WitRaw 'audit: remote.sdsys api lines' ($al -join "`n")
+    Set-WitVerdict '331' 'the audit has remote.sdsys api off status=0' ($al -join "`n") 'remote\.sdsys api off status=0' @('status=[1-9-]')
 }
 
 # ===================================================================================================== runin201

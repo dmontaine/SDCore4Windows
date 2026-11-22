@@ -10,6 +10,7 @@
 #                   C:\SD-witness\fixtures.json): every wall open, groups, rights, sshd -T for both spellings, the broker task
 #   ssh         F3  SDRADMIN over ssh lands in sdradmin; Windows refuses its interactive, batch and service logons (A3)
 #   ops         F4  each listed op through the broker, read back on Windows and in SD (A1, A5, A6)
+#   api331      RELEASE_1.1 331: remote.sdsys api on / the report / off from the remote session, the file and the audit (needs on, ssh)
 #   refuse      F5  bad and reserved targets, an administrator, an unstamped user; every verb not on the list; LOGTO
 #   f6          F6  sftp, scp, a command line, a port forward, a key: all refused
 #   f8          F8  SDRADMIN (and an ordinary SD user) cannot write SD's locked files; its own directory is the control
@@ -28,6 +29,7 @@
 # START-HISTORY:
 # 13 Nov 26  New, for the Core VM witness sitting.  Parse-checked; not run (it needs the VM).
 # 19 Nov 26  Refuses to run as SDSYS (sit5 ran it so: -On succeeded for the "another administrator" checks, 5 harness FAILs).
+# 22 Nov 26  api331 (RELEASE_1.1 331's C6): SDRADMIN's remote.sdsys api on, report and off through the broker.  Not run.
 # END-HISTORY
 
 param([string[]]$Only = @(), [switch]$List)
@@ -37,7 +39,7 @@ $ErrorActionPreference = 'Continue'
 . (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 . (Join-Path $PSScriptRoot 'sdtestuser.ps1')
 
-$known = @('delivered', 'on', 'ssh', 'ops', 'refuse', 'f6', 'f8', 'lockout', 'keep', 'off', 'offremote')
+$known = @('delivered', 'on', 'ssh', 'ops', 'api331', 'refuse', 'f6', 'f8', 'lockout', 'keep', 'off', 'offremote')
 if ($List) { Write-Host ('sections: ' + ($known -join ',')); exit 0 }
 $sections = Resolve-WitSections $Only $known
 if ($null -eq $sections) { exit 2 }
@@ -316,6 +318,44 @@ if ($sections -contains 'ops') {
         Write-WitRaw ('the broker''s log ' + $brokerLog + ' (last 20)') ($bl -join "`n")
         $sec = @($bl | Where-Object { $_ -match [regex]::Escape($pa) -or $_ -match [regex]::Escape($pb) })
         Set-WitCompare '202' 'the broker''s log never holds a password' '0' ([string]$sec.Count)
+    }
+}
+
+# ===================================================================================================== api331 (331)
+# 22 Nov 26 - RELEASE_1.1 331 (Linux S.256, its mail 2000: the remote administrator runs remote.sdsys api): from the remote session the
+# broker runs remote.sdsys api on / the report / off as SDSYS's job.  192.0.2.99 is TEST-NET-1, so nobody is admitted while it is on.
+# Needs on and ssh before it; the file is left absent, as found.
+if ($sections -contains 'api331') {
+    Write-Wit ''
+    Write-Wit '=== api331: remote.sdsys api on, the report and off from the remote session, through the broker (row 331)'
+    if ($pw -eq '') { Add-WitResult '331' 'SDRADMIN: remote.sdsys api' 'NOT-MEASURED' 'no SDRADMIN password on file: run -Only on first' }
+    else {
+        $apiFile = Join-Path $script:WitDataDir 'sd-tls\sdsys-api'
+        $readFile = {
+            try { $b = [IO.File]::ReadAllBytes($apiFile) } catch { return '<no file>' }
+            return ([Text.Encoding]::ASCII.GetString($b)).Replace("`r", '\r').Replace("`n", '\n')
+        }
+        $bad = @('did not succeed', 'helper refused', 'gave no answer', 'is not available in a remote administration session', 'Command requires administrator', 'is not in your VOC', 'not an address or a range', 'takes on with')
+        Write-Wit ('  the file before: ' + (& $readFile) + '   (' + $apiFile + ')')
+        $mark = Get-WitAuditMark
+        $r = Invoke-WitSsh -User 'sdradmin' -Password $pw -Commands @('remote.sdsys api on 192.0.2.99') -Label 'api on 192.0.2.99 through the broker'
+        $t = ''
+        if ($null -ne $r) { $t = $r.Out }
+        Set-WitVerdict '331' 'SDRADMIN: remote.sdsys api on 192.0.2.99 is done through the broker (15117)' $t 'The API is open for sdsys from 192\.0\.2\.99' $bad
+        Set-WitCompare '331' 'SDRADMIN: the file holds "on" and 192.0.2.99/32' 'on\n192.0.2.99/32\n' (& $readFile) -Evidence $apiFile
+        $r = Invoke-WitSsh -User 'sdradmin' -Password $pw -Commands @('remote.sdsys api') -Label 'the api report through the broker'
+        $t = ''
+        if ($null -ne $r) { $t = $r.Out }
+        Set-WitVerdict '331' 'SDRADMIN: remote.sdsys api reports on, from 192.0.2.99/32' $t 'sdsys over the API from other computers: on, from 192\.0\.2\.99/32' $bad
+        $r = Invoke-WitSsh -User 'sdradmin' -Password $pw -Commands @('remote.sdsys api off') -Label 'api off through the broker'
+        $t = ''
+        if ($null -ne $r) { $t = $r.Out }
+        Set-WitVerdict '331' 'SDRADMIN: remote.sdsys api off reports off' $t 'sdsys over the API from other computers: off' ($bad + @('on, from'))
+        Set-WitCompare '331' 'SDRADMIN: after off the file is gone' 'False' ([string](Test-Path -LiteralPath $apiFile)) -Evidence $apiFile
+        $al = @(Get-WitAuditSince $mark | Where-Object { $_ -match 'remote\.sdsys api' })
+        Write-WitRaw 'audit: remote.sdsys api lines' ($al -join "`n")
+        Set-WitVerdict '331' 'SDRADMIN: the audit has remote.sdsys api on from=192.0.2.99 status=0 by=remote' ($al -join "`n") 'remote\.sdsys api on from=192\.0\.2\.99 status=0 by=remote' @('status=[1-9-]')
+        Set-WitVerdict '331' 'SDRADMIN: the audit has remote.sdsys api off status=0 by=remote' ($al -join "`n") 'remote\.sdsys api off status=0 by=remote' @('status=[1-9-]')
     }
 }
 
