@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 21 Nov 26 Windows port - RELEASE_1.1 379 (Linux sd-elevate cred-own): K_CRED_OWN (86), the session's own SD password through the
+ *           SD service (win32credown.c; cred_own_key()).
  * 18 Nov 26 Windows port - RELEASE_1.1 344, from Linux 02507803 (S.264): K_OWN_ADDR (176), is an address one of this machine's own (sd_ownaddr.c).
  * 18 Nov 26 Windows port - the owner: LOGTO back into SDSYS as on Linux - K_OS_SDSYS_USER also answers 1 for a process LOGIN or CPROC
  *           granted USR_ADMIN (sdsys_entered, kept across LOGTO), not only for the desktop sign-in.
@@ -123,6 +125,7 @@
 #include "sd_jobmark.h"   /* 10 Nov 26 Windows port - K_JOB_MARK (Linux S.102 stage 3, carry area 14) */
 #include "win32auditpipe.h" /* 13 Nov 26 Windows port - K_LOCK_TRACE's file (RELEASE_1.1 182); no Windows type */
 #include "win32runin.h"     /* 13 Nov 26 Windows port - K_RUNIN_CHILD, K_RUNIN_DEBUG (RELEASE_1.1 253(b)); no Windows type */
+#include "win32credown.h"   /* 21 Nov 26 Windows port - K_CRED_OWN (RELEASE_1.1 379); no Windows type */
 #include "win32localsdsys.h" /* 18 Nov 26 Windows port - K_SDSYS_LOCAL (RELEASE_1.1 339); no Windows type */
 #include "sd_ownaddr.h"      /* 18 Nov 26 Windows port - K_OWN_ADDR (RELEASE_1.1 344, Linux S.264) */
 
@@ -237,6 +240,70 @@ Private bool run_exe(char *exe_name, char *cmd_line);
 
 /* ======================================================================
    op_kernel()  -  KERNEL()  -  Miscellaneous kernel functions            */
+
+/* ======================================================================
+   cred_own_key()  -  K_CRED_OWN, this session's own SD password through the SD service  (21 Nov 26 Windows port - RELEASE_1.1 379)
+
+   Linux's MODIFY.PASSWORD runs "sudo sd-elevate cred-own" for a person who is not the administrator; this is that call, over
+   win32credown.c's pipe instead of a command line, so the stored keys go from this process's memory to the service and nowhere
+   else.  Only a $internal program may ask (MODIFY.PASSWORD).  The argument is the mode, then its lines, field mark separated; a
+   line may hold no CR or LF.  The service names the account from this process's token; nothing here does.  The buffers that held
+   the keys are wiped before returning.                                                                                      */
+
+Private void cred_own_wipe(char *p, size_t n) {
+  volatile char *v = p;
+
+  while (n-- > 0)
+    *(v++) = '\0';
+}
+
+Private void cred_own_key(DESCRIPTOR *descr, DESCRIPTOR *result) {
+  char arg[CREDOWN_REQUEST_MAX + 1];
+  char req[CREDOWN_REQUEST_MAX + 32];
+  char ans[CREDOWN_ANSWER_MAX];
+  char out[CREDOWN_ANSWER_MAX + 8];
+  size_t used;
+  char *p;
+
+  if (!(process.program.flags & HDR_INTERNAL)) {
+    k_put_c_string("ER" FIELD_MARK_STRING "only MODIFY.PASSWORD may ask the SD service for a password change", result);
+    return;
+  }
+  if (k_get_c_string(descr, arg, sizeof(arg) - 1) < 1) {
+    cred_own_wipe(arg, sizeof(arg));
+    k_put_c_string("ER" FIELD_MARK_STRING "the request is empty or too long", result);
+    return;
+  }
+
+  used = (size_t)snprintf(req, sizeof(req), "%s", CREDOWN_MAGIC);
+  for (p = arg; (*p != '\0') && (used + 6 < sizeof(req)); p++) {
+    if ((*p == '\n') || (*p == '\r')) {
+      cred_own_wipe(arg, sizeof(arg));
+      cred_own_wipe(req, sizeof(req));
+      k_put_c_string("ER" FIELD_MARK_STRING "a line of the request holds a line break", result);
+      return;
+    }
+    req[used++] = (*p == FIELD_MARK) ? '\n' : *p;
+  }
+  cred_own_wipe(arg, sizeof(arg));
+  if (*p != '\0') {
+    cred_own_wipe(req, sizeof(req));
+    k_put_c_string("ER" FIELD_MARK_STRING "the request is too long", result);
+    return;
+  }
+  memcpy(req + used, "\nEND\n", 6); /* with its terminator */
+
+  if (win32_credown_ask(req, ans, sizeof(ans)) == 0) {
+    if (strncmp(ans, "OK ", 3) == 0)
+      snprintf(out, sizeof(out), "OK%c%s", FIELD_MARK, ans + 3);
+    else
+      snprintf(out, sizeof(out), "ER%c%s", FIELD_MARK, (strncmp(ans, "ER ", 3) == 0) ? ans + 3 : ans);
+  } else {
+    snprintf(out, sizeof(out), "ER%c%s", FIELD_MARK, ans);
+  }
+  cred_own_wipe(req, sizeof(req));
+  k_put_c_string(out, result);
+}
 
 /* ======================================================================
    runin_debug_key()  -  K_RUNIN_DEBUG, the SDSYS session's end of run.in's debug  (13 Nov 26 Windows port - RELEASE_1.1 253(b))
@@ -1986,6 +2053,11 @@ void op_kernel() {
 
     case K_RUNIN_DEBUG:
       runin_debug_key(descr, &result);
+      break;
+
+    /* 21 Nov 26 Windows port - RELEASE_1.1 379: see cred_own_key(). */
+    case K_CRED_OWN:
+      cred_own_key(descr, &result);
       break;
 
     default:

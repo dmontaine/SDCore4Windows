@@ -18,6 +18,7 @@
   	  * 
   	  * 
 	  * START-HISTORY:
+	  * 21 Nov 26 Windows port - RELEASE_1.1 379 (Linux sd-elevate cred-own): K$CRED.OWN (86), Windows only.
 	  * 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): K$SDSYS.LOCAL (175).
 	  * 18 Nov 26 Windows port - four-version audit round 2 (P-5475): K$WINSIZE stands before the S.63 gates and K$LOCK.TRACE after the AI keys, in Linux's order.
 	  * 17 Nov 26 Windows port - four-version audit round 1 (P-1965): K$OS.ADMINISTRATOR (63) is retired, as gplsrc/keys.h; nothing asked it.
@@ -284,6 +285,7 @@
 * 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug; Windows only.  Must match gplsrc/keys.h, which says what each answers.
       $define K$RUNIN.CHILD     84      ;* run.in's debugged child: account:@fm:store:@fm:groups, '' for any other process
       $define K$RUNIN.DEBUG     85      ;* the SDSYS session's end of a run: 'O', 'P' (relay) or 'C' (end)
+      $define K$CRED.OWN        86      ;* the session's OWN SD password via the SD service: 'query', 'verify', 'set' (RELEASE_1.1 379)
       * 13 Oct 26 dm (Linux 7ff476f) - The terminal's own size: kernel(K$WINSIZE, '') answers width, a field mark, height as the kernel last
       *   read them from the tty (start-up and every SIGWINCH), or null when it could not.  Must match gplsrc/keys.h.
       $define K$WINSIZE          92      ;* The terminal's size from the tty

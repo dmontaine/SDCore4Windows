@@ -34,6 +34,10 @@ int sdaudit_sysdir(char* out, int outsz);
    process's own user - LocalSystem in the service, which is what a session checks.  0 serving, -1 not (logged). */
 int sdaudit_start(const char* pipe_name, const char* sysdir, const char* const* grant, sdaudit_log_fn log);
 
+/* 21 Nov 26 - RELEASE_1.1 379.  Append one line the service itself has to say (cred-own): "<time> user=<user> uid=- pid=<pid>
+   <msg>".  0 written, -1 not (no writer running, too long, or the append failed). */
+int sdaudit_write(const char* user, unsigned long pid, const char* msg);
+
 /* Stop serving, write the rate notes still owed, and log what was done. */
 void sdaudit_stop(void);
 

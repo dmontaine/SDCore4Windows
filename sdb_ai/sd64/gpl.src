@@ -99,6 +99,7 @@ win32relay
 win32s4u
 win32s4ulogon
 win32runin
+win32credown
 win32pipe
 win32vt
 win32session

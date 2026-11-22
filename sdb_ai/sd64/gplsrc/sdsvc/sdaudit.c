@@ -13,6 +13,7 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 21 Nov 26 Windows port - RELEASE_1.1 379: sdaudit_write(), a line the service writes itself (cred-own's audit).
  * 13 Nov 26 Windows port - written.  RELEASE_1.1 247, the Windows form of Linux W.11 F4 (sdlnxd.c's audit writer,
  *           options C1 and C2), and RELEASE_1.1 182, LOCK.TRACER's file (Linux 7f7a4fd4).
  * END-HISTORY
@@ -886,6 +887,24 @@ int sdaudit_start(const char* pipe_name, const char* sysdir, const char* const* 
             "%d account(s) besides Administrators may send",
             audit_pipe_name, audit_nthreads, audit_dir, audit_dir, audit_ngrant);
   return 0;
+}
+
+/* 21 Nov 26 - RELEASE_1.1 379: a line the SERVICE writes about a request it served itself (cred-own), in the trail's own shape,
+   with the caller's user and pid as the kernel gave them and uid "-" (there is no SD user number).  Written under audit_cs like
+   every other line.  0 written, -1 not (the writer is not running, the line does not fit, or the append failed). */
+int sdaudit_write(const char* user, unsigned long pid, const char* msg) {
+  char line[1024];
+  int len;
+  BOOL ok;
+
+  if (!audit_running || (user == NULL) || (msg == NULL))
+    return -1;
+  if ((len = audit_format_line(line, sizeof(line), user, "-", (DWORD)pid, msg)) == 0)
+    return -1;
+  EnterCriticalSection(&audit_cs);
+  ok = audit_emit_line(line, len);
+  LeaveCriticalSection(&audit_cs);
+  return ok ? 0 : -1;
 }
 
 void sdaudit_stop(void) {

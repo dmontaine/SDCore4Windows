@@ -7546,15 +7546,6 @@ Idle: signing out in %1 s
 
 cited by: `ide`
 
-### msg:12759
-> kind=message tier=reference since=- src=sdsys/messages/12759:1#bb342d1f
-
-```
-Changing an SD password needs an elevated session. A Windows administrator starts SD Core with Run as administrator; anyone else asks the SD administrator (SDSYS) to change it.
-```
-
-cited by: `set_acc_password`
-
 ### msg:12760
 > kind=message tier=reference since=- src=sdsys/messages/12760:1#451a91b5
 

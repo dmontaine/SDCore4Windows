@@ -13,6 +13,8 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 21 Nov 26 Windows port - RELEASE_1.1 379 (Linux sd-elevate cred-own): the service serves SD_CREDOWN_PIPE (sdcredown.c), where an
+ *           SD user changes its own SD password; started with the other doors, stopped before the audit writer.
  * 19 Nov 26 Windows port - RELEASE_1.1 295 (Linux's rule, mail T2930): the daemon is held by a handle; gone with exit code 0 (sd -stop)
  *           the service stops with NO_ERROR, any other end keeps exit code 3, which the failure flag install-service.ps1 now sets
  *           turns into a restart.
@@ -142,6 +144,8 @@
 #include "../win32localsdsys.h"
 #include "sdsyslocal.h" /* 18 Nov 26 - "ssh -t <user>@localhost sd-sdsys", RELEASE_1.1 339 */
 #include "sdrestore.h" /* 21 Nov 26 - "sdsvc.exe -restore-kept", RELEASE_1.1 370 */
+#include "sdcredown.h" /* 21 Nov 26 - cred-own, a person's own SD password, RELEASE_1.1 379 */
+#include "../win32credown.h"
 
 #define SVC_NAME "SD"
 #define SDWIND_EXE "sdwind.exe"
@@ -743,6 +747,27 @@ static void svc_sdsyslocal_start(void) {
   (void)sdsyslocal_start(SDL_PIPE, exe, svc_log);
 }
 
+/* ======================================================================
+   A person's own SD password.
+
+   21 Nov 26 Windows port - RELEASE_1.1 379 (Linux sd-elevate cred-own, d147a5c; agreed with the Linux audit session, mail
+   2026-11-22T1900).  $cred is SYSTEM and Administrators only, so an unelevated session cannot change its own password; it asks here
+   (MODIFY.PASSWORD through K$CRED.OWN), and sdcredown.c acts on the record of the account whose token opened the pipe, after the
+   current password is proved.  Every SD user may open the pipe (sdusers).  The service writes its audit lines.  NOTHING HERE IS
+   FATAL: without it an unelevated MODIFY.PASSWORD says the service could not be asked, and everything else in SD runs.        */
+
+static const char* const credown_grant[] = {"sdusers", NULL};
+
+static void svc_credown_start(void) {
+  char sysdir[MAX_PATH];
+
+  if (sdaudit_sysdir(sysdir, sizeof(sysdir)) != 0) {
+    svc_log("cred-own: not started - no SDSYS= in the [sd] section of ProgramData\\SD\\sd.conf");
+    return;
+  }
+  (void)sdcredown_start(SD_CREDOWN_PIPE, sysdir, credown_grant, sdaudit_write, svc_log);
+}
+
 static void WINAPI svc_ctrl(DWORD ctrl) {
   switch (ctrl) {
     case SERVICE_CONTROL_STOP:
@@ -812,6 +837,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
   svc_audit_start();
   svc_runin_start(); /* 13 Nov 26 - RELEASE_1.1 253(b): see svc_runin_start() */
   svc_sdsyslocal_start(); /* 18 Nov 26 - RELEASE_1.1 339: see svc_sdsyslocal_start() */
+  svc_credown_start(); /* 21 Nov 26 - RELEASE_1.1 379: see svc_credown_start() */
 
   /* A NON-ZERO EXIT IS NOT ALWAYS A FAILURE.  "sd -start" exits 1 when SD is
      already running, which at boot means somebody started it by hand first -
@@ -821,6 +847,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
   if (!run_sd("-start", &rc)) {
     svc_log("could not run \"sd -start\" at all - CreateProcess error %lu (service exit code %d)",
             (unsigned long)GetLastError(), SVC_EXIT_NO_START);
+    sdcredown_stop();
     sdaudit_stop();
     sdrunin_stop();
     sdsyslocal_stop();
@@ -869,6 +896,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
     svc_log("cleared the half-started segment: \"sd -stop\" exited with %lu (service exit code %d)",
             (unsigned long)rc, SVC_EXIT_DAEMON_NEVER_UP);
 
+    sdcredown_stop();
     sdaudit_stop();
     sdrunin_stop();
     sdsyslocal_stop();
@@ -906,6 +934,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
       if (have_code && wcode == 0) {
         svc_log("%s ended with exit code 0 after %d seconds - SD was stopped (sd -stop); the service stops too, not as a failure",
                 SDWIND_EXE, alive);
+        sdcredown_stop();
         sdaudit_stop();
         sdrunin_stop();
         sdsyslocal_stop();
@@ -931,6 +960,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
       svc_log("cleared up after it: \"sd -stop\" exited with %lu (service exit code %d)",
               (unsigned long)rc, SVC_EXIT_DAEMON_GONE);
 
+      sdcredown_stop();
       sdaudit_stop();
       sdrunin_stop();
       sdsyslocal_stop();
@@ -948,6 +978,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
      alternative, leaving the daemon behind, orphans the segment.          */
   run_sd("-stop", &rc);
   svc_log("service stopping: \"sd -stop\" exited with %lu", (unsigned long)rc);
+  sdcredown_stop(); /* 21 Nov 26 - before the audit writer, so its last lines are written */
   sdaudit_stop(); /* after the sessions' last records, not before */
   sdrunin_stop(); /* 13 Nov 26 - any run still going is ended, its store removed */
   sdsyslocal_stop(); /* 18 Nov 26 - any sd-sdsys session still going is ended */

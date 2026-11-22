@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 21 Nov 26 Windows port - RELEASE_1.1 379 (Linux sd-elevate cred-own): K_CRED_OWN (86), a session's own SD password; Windows only.
  * 18 Nov 26 Windows port - RELEASE_1.1 339 (Linux S.267): K_SDSYS_LOCAL (175), SDSYS reached from this computer by a listed user.
  * 17 Nov 26 Windows port - four-version audit round 1, owner's answer 5a: SKT_INFO_TRACE (10) is carried from Linux 400500c.
  *           (P-1969) K_OS_ADMINISTRATOR (63) is retired: nothing asked it; 63 stays reserved.
@@ -610,6 +611,12 @@
    GPL.BP/INT$KEYS.H carries the same numbers. */
 #define K_RUNIN_CHILD        84
 #define K_RUNIN_DEBUG        85
+/* 21 Nov 26 Windows port - RELEASE_1.1 379 (Linux sd-elevate cred-own; WINDOWS ONLY, in the same gap, Linux asked to reserve it).
+   kernel(K$CRED.OWN, mode {: @fm : line ...}) from a $internal program: asks the SD service (win32credown.h) about the SESSION'S
+   OWN account's SD password - "query", "verify" <FM> stored key, "set" <FM> the seven lines of win32credown.h.  Answers "OK" <FM>
+   text or "ER" <FM> reason.  The service names the account from this process's token; nothing here names one.  An unelevated
+   MODIFY.PASSWORD uses it, because $cred is SYSTEM and Administrators only.  GPL.BP/INT$KEYS.H carries the same number. */
+#define K_CRED_OWN           86
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

@@ -298,11 +298,12 @@ SVCDIR   := $(GPLSRC)sdsvc
 # 18 Nov 26 Windows port - RELEASE_1.1 339: and it is the door of "ssh -t
 # <user>@localhost sd-sdsys", sdsyslocal.c (pseudo console: kernel32, no new lib).
 # 21 Nov 26 - RELEASE_1.1 370: and "sdsvc.exe -restore-kept", sdrestore.c (the installer's one-time SYSTEM task: advapi32 and userenv, nothing new).
+# 21 Nov 26 - RELEASE_1.1 379: and cred-own, sdcredown.c (a person's own SD password; advapi32, nothing new).
 sdsvc:
 	@echo Building native service wrapper
 	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 \
 	    $(SVCDIR)/sdsvc.c $(SVCDIR)/sdaudit.c $(GPLSRC)win32audit.c \
-	    $(SVCDIR)/sdrunin.c $(SVCDIR)/sdsyslocal.c $(SVCDIR)/sdrestore.c $(GPLSRC)win32s4ulogon.c $(GPLSRC)win32localsdsys.c -lsecur32 -lbcrypt \
+	    $(SVCDIR)/sdrunin.c $(SVCDIR)/sdsyslocal.c $(SVCDIR)/sdrestore.c $(SVCDIR)/sdcredown.c $(GPLSRC)win32s4ulogon.c $(GPLSRC)win32localsdsys.c -lsecur32 -lbcrypt \
 	    -ladvapi32 -luserenv -lnetapi32 -liphlpapi -lwevtapi -o $(GPLBIN)sdsvc.exe
 
 # 16 Sep 26 Windows port - RELEASE_1.1 43: THE API's TLS RELAY IS NATIVE, AND
