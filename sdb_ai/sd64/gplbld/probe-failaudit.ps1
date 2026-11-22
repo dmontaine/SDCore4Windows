@@ -85,7 +85,8 @@ function Invoke-Client([double]$KillSeconds) {
     }
     $sw.Stop()
     $text = (($o.Result) + ($e.Result)) -replace "`r", ''
-    return [pscustomobject]@{ Seconds = [math]::Round($sw.Elapsed.TotalSeconds, 2); StillRunningAtKill = $stillRunning; Text = $text }
+    $code = $(if ($p.HasExited) { $p.ExitCode } else { 'still running' })
+    return [pscustomobject]@{ Seconds = [math]::Round($sw.Elapsed.TotalSeconds, 2); StillRunningAtKill = $stillRunning; Text = $text; ExitCode = $code }
 }
 
 Say ('=== probe-failaudit ' + (Get-Date -Format s))
@@ -125,7 +126,15 @@ $rows = @()
 foreach ($k in $KillAfter) {
     $before = Get-RefusedCount
     $r = Invoke-Client $k
-    if (-not $r.StillRunningAtKill) { Refuse ('the client had already ended before the ' + $k + ' s kill (it lived ' + $r.Seconds + ' s) - not a measurement of an early drop.') }
+    if (-not $r.StillRunningAtKill) {
+        # What it printed says why it ended (RELEASE_1.1 300: b354's K=2.5 client ended by itself at 2.15 s, before the
+        # server's 3 s sleep could end, and this refusal printed nothing of it, so the cause was never seen).
+        Say ('    client ended by itself at ' + $r.Seconds + ' s, exit code ' + $r.ExitCode + '; it printed:')
+        $shown = 0
+        foreach ($l in ($r.Text -split "`n")) { if ($l.Trim()) { Say ('    | ' + $l); $shown++ } }
+        if ($shown -eq 0) { Say '    | (nothing on stdout or stderr)' }
+        Refuse ('the client had already ended before the ' + $k + ' s kill (it lived ' + $r.Seconds + ' s) - not a measurement of an early drop.')
+    }
     Start-Sleep -Seconds $WaitAfter
     $after = Get-RefusedCount
     $delta = $after - $before
