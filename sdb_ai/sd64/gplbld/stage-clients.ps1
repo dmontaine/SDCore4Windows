@@ -11,14 +11,18 @@ mkrelease.ps1 packages:
 
   <To>\Windows64\  sdclilib.dll  sdclient.dll  libsdclilib.dll.a  libsdclient.dll.a   (64-bit; sd.iss puts the DLLs in
                                                                                       usr\bin and all four in usr\clients\client64)
-  <To>\Windows32\  qmclilib.dll  qmclient.dll  libqmclilib.dll.a  libqmclient.dll.a   (32-bit; usr\bin and usr\clients\client32)
 
-each with its own COMMIT.txt (a line naming the set's SDClientLib commit, then "<sha256>  ./<name>" per file), which is the form mkrelease.ps1 -Clients
+with its own COMMIT.txt (a line naming the set's SDClientLib commit, then "<sha256>  ./<name>" per file), which is the form mkrelease.ps1 -Clients
 checks.  Every file is checked against the set's COMMIT.txt BEFORE it is copied and its copy AFTER; a file missing from the set,
 missing from COMMIT.txt, or not matching it stops the run.  -From defaults to the newest set (by its COMMIT.txt's time) that has
-win64\ and win32\.
+win64\.
 
-Exit 0: both folders written and every copy matches.  1: a check failed (nothing is claimed).  2: cannot run (no set, bad -To).
+21 Nov 26 - RELEASE_1.1 383 (owner: "pull the 32 bit dlls from the release.  We will keep them in case someone wants them, but
+the old programs written for qm will not work out of the box with sd because of the changes we have made").  The set's win32\
+stays in the private store and is NOT staged.  A <To>\Windows32 an earlier run left is removed when it holds only the files
+that run wrote (anything else stops the run), so it cannot reach a package.
+
+Exit 0: the folder written and every copy matches.  1: a check failed (nothing is claimed).  2: cannot run (no set, bad -To).
 #>
 param(
     [Parameter(Mandatory = $true)] [string] $To,
@@ -33,17 +37,17 @@ function Cannot([string] $t) { Say "stage-clients: CANNOT RUN - $t"; exit 2 }
 $Sets = 'P:\git-private\sdclientlib-binaries'
 $Layout = [ordered]@{
     'Windows64' = @{ Src = 'win64'; Files = @('sdclilib.dll', 'sdclient.dll', 'libsdclilib.dll.a', 'libsdclient.dll.a') }
-    'Windows32' = @{ Src = 'win32'; Files = @('qmclilib.dll', 'qmclient.dll', 'libqmclilib.dll.a', 'libqmclient.dll.a') }
 }
+# RELEASE_1.1 383: what an earlier run staged as Windows32, so its leftover folder can be told from anything else.
+$Retired32 = @('qmclilib.dll', 'qmclient.dll', 'libqmclilib.dll.a', 'libqmclient.dll.a', 'COMMIT.txt')
 
 if (-not $From) {
     if (-not (Test-Path -LiteralPath $Sets -PathType Container)) { Cannot "no -From and no $Sets" }
     $cand = @(Get-ChildItem -LiteralPath $Sets -Directory | Where-Object {
-        (Test-Path -LiteralPath (Join-Path $_.FullName 'win64')) -and (Test-Path -LiteralPath (Join-Path $_.FullName 'win32')) -and
-        (Test-Path -LiteralPath (Join-Path $_.FullName 'COMMIT.txt'))
+        (Test-Path -LiteralPath (Join-Path $_.FullName 'win64')) -and (Test-Path -LiteralPath (Join-Path $_.FullName 'COMMIT.txt'))
     } | Sort-Object { (Get-Item -LiteralPath (Join-Path $_.FullName 'COMMIT.txt')).LastWriteTimeUtc })
     # 19 Nov 26 - newest by its COMMIT.txt, not by name: a set's name starts with its commit hash, which does not sort by date.
-    if ($cand.Count -eq 0) { Cannot "no set under $Sets has win64\, win32\ and COMMIT.txt" }
+    if ($cand.Count -eq 0) { Cannot "no set under $Sets has win64\ and COMMIT.txt" }
     $From = $cand[-1].FullName
 }
 $manifest = Join-Path $From 'COMMIT.txt'
@@ -70,6 +74,15 @@ Say ("  COMMIT.txt names {0} file(s)" -f $want.Count)
 if ($want.Count -eq 0) { Fail "COMMIT.txt in $From names no file" }
 
 $null = New-Item -ItemType Directory -Path $To -Force
+$old32 = Join-Path $To 'Windows32'
+if (Test-Path -LiteralPath $old32) {
+    $other = @(Get-ChildItem -LiteralPath $old32 -Force | Where-Object { $_.PSIsContainer -or ($Retired32 -notcontains $_.Name) })
+    if ($other.Count) { Fail ("$old32 holds what no earlier run wrote: " + (($other | ForEach-Object Name) -join ', ')) }
+    $gone = @(Get-ChildItem -LiteralPath $old32 -File -Force | ForEach-Object Name)
+    Remove-Item -LiteralPath $old32 -Recurse -Force
+    if (Test-Path -LiteralPath $old32) { Fail "could not remove $old32" }
+    Say ("  removed {0} (32-bit set not shipped, RELEASE_1.1 383): {1}" -f $old32, ($gone -join ', '))
+}
 $total = 0
 foreach ($dst in $Layout.Keys) {
     $src = $Layout[$dst].Src
@@ -97,6 +110,6 @@ foreach ($dst in $Layout.Keys) {
     }
     Set-Content -LiteralPath (Join-Path $dir 'COMMIT.txt') -Value $out -Encoding ascii
 }
-if ($total -ne 8) { Fail "copied $total file(s), expected 8" }
-Say "stage-clients: STAGED 8 files, each matching $manifest"
+if ($total -ne 4) { Fail "copied $total file(s), expected 4" }
+Say "stage-clients: STAGED 4 files (64-bit), each matching $manifest"
 exit 0

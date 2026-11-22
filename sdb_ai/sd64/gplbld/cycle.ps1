@@ -752,7 +752,7 @@ if ((Get-FileHash -LiteralPath $outZip).Hash -ne (Get-FileHash -LiteralPath $src
 Write-Host ("   source beside it: {0}, {1:N0} bytes, and {2}" -f (Split-Path -Leaf $outZip), (Get-Item -LiteralPath $outZip).Length, (Split-Path -Leaf $outTxt))
 
 # 19 Nov 26 - RELEASE_1.1 351 (Linux S.262).  THE CLIENT LIBRARIES GO BESIDE THE INSTALLER TOO.  The GPL client is no
-# longer built; sd.iss installs the clean-room DLLs from clients\Windows64 and \Windows32 beside the setup exe, the release
+# longer built; sd.iss installs the clean-room DLLs from clients\Windows64 beside the setup exe (64-bit only since 383), the release
 # package's layout.  An install without them has no client library (as Linux's from a clone), and the API verifiers need
 # one, so a cycle that cannot stage them fails here.
 Write-Host "   staging the clean-room client libraries beside it (stage-clients.ps1, a few seconds)"

@@ -233,22 +233,32 @@ def main():
         # AND THE REAL LIST IS NOW EXERCISED, not just an injected name: 64
         # put adopt-account.ps1 in it, so the positive case is the first place
         # a reader sees what the shipped entry looks like.
-        check('exactly one {app} delete per PF_RETIRED name',
-              len(app_dels) == len(S.PF_RETIRED),
-              'got %d for %d name(s)' % (len(app_dels), len(S.PF_RETIRED)))
+        # 21 Nov 26 - RELEASE_1.1 383: PF_RETIRED_DIRS adds one dirifempty delete per folder, after every file delete.
+        n_dirs = len(S.PF_RETIRED_DIRS)
+        check('exactly one {app} delete per PF_RETIRED name and PF_RETIRED_DIRS folder',
+              len(app_dels) == len(S.PF_RETIRED) + n_dirs,
+              'got %d for %d name(s) + %d folder(s)' % (len(app_dels), len(S.PF_RETIRED), n_dirs))
         for n, _w in S.PF_RETIRED:
             check('PF_RETIRED %s is deleted under {app}, ungated, and not '
                   'copied back' % n,
-                  any((('{app}\\%s"' % n) in l and 'Check:' not in l)
+                  any((('{app}\\%s"' % n) in l and 'Check:' not in l and 'Type: files' in l)
                       for l in app_dels) and
                   not any(('\\%s' % n) in l for l in copies))
+        last_file = max([i for i, l in enumerate(app_dels) if 'Type: files' in l] or [-1])
+        for n, _w in S.PF_RETIRED_DIRS:
+            hits = [i for i, l in enumerate(app_dels)
+                    if ('{app}\\%s"' % n) in l and 'Type: dirifempty' in l and 'Check:' not in l]
+            check('PF_RETIRED_DIRS %s is a dirifempty delete under {app}, ungated, after every file delete' % n,
+                  len(hits) == 1 and hits[0] > last_file, 'got %s, last file delete at %d' % (hits, last_file))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
     root = tempfile.mkdtemp()
     saved = S.PF_RETIRED
+    saved_dirs = S.PF_RETIRED_DIRS
     try:
         S.PF_RETIRED = [('old-helper.ps1', 'dropped from stage.py')]
+        S.PF_RETIRED_DIRS = []
         sdsys = build_tree(root)
         path, _r, _p = S.write_upgrade_iss(root, sdsys, True)
         text = open(path, encoding='ascii').read()
@@ -265,6 +275,7 @@ def main():
               not any('old-helper.ps1' in l for l in copies))
     finally:
         S.PF_RETIRED = saved
+        S.PF_RETIRED_DIRS = saved_dirs
         shutil.rmtree(root, ignore_errors=True)
 
     # --- the refusals ------------------------------------------------------

@@ -16,7 +16,7 @@
     -DocsRepo    default <Projects>\SDCore4WindowsDocs (Solo: SDCore4WindowsSoloDocs)
     -Readme      README.txt of the package (the owner reads it before anything is distributed; this script does not write one)
     -Books       a folder holding the whole-book PDFs <Product>-<ver>-*.pdf, copied to documentation\
-    -Clients     a folder of client folders (Linux64, Linux64-openssl4, Windows32, Windows64, bindings), copied to clients\.  Each must
+    -Clients     a folder of client folders (Linux64, Linux64-openssl4, Windows64, bindings; never Windows32), copied to clients\.  Each must
                  hold a COMMIT.txt whose sha256 lines name every other file in it, and match them.  P:\sdcore-mail\transfer\clients is
                  where both agents keep the current sets.
     -SshServer   a folder with OpenSSH-Win64-*.msi, copied to ssh-server\ (the installer installs from it when the box is ticked)
@@ -50,6 +50,8 @@
     mkdoc.py, mkfooterpdf.py, mkbookpdf.ps1), writing the README, an install from the zip, the merge to main, the tag, the push.
 
     13 Nov 26 - written for RELEASE_1.1 268 (and 234: the clients folder with the other platform's libraries and the bindings).
+    21 Nov 26 - RELEASE_1.1 383 (owner: "pull the 32 bit dlls from the release"): a Windows32 client folder is refused, so the
+                32-bit QM set (kept in the private store) cannot reach a package by being left in the folder given.
 #>
 
 [CmdletBinding()]
@@ -213,6 +215,9 @@ if ($Clients) {
     if (-not (Test-Path -LiteralPath $Clients -PathType Container)) { Die "no clients folder $Clients" }
     $subs = @(Get-ChildItem -LiteralPath $Clients -Directory)
     if ($subs.Count -eq 0) { Die "the clients folder $Clients holds no client folder" }
+    if (@($subs | Where-Object { $_.Name -eq 'Windows32' }).Count) {
+        Die "the clients folder $Clients holds Windows32: the 32-bit QM client set is not shipped (RELEASE_1.1 383); take it out"
+    }
     foreach ($s in $subs) {
         $ct = Join-Path $s.FullName 'COMMIT.txt'
         if (-not (Test-Path -LiteralPath $ct)) { Die "$($s.FullName) has no COMMIT.txt" }

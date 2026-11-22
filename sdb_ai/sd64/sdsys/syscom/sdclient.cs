@@ -8,7 +8,7 @@
 // /usr/local/sdsys/bin/sdclilib.so).  Both are cdecl and have the same functions, and a client of either kind talks to a server of
 // either kind: a Windows program can use an SD server on Linux and a Linux program one on Windows.  Put the library where .NET
 // looks (the program's own directory, or PATH / LD_LIBRARY_PATH), or point .NET at it with NativeLibrary.SetDllImportResolver.
-// A 64-bit program needs the 64-bit library and a 32-bit program the 32-bit one.
+// The Windows library is 64-bit only (SD ships no 32-bit client since 2.0-0), so the program must be 64-bit.
 //
 // STRINGS ARE BYTES.  SD strings carry the marks 0xFB to 0xFF (item, field, value, subvalue and text marks) and a UTF-8
 // conversion by .NET would damage them, so every string parameter is a byte[] and every string result an IntPtr, and the two
