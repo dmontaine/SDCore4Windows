@@ -387,6 +387,23 @@ read.report:
    next i
    return
 
+* 21 Nov 26 - RELEASE_1.1 382: the page takes the screen again after $tk_restart closed it and SD did not restart: opened for the administrator
+* again, the new context given its AI line and panes, everything read and drawn.  A refusal at $tk_open ends the page (done = 1).
+take.screen:
+   call $tk_open('tool.config', 'admin', ctx, err)
+   if err # '' then
+      display err
+      done = 1
+      return
+   end
+   call $tk_aipage('again', ctx, keys, '', '', aout)
+   gosub lay.declare
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub read.all
+   gosub draw.all
+   return
+
 * ------------------------------------------------------------------------------------------------- the layout (S.88 L2)
 
 * The page's three boxes as panes of $tk_layout: each size is the box drawn at 140 by 43 (the body is 138 by 39), so at that size nothing moves; in a larger window the list stretches
@@ -867,7 +884,8 @@ change.param:
 *     21 Nov 26 - RELEASE_1.1 382 (owner): a change that takes effect only at a restart asks, in a box, whether to restart SD now
       if k.eff = 'restart' then
          why = k : ' is now ' : now.f : ' in sd.conf, but SD reads it only when it starts: until SD restarts, it keeps running with ' : now.r : '.'
-         call $tk_restart(why, rres, rmsg)
+         call $tk_restart(ctx, why, rres, rmsg)
+         if rres = 'failed' then gosub take.screen               ;* Restart closed the page and SD did not end this session
          msg = k : ' in sd.conf: ' : old.f : ' -> ' : now.f : '; ' : rmsg
       end
    end else

@@ -32,7 +32,8 @@ FILES = ["sl.h", "sl_put", "sl_scr", "sl_repaint", "sl_desktop", "sl_resize", "s
          "screen_clear", "screen_close", "tk_open"]
 # 5: the routines that may DISPLAY a clear or text without $sl_put, and why each is safe
 RAW_WRITERS = {"sl_repaint": "resets the picture", "sl_desktop": "resets the picture", "sl_guard": "its caller $sl_key unsyncs",
-               "screen_close": "the screen is given back", "sl_cleanup": "the screen is given back"}
+               "screen_close": "the screen is given back", "sl_cleanup": "the screen is given back",
+               "tk_restart": "the page was closed first ($tk_close): the screen is given back"}   # 21 Nov 26, RELEASE_1.1 382
 
 
 def code(src):

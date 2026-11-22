@@ -102,8 +102,10 @@ def check(raw):
     res["H3"] = (re.search(r"volatile\s+sig_atomic_t\s+term_signal_seen\b", code["linuxio.c"]) is not None, "")
     lt = lt or ""
     clr = lt.find("term_signal_seen = 0")
-    lg = lt.find("log_printf")
-    res["H4"] = (clr >= 0 and lg > clr and "Received termination signal" in raw["linuxio.c"], lt[:200])
+    # 21 Nov 26 - RELEASE_1.1 382 (the owner: the line flashed over a page during a restart): log_message(), the log alone; never log_printf(),
+    # which also displays to a logged-in user
+    lg = lt.find("log_message(")
+    res["H4"] = (clr >= 0 and lg > clr and "log_printf" not in lt and "Received termination signal" in raw["linuxio.c"], lt[:200])
     ev = ev or ""
     m = re.search(r"if\s*\(\s*events\s*&\s*EVT_TERMINATE\s*\)\s*\{([^}]*)\}", ev)
     br = m.group(1) if m else ""
@@ -120,7 +122,7 @@ NAMES = {
     "H1": "no signal handler (nor do_input, which SIGIO's handler calls) takes a semaphore, logs, prints or allocates",
     "H2": "signal_handler records the signal in term_signal_seen and raises EVT_TERMINATE",
     "H3": "term_signal_seen is a volatile sig_atomic_t",
-    "H4": "log_termination_signal clears term_signal_seen before it logs 'Received termination signal'",
+    "H4": "log_termination_signal clears term_signal_seen before it logs 'Received termination signal', to the log only (log_message, never log_printf)",
     "H5": "process_events calls log_termination_signal in its EVT_TERMINATE branch, before the branch returns",
     "H6": "fatal_signal_handler releases this process's semaphores before anything that logs",
 }
@@ -155,8 +157,9 @@ MUTANTS = [
     ("the handler takes a semaphore", "H1", sub("linuxio.c", "      term_signal_seen = signum;\n", "      term_signal_seen = signum;\n      StartExclusive(ERRLOG_SEM, 1);\n")),
     ("the handler forgets the signal", "H2", sub("linuxio.c", "      term_signal_seen = signum;\n", "      ;\n")),
     ("not volatile", "H3", sub("linuxio.c", "Private volatile sig_atomic_t term_signal_seen", "Private sig_atomic_t term_signal_seen")),
-    ("logged before cleared", "H4", sub("linuxio.c", "    term_signal_seen = 0;\n    log_printf(\"Received termination signal %d\\n\", signum);",
-                                        "    log_printf(\"Received termination signal %d\\n\", signum);\n    term_signal_seen = 0;")),
+    ("logged before cleared", "H4", sub("linuxio.c", "    term_signal_seen = 0;\n    sprintf(s, \"Received termination signal %d\", signum);\n    log_message(s);",
+                                        "    sprintf(s, \"Received termination signal %d\", signum);\n    log_message(s);\n    term_signal_seen = 0;")),
+    ("the line is shown on the screen again (RELEASE_1.1 382)", "H4", sub("linuxio.c", "    log_message(s);\n  }\n}", "    log_printf(\"%s\\n\", s);\n  }\n}")),
     ("process_events does not log it", "H5", sub("kernel.c", "    log_termination_signal(); /* 10 Nov 26 S.196", "    ; /* 10 Nov 26 S.196")),
     ("the fatal handler logs first", "H6", sub("kernel.c", "  release_owned_semaphores();\n  set_old_tty_modes();\n  log_printf(\"Fault type",
                                                 "  set_old_tty_modes();\n  log_printf(\"Fault type")),

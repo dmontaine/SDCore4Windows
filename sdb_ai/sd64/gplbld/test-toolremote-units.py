@@ -122,7 +122,7 @@ def checks(raw):
        and "'Restart SD if needed'" not in da
        and "fv = 'off'\n" in da and "if aw # 'on' and aw # 'local' and aw # 'off' then" in da
        and "sent = 'remote.api ' : aw : ' no.restart'" in da
-       and 0 < da.find("gosub confirm.and.run") < da.find("sysmsg(10136)") < da.find("call $tk_restart(why, rres, rmsg)")
+       and 0 < da.find("gosub confirm.and.run") < da.find("sysmsg(10136)") < da.find("call $tk_restart(ctx, why, rres, rmsg)") < da.find("if rres = 'failed' then gosub take.screen")
        and "sw = (if pk = 1 then 'on' else 'off')" in ds and "if pk < 1 or pk > 2 then" in ds and "default 2 returning pk" in ds
        and da.count("typed = 'open'") == 1 and ds.count("typed = 'open'") == 1 and "'OPEN'" not in pg
        and re.search(r"case aw = 'on'\s*\n\s*typed = 'open'", da) is not None and re.search(r"if sw = 'on' then\s*\n\s*typed = 'open'", ds) is not None
@@ -144,7 +144,10 @@ def checks(raw):
     ck("RM9", "SET.SERVER is run by the VERB on the terminal and never with NO.QUERY (its replace question and its trust-this-key question are a person's to answer): the sentence has no no.query, ends in the hand-over, and the accounts clause is added only when accounts were given",
        "no.query" not in dn and dn.count("gosub confirm.and.hand.over") == 1 and "if s.accts # '' then sent := ' accounts ' : s.accts" in dn and dn.count("sent = ") == 1, dn[-300:])
     ck("RM10", "the hand-over gives the terminal back in order: the box, $tk_close, the verb, a pause for Enter, $tk_open for the ADMINISTRATOR again (a refusal there ends the page), the context regenerated, everything read and drawn again",
-       0 < ch.find("call $tk_confirm") < ch.find("call $tk_close(ctx)") < ch.find("execute sent") < ch.find("input junk") < ch.find("call $tk_open('tool.remote', 'admin', ctx, err)") < ch.find("gen += 1") < ch.find("gosub read.all") < ch.find("gosub draw.all") and "done = 1" in ch, ch[:200])
+       # 21 Nov 26 - RELEASE_1.1 382: the taking back is take.screen, shared with a restart that did not happen
+       0 < ch.find("call $tk_confirm") < ch.find("call $tk_close(ctx)") < ch.find("execute sent") < ch.find("input junk") < ch.find("gosub take.screen")
+       and 0 < block(pg, "take.screen").find("call $tk_open('tool.remote', 'admin', ctx, err)") < block(pg, "take.screen").find("gen += 1") < block(pg, "take.screen").find("gosub read.all") < block(pg, "take.screen").find("gosub draw.all")
+       and "done = 1" in block(pg, "take.screen"), ch[:200])
     br = block(pg, "build.rows")
     sl = block(pg, "session.line")
     rl = block(pg, "route.line")
@@ -233,7 +236,8 @@ MUTANTS = [
     ("A's door starts on on", "RM6", sub("page", "   fv = 'off'\n", "   fv = 'on'\n")),
     ("A sends no restart word, so the verb would ask with nobody to answer", "RM6", sub("page", "   sent = 'remote.api ' : aw : ' no.restart'", "   sent = 'remote.api ' : aw")),
     ("A restarts without asking (RELEASE_1.1 382)", "RM6", sub("page", "   sent = 'remote.api ' : aw : ' no.restart'", "   sent = 'remote.api ' : aw : ' restart'")),
-    ("A never offers the restart box (RELEASE_1.1 382)", "RM6", sub("page", "         call $tk_restart(why, rres, rmsg)\n", "")),
+    ("A never offers the restart box (RELEASE_1.1 382)", "RM6", sub("page", "         call $tk_restart(ctx, why, rres, rmsg)\n", "")),
+    ("a failed restart leaves the page closed (RELEASE_1.1 382)", "RM6", sub("page", "         if rres = 'failed' then gosub take.screen", "         if 0 then null")),
     ("A types its word again", "RM6", sub("page", "   aw = fv<1>\n", "   screen ask 'REMOTE.API: on, local or off' width 8 value '' title 'The API door' returning aw else return\n")),
     ("A gives the terminal to the verb again", "RM6", sub("page", "which ends every session.'\n   gosub confirm.and.run",
                                                            "which ends every session.'\n   gosub confirm.and.hand.over")),

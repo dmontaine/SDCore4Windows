@@ -7,28 +7,36 @@
 * 21 Nov 26 Windows port - New.  RELEASE_1.1 382, the owner in chat: "A dialog specifying why a restart might be needed, warning that
 *           everyone will be logged out and giving a Restart|Not now option would be the best", and "That should be true for any other full
 *           screen action where a restart is needed to implement it".  Until now only the status line said so, which is easily missed.
+* 21 Nov 26 Windows port - RELEASE_1.1 382, the owner after VM sit12 round 8 ("sloppy, it would be better if the screen disappeared and then
+*           the message briefly displayed and then turned off"): Restart closes the page ($tk_close, which also gives the terminal back), clears
+*           the screen, shows one line, and waits here for SD to end this session; the page is never drawn again over a restart.  ctx is the
+*           first argument for that.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   call $tk_restart(why, res, msg)
+*   call $tk_restart(ctx, why, res, msg)
 *
+*     ctx   the page's context ($tk_open's): Restart closes the page with it
 *     why   why this change needs a restart, one line to a field (the page's own words: which setting, and that SD reads it only when it starts)
-*     res   returned: 'later' when Not now was chosen (or Esc, or no terminal); 'failed' when Restart was chosen and SD could not be restarted.
-*           When the restart works this session is ended with every other, so nothing comes back.
+*     res   returned: 'later' when Not now was chosen (or Esc, or no terminal); 'failed' when Restart was chosen and SD did not restart.
+*           After 'failed' THE PAGE IS CLOSED: the caller opens it again ($tk_open) and draws it.  When the restart works this session is
+*           ended with every other, so nothing comes back.
 *     msg   returned: the line for the page's status bar
 *
 *   The box: its title says "Restart SD?", then why, then that a restart signs out everyone using SD and ends this session too, then what Not now
 *   means.  Two buttons, Restart and Not now; NOT NOW IS THE DEFAULT ($tk_confirm's last button is), so Enter alone never restarts SD.
-*   Restart hands the restart to Task Scheduler (restart-sd.ps1 -Detach, a one-shot SYSTEM task, RELEASE_1.1 340), as REMOTE.API RESTART does,
-*   because this session and its elevated helper end with SD.  Only an administrator's page calls this: the script runs through !ps_script_out.
+*   Restart: the page is closed and the screen cleared, one line says SD is restarting, and the restart is handed to Task Scheduler
+*   (restart-sd.ps1 -Detach, a one-shot SYSTEM task, RELEASE_1.1 340), as REMOTE.API RESTART does, because this session and its elevated helper
+*   end with SD.  Then it waits up to a minute for SD to end this session; if SD has not, it says so and waits for Enter.  Only an
+*   administrator's page calls this: the script runs through !ps_script_out.
 *
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine tk_restart(why, res, msg)
+subroutine tk_restart(ctx, why, res, msg)
 $catalog $tk_restart
 
 $include int$keys.h
@@ -47,21 +55,36 @@ deffun ps_script_out(script, want.out) calling '!ps_script_out'
       return
    end
 
+   call $tk_close(ctx)
+   display @(-1) :
+   display 'SD is restarting.  Everyone using SD is signed out, and this window closes.'
+
    ps  =       '& ' : char(39) : kernel(K$WINPATH, '/restart-sd.ps1') : char(39) : ' -Detach'
    ps := @fm : 'exit $LASTEXITCODE'
    rs = ps_script_out(ps, @true)
-*  When the restart works, this session has been ended before the script returns.  Reaching here with 0 means the stop is still on its way.
    rc = rs<1>
    if rc = 0 then
-      msg = 'SD is restarting: this session ends'
-      return
+*     The SD service is stopping: this session is ended with the rest.  It is not drawn again meanwhile.
+      for w = 1 to 60
+         sleep 1
+      next w
+      rs<-1> = 'SD did not end this session within a minute.'
    end
+
    res = 'failed'
-   last = ''
+   display ''
+   display 'SD was not restarted (status ' : rc : ').'
    rn = dcount(rs, @fm)
+   last = ''
    for ri = 2 to rn
-      if trim(rs<ri>) # '' then last = trim(rs<ri>)
+      if trim(rs<ri>) # '' then
+         display rs<ri>
+         last = trim(rs<ri>)
+      end
    next ri
+   display sysmsg(12870) :                                      ;* Press Enter to return
+   input junk
+   if junk = char(1) then null                                  ;* any answer goes back; the answer itself is not used
    msg = 'SD was not restarted (status ' : rc : ')' : (if last = '' then '' else ': ' : last)
    return
 end

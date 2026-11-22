@@ -32,7 +32,8 @@ BP = os.environ.get("BPDIR", os.path.normpath(os.path.join(HERE, "..", "sdsys", 
 # 16 Nov 26 Windows port (RELEASE_1.1 305): screen_open, screen_close and sl_cleanup each have one more, the alternate buffer's switch
 # (ESC[?1049h / l) in SD's own console window - a mode sequence of the library's own, as the others are.
 DISPLAYS = {"sl_cleanup": 3, "sl_desktop": 1, "sl_form": 3,"sl_guard": 3, "sl_memo": 1, "sl_put": 1, "sl_repaint": 1, "sl_scr": 2, "screen_close": 4, "screen_cursor": 2, "screen_open": 2,
-            "tk_std": 1}     # 9 Nov 26 (S.186): View > Mouse sends the terminal $sl_mouse's switch sequence (mouse.apply)
+            "tk_std": 1,     # 9 Nov 26 (S.186): View > Mouse sends the terminal $sl_mouse's switch sequence (mouse.apply)
+            "tk_restart": 6}  # 21 Nov 26 (RELEASE_1.1 382): after $tk_close has given the screen back - the clear, "SD is restarting", and on a failed restart its lines and Press Enter
 
 
 def read(name):

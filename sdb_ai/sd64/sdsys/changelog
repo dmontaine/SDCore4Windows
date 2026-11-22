@@ -7,8 +7,10 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
 
              What        - After tool.remote changes the API door, or tool.config changes a setting SD reads only when
                            it starts, a box says why a restart is needed, that a restart signs out everyone using SD
-                           (this session too), and offers Restart or Not now; Not now is the default.  Restart restarts
-                           SD at once.  tool.remote's form no longer has its "Restart SD if needed" field.  Before,
+                           (this session too), and offers Restart or Not now; Not now is the default.  Restart closes
+                           the page, clears the screen, says "SD is restarting", and restarts SD; the window closes.
+                           "Received termination signal" no longer flashes on the screen of a session SD stops (it is
+                           still in the error log).  tool.remote's form no longer has its "Restart SD if needed" field.  Before,
                            only the status line said the change waited for a restart.  A page's status line no longer
                            shows a stray letter before a message that holds a line break ("Mstarted.").
              Does NOT    - Restart anything unless Restart is chosen, or change what any command does.

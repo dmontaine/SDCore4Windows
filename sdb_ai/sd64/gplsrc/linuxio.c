@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 21 Nov 26 Windows port - RELEASE_1.1 382: log_termination_signal() writes the error log only, not the user's screen.
  * 21 Nov 26 Windows port - from Linux 2ca433b7 (S.297, Windows row 372): discard_typeahead(): CLEARINPUT leaves a piped input alone (keyready() is TRUE for ever on a pipe).
  * 18 Nov 26 Windows port - RELEASE_1.1 339: the PF_INET case records a loopback peer's program (sdl_peer_record) for the local SDSYS door.
  * 18 Nov 26 Windows port - four-version audit round 2 (P-3082, P-3083, P-5448, P-5449): the TCP peer's address is read in Linux's
@@ -1240,14 +1241,19 @@ void signal_handler(signum) int signum;
 /* ======================================================================
    log_termination_signal()  -  The line signal_handler() may not write itself (S.196): called by process_events() when it
    handles EVT_TERMINATE, in normal context.  Logs once per signal received; nothing when the event came from elsewhere
-   (LOGOUT, sd -stop's raise_event).                                                                                       */
+   (LOGOUT, sd -stop's raise_event).
+   21 Nov 26 Windows port - RELEASE_1.1 382 (the owner, VM sit12 round 8: the line flashed over the full-screen page during a restart,
+   "sloppy"): written to the error log only, not to the user's screen.  log_printf() also displays to a logged-in user; log_message()
+   is its log half.                                                                                                         */
 
 void log_termination_signal() {
   int signum = term_signal_seen;
+  char s[64];
 
   if (signum != 0) {
     term_signal_seen = 0;
-    log_printf("Received termination signal %d\n", signum);
+    sprintf(s, "Received termination signal %d", signum);
+    log_message(s);
   }
 }
 
