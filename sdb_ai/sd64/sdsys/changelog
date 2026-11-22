@@ -3,13 +3,15 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
-21 Nov 26  A PAGE'S STATUS LINE SHOWS A COMMAND'S LAST MESSAGE WHOLE.
+21 Nov 26  A CHANGE MADE ON A PAGE THAT NEEDS SD RESTARTED ASKS WHETHER TO RESTART NOW; NO STRAY LETTER ON THE STATUS LINE.
 
-             What        - After a page (tool.remote, tool.accounts, tool.backups, tool.config ...) ran a command whose
-                           last message was longer than one line, the status line showed only the end of it, after a
-                           stray letter: tool.remote's "API off, restart later" said "Mstarted.".  It now shows the
-                           whole message.
-             Does NOT    - Change what any command does.
+             What        - After tool.remote changes the API door, or tool.config changes a setting SD reads only when
+                           it starts, a box says why a restart is needed, that a restart signs out everyone using SD
+                           (this session too), and offers Restart or Not now; Not now is the default.  Restart restarts
+                           SD at once.  tool.remote's form no longer has its "Restart SD if needed" field.  Before,
+                           only the status line said the change waited for a restart.  A page's status line no longer
+                           shows a stray letter before a message that holds a line break ("Mstarted.").
+             Does NOT    - Restart anything unless Restart is chosen, or change what any command does.
 
 21 Nov 26  SDSYS'S ADMINISTRATION COMMANDS NO LONGER WAIT 1.5 SECONDS FOR EACH WINDOWS STEP.
 

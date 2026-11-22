@@ -110,21 +110,23 @@ def checks(raw):
        "cmd = 'remote.api'" in ra and "cmd = 'remote.ssh'" in ra and "cmd = 'remote.sdsys'" in ra and "cmd = 'local.sdsys'" in ra and pg.count("cmd = ") == 4 and "call $tk_run(allow, cmd, rep, rstat, rerr)" in rr and pg.count("sent = 'remote.api ' : aw") == 1 and pg.count("sent = 'remote.ssh ' : sw") == 1, ra[:200])
     da = block(pg, "do.api")
     ds = block(pg, "do.ssh")
-    # 15 Nov 26 Windows port - Linux S.244's RM6, with A in the Windows form the owner asked for ("put the restart question in the page's dialog"):
-    # SD opens the API socket only when it starts, so A is ONE form with two choices, the door (starting on off) and restart now or later (starting
-    # on later), and REMOTE.API is run with RESTART or NO.RESTART through the routine: the terminal is never given to it.  Linux restarts a socket unit.
-    ck("RM6", "A and S choose, never type (S.244 (1)): A is one form with the door a choice of on, local or off STARTING ON OFF and the restart a choice of later or now STARTING ON LATER, both "
-       "checked against those words before the sentence, which always carries restart or no.restart; S picks on or off from a list starting on off; turning a door on wants the word open typed "
+    # 15 Nov 26 Windows port - Linux S.244's RM6, with A in the Windows form the owner asked for ("put the restart question in the page's dialog").
+    # 21 Nov 26 - RELEASE_1.1 382 (owner: "A dialog specifying why a restart might be needed, warning that everyone will be logged out and giving a
+    # Restart|Not now option"): the form asks only for the door (starting on off); REMOTE.API is run with NO.RESTART through the routine, and when
+    # its words carry 10136 (the listener moved, SD not restarted) $tk_restart's box asks.  The terminal is never given to it.  Linux restarts a socket unit.
+    ck("RM6", "A and S choose, never type (S.244 (1)): A is one form with the door a choice of on, local or off STARTING ON OFF, checked against those words before the sentence, "
+       "which always carries no.restart; when the verb answered 10136, $tk_restart's box asks Restart or Not now (RELEASE_1.1 382); S picks on or off from a list starting on off; turning a door on wants the word open typed "
        "(S.244 (5) lower case), and the box says what on opens; A's box says a restart ends every session; BOTH run through the routine and neither gives the terminal to the verb",
        "screen ask" not in da and "screen ask" not in ds and "screen pick" not in da
        and "spec<-1> = 'door' : @vm : 'API' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'on' : @sm : 'local' : @sm : 'off'" in da
-       and "spec<-1> = 'restart' : @vm : 'Restart SD if needed' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'later' : @sm : 'now'" in da   # 19 Nov 26 RELEASE_1.1 361: a label over 28 cells is cut (tk_form labw)
-       and "fv = 'off' : @fm : 'later'" in da and "if (aw # 'on' and aw # 'local' and aw # 'off') or (rw # 'later' and rw # 'now') then" in da
-       and "sent = 'remote.api ' : aw : (if rw = 'now' then ' restart' else ' no.restart')" in da
+       and "'Restart SD if needed'" not in da
+       and "fv = 'off'\n" in da and "if aw # 'on' and aw # 'local' and aw # 'off' then" in da
+       and "sent = 'remote.api ' : aw : ' no.restart'" in da
+       and 0 < da.find("gosub confirm.and.run") < da.find("sysmsg(10136)") < da.find("call $tk_restart(why, rres, rmsg)")
        and "sw = (if pk = 1 then 'on' else 'off')" in ds and "if pk < 1 or pk > 2 then" in ds and "default 2 returning pk" in ds
        and da.count("typed = 'open'") == 1 and ds.count("typed = 'open'") == 1 and "'OPEN'" not in pg
        and re.search(r"case aw = 'on'\s*\n\s*typed = 'open'", da) is not None and re.search(r"if sw = 'on' then\s*\n\s*typed = 'open'", ds) is not None
-       and 0 < da.find("call $tk_form('close'") < da.find("if (aw # 'on'") < da.find("sent = ") and 0 < ds.find("if pk < 1") < ds.find("sent = ")
+       and 0 < da.find("call $tk_form('close'") < da.find("if aw # 'on'") < da.find("sent = ") and 0 < ds.find("if pk < 1") < ds.find("sent = ")
        and "other computers may connect to the API" in da and "firewall" in ds and "ends every session" in da   # 17 Nov 26 (audit round 1, P-3477): Linux's words
        and da.count("gosub confirm.and.run") == 1 and "confirm.and.hand.over" not in da
        and ds.count("gosub confirm.and.run") == 1 and "gosub confirm.and.hand.over" not in ds, da[:200])
@@ -227,14 +229,15 @@ MUTANTS = [
     ("the page writes a record", "RM4", sub("page", "   keys = ''\n", "   write 'x' to acc.f, 'y'\n   keys = ''\n")),
     ("the page rewrites the servers", "RM4", sub("page", "   call !netdefs('READ', defs, nderr)", "   call !netdefs('WRITE', defs, nderr)")),
     ("the report is run with a keyword", "RM5", sub("page", "   cmd = 'remote.api'\n", "   cmd = 'remote.api off'\n")),
-    ("A's door is not checked against its words", "RM6", sub("page", "   if (aw # 'on' and aw # 'local' and aw # 'off') or (rw # 'later' and rw # 'now') then", "   if 0 then")),
-    ("A's door starts on on", "RM6", sub("page", "   fv = 'off' : @fm : 'later'", "   fv = 'on' : @fm : 'later'")),
-    ("A's restart starts on now", "RM6", sub("page", "   fv = 'off' : @fm : 'later'", "   fv = 'off' : @fm : 'now'")),
-    ("A sends no restart word, so the verb would ask with nobody to answer", "RM6", sub("page", "   sent = 'remote.api ' : aw : (if rw = 'now' then ' restart' else ' no.restart')", "   sent = 'remote.api ' : aw")),
+    ("A's door is not checked against its words", "RM6", sub("page", "   if aw # 'on' and aw # 'local' and aw # 'off' then", "   if 0 then")),
+    ("A's door starts on on", "RM6", sub("page", "   fv = 'off'\n", "   fv = 'on'\n")),
+    ("A sends no restart word, so the verb would ask with nobody to answer", "RM6", sub("page", "   sent = 'remote.api ' : aw : ' no.restart'", "   sent = 'remote.api ' : aw")),
+    ("A restarts without asking (RELEASE_1.1 382)", "RM6", sub("page", "   sent = 'remote.api ' : aw : ' no.restart'", "   sent = 'remote.api ' : aw : ' restart'")),
+    ("A never offers the restart box (RELEASE_1.1 382)", "RM6", sub("page", "         call $tk_restart(why, rres, rmsg)\n", "")),
     ("A types its word again", "RM6", sub("page", "   aw = fv<1>\n", "   screen ask 'REMOTE.API: on, local or off' width 8 value '' title 'The API door' returning aw else return\n")),
-    ("A gives the terminal to the verb again", "RM6", sub("page", "      el<-1> = 'You chose later: nothing restarts, and a change to or from OFF waits for the next start of SD.'\n   end\n   gosub confirm.and.run",
-                                                           "      el<-1> = 'You chose later: nothing restarts, and a change to or from OFF waits for the next start of SD.'\n   end\n   gosub confirm.and.hand.over")),
-    ("A no longer says a restart ends every session", "RM6", sub("page", "which ends every session, this one too.", "which may follow.")),
+    ("A gives the terminal to the verb again", "RM6", sub("page", "which ends every session.'\n   gosub confirm.and.run",
+                                                           "which ends every session.'\n   gosub confirm.and.hand.over")),
+    ("A no longer says a restart ends every session", "RM6", sub("page", "whether to restart SD now, which ends every session.'", "whether to restart SD now.'")),
     ("on needs no typed word", "RM6", sub("page", "      case aw = 'on'\n         typed = 'open'", "      case aw = 'on'\n         typed = ''")),
     ("ssh on needs no typed word", "RM6", sub("page", "   if sw = 'on' then\n      typed = 'open'", "   if sw = 'on' then\n      typed = ''")),
     ("the word is upper case again", "RM6", sub("page", "      case aw = 'on'\n         typed = 'open'", "      case aw = 'on'\n         typed = 'OPEN'")),

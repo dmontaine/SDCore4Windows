@@ -33,6 +33,8 @@
 * 10 Nov 26 Windows port - the two sentences that name SDSYS's helper are double-quoted: a string ends at its own quote (op_str3.c, no ''
 *               escape), so 'SDSYS''s ...' was two strings side by side; in SCREEN TEXT (line 565) that did not compile, and the cycle of
 *               10 Nov 20:44 stopped at SECOND.COMPILE on it.  The EL<-1> sentence was made the same way and is changed with it.
+* 21 Nov 26 Windows port - RELEASE_1.1 382 (owner): after a change to a parameter that takes effect at a restart, $tk_restart's box asks
+*               whether to restart SD now (why, everyone signed out, Restart or Not now).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -862,6 +864,12 @@ change.param:
    next j
    if stat = 0 and ('S' : trim(now.f)) = ('S' : nv) then
       msg = k : ' in sd.conf: ' : old.f : ' -> ' : now.f : '; SD is running with ' : now.r : (if k.eff = 'restart' then ' until it is restarted' else ' (sessions started now use ' : now.f : ')')
+*     21 Nov 26 - RELEASE_1.1 382 (owner): a change that takes effect only at a restart asks, in a box, whether to restart SD now
+      if k.eff = 'restart' then
+         why = k : ' is now ' : now.f : ' in sd.conf, but SD reads it only when it starts: until SD restarts, it keeps running with ' : now.r : '.'
+         call $tk_restart(why, rres, rmsg)
+         msg = k : ' in sd.conf: ' : old.f : ' -> ' : now.f : '; ' : rmsg
+      end
    end else
       msg = 'sd.conf was not changed' : (if lastl = '' then '' else ': ' : lastl)
    end

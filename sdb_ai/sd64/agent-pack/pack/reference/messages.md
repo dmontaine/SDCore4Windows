@@ -876,7 +876,7 @@ cited by: `remoteapi`
 SD was not restarted. The setting is written and takes effect when SD is next\nstarted.
 ```
 
-cited by: `remoteapi`
+cited by: `remoteapi`, `tool_remote`
 
 ### msg:10137
 > kind=message tier=reference since=- src=sdsys/messages/10137:1#afa2c021

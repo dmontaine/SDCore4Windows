@@ -6,7 +6,7 @@
 * START-HISTORY:
 * 23 Oct 26 dm  New.  tool.ai passes set.ai an https address, a model name that may have capitals and a certificate file: words that $tk_run refuses.
 * 9 Nov 26 dm  S.186: a refused word says which character is wrong (15040 with $tk_badch), as $tk_run does.
-* 21 Nov 26 Windows port - RELEASE_1.1 380: a line the capture wrapped is joined back to the line it came from (join.wrapped).
+* 21 Nov 26 Windows port - RELEASE_1.1 380: the CR a message's own line break leaves in the capture is dropped (drop.cr); the lines are kept.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -75,7 +75,7 @@ $include tk.h
    next i
    execute s trapping aborts capturing out
    status = @system.return.code
-   gosub join.wrapped
+   gosub drop.cr
 * 9 Nov 26 (S.186): into the page's log of commands, as $tk_run
 run.done:
    lg.kind = (if err # '' then 'refuse' else 'ok')
@@ -83,22 +83,10 @@ run.done:
    call $tk_out('log', '', lg.kind, lg.text, '')
    return
 
-* 21 Nov 26 Windows port - RELEASE_1.1 380: a line the capture wrapped comes back as a piece starting with a CR; joined back, as $tk_run does (its
-* join.wrapped says why).
-join.wrapped:
-   jo = ''
-   jn = 0
-   jc = dcount(out, @fm)
-   for ji = 1 to jc
-      jl = out<ji>
-      if jl[1, 1] = char(13) and jn > 0 then
-         jo<jn> = jo<jn> : ' ' : convert(char(13), '', jl)
-      end else
-         jn += 1
-         jo<jn> = convert(char(13), '', jl)
-      end
-   next ji
-   out = jo
+* 21 Nov 26 Windows port - RELEASE_1.1 380: a message's own line break comes back as a line that starts with a CR; the CR is dropped and the
+* lines kept, as $tk_run does (its drop.cr says why).
+drop.cr:
+   out = convert(char(13), '', out)
    return
 end
 

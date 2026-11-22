@@ -1,0 +1,69 @@
+* TK_RESTART
+* The full-screen toolkit, shared base: the box that asks whether to restart SD now, after a page made a change that needs a restart.
+* Copyright (c) 2026, SD Core for Windows.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 21 Nov 26 Windows port - New.  RELEASE_1.1 382, the owner in chat: "A dialog specifying why a restart might be needed, warning that
+*           everyone will be logged out and giving a Restart|Not now option would be the best", and "That should be true for any other full
+*           screen action where a restart is needed to implement it".  Until now only the status line said so, which is easily missed.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_restart(why, res, msg)
+*
+*     why   why this change needs a restart, one line to a field (the page's own words: which setting, and that SD reads it only when it starts)
+*     res   returned: 'later' when Not now was chosen (or Esc, or no terminal); 'failed' when Restart was chosen and SD could not be restarted.
+*           When the restart works this session is ended with every other, so nothing comes back.
+*     msg   returned: the line for the page's status bar
+*
+*   The box: its title says "Restart SD?", then why, then that a restart signs out everyone using SD and ends this session too, then what Not now
+*   means.  Two buttons, Restart and Not now; NOT NOW IS THE DEFAULT ($tk_confirm's last button is), so Enter alone never restarts SD.
+*   Restart hands the restart to Task Scheduler (restart-sd.ps1 -Detach, a one-shot SYSTEM task, RELEASE_1.1 340), as REMOTE.API RESTART does,
+*   because this session and its elevated helper end with SD.  Only an administrator's page calls this: the script runs through !ps_script_out.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_restart(why, res, msg)
+$catalog $tk_restart
+
+$include int$keys.h
+
+deffun ps_script_out(script, want.out) calling '!ps_script_out'
+
+   res = 'later'
+   msg = ''
+
+   lines = why
+   lines<-1> = 'Restarting stops SD and starts it again.  Everyone using SD is signed out, and this session ends too.'
+   lines<-1> = 'Not now: nothing restarts, and the change takes effect when SD is next started.'
+   call $tk_confirm('sd -restart', lines, '', cres, cmsg, 'Restart SD?', '&Restart,&Not now')
+   if cres # 'run' then
+      msg = 'SD was not restarted: the change takes effect when SD is next started'
+      return
+   end
+
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/restart-sd.ps1') : char(39) : ' -Detach'
+   ps := @fm : 'exit $LASTEXITCODE'
+   rs = ps_script_out(ps, @true)
+*  When the restart works, this session has been ended before the script returns.  Reaching here with 0 means the stop is still on its way.
+   rc = rs<1>
+   if rc = 0 then
+      msg = 'SD is restarting: this session ends'
+      return
+   end
+   res = 'failed'
+   last = ''
+   rn = dcount(rs, @fm)
+   for ri = 2 to rn
+      if trim(rs<ri>) # '' then last = trim(rs<ri>)
+   next ri
+   msg = 'SD was not restarted (status ' : rc : ')' : (if last = '' then '' else ': ' : last)
+   return
+end
+
+* END-CODE
