@@ -14,7 +14,7 @@
 #   voc          227/262: which HOME tile verbs SDSYS's VOC holds (the console look is the sheet's)
 #   api          243 (12950/12944), 278 (the restart question: local from off asks; on twice asks once), 266 (an API session's
 #                @WHO lower case), 247 (an API session's line stamped with its own user)
-#   api331       331: remote.sdsys api on a /24 stored as the network, the file's ACL, an ordinary API account's 2001, off (needs fixtures)
+#   api331       331: remote.sdsys api on a /24 stored as the network, the file's ACL, an ordinary API account refused, off (needs fixtures)
 #   runin201    201: compile.dict, a trigger, no.catalog (sitting 2's block 1, through the seat)
 #   job222       222: a backup-all job run by Task Scheduler as SDSYS
 #   print219     219: SPOOLER set to a "Microsoft Print To PDF" printer on a file port (never paper), and a refusal leg
@@ -43,7 +43,8 @@
 #
 # START-HISTORY:
 # 13 Nov 26  New, for the Core VM witness sitting.  Parse-checked; not run (it needs the VM).
-# 22 Nov 26  api331 (RELEASE_1.1 331's VM owed after sit5): a /24 stored as the network, the file's ACL, zzwitapi's 2001, off.  Not run.
+# 22 Nov 26  api331 (RELEASE_1.1 331's VM owed after sit5): a /24 stored as the network, the file's ACL, zzwitapi refused, off.  Run on
+#            sit14: 11 of 12 PASS; the 12th wanted 2001 where the VOC refuses first (the verb is SDSYS's only) - the anchor now takes either.
 # END-HISTORY
 
 param(
@@ -354,7 +355,10 @@ if ($sections -contains 'api331') {
     Write-WitRaw 'audit: remote.sdsys api lines' ($al -join "`n")
     Set-WitVerdict '331' 'the audit has remote.sdsys api on from=192.0.2.77/24 status=0' ($al -join "`n") 'remote\.sdsys api on from=192\.0\.2\.77/24 status=0' @('status=[1-9-]')
 
-    # An ordinary API account.  Its own account, its own rights: remote.sdsys is in every account's VOC and refuses anyone but the administrator.
+    # An ordinary API account.  Its own account, its own rights.  remote.sdsys is in voc_template (SDSYS's VOC) and NOT in newvoc, as on
+    # Linux, so an ordinary account is refused at the VOC ("REMOTE.SDSYS is not in your VOC"); 2001 is the verb's own wall behind that, for
+    # a copied VOC entry.  Either refusal passes.  (sit14, 22 Nov 26: the first version wanted 2001 only, from the 16 Nov plan, and scored the
+    # VOC refusal as a FAIL.)
     $port = Get-ApiPort
     if ($port -eq 0) {
         Write-Wit '  the API is off: putting it LOCAL for zzwitapi (answer N to the restart question, then the SD service is restarted; about 20 seconds)'
@@ -369,7 +373,7 @@ if ($sections -contains 'api331') {
     $apiPw = Get-Fix 'zzwitapi'
     $py = Get-Command python.exe -ErrorAction SilentlyContinue
     $probe = Join-Path $PSScriptRoot 'scram-probe.py'
-    $c2001 = 'an ordinary API account (zzwitapi) running remote.sdsys api is refused with 2001'
+    $c2001 = 'an ordinary API account (zzwitapi) running remote.sdsys api is refused (not in its VOC, or 2001)'
     if ($apiPw -eq '' -or $null -eq $py -or $lis.Count -eq 0) {
         Add-WitResult '331' $c2001 'NOT-MEASURED' ('zzwitapi''s password on file: ' + ($apiPw -ne '') + ' (run -Only fixtures first); python: ' + ($null -ne $py) + '; listener: ' + $lis.Count)
     } else {
@@ -383,7 +387,7 @@ if ($sections -contains 'api331') {
         Write-WitRaw 'scram-probe' $pt
         if ($pt -notmatch 'SCRAM: server signature VERIFIED') { Add-WitResult '331' $c2001 'NOT-MEASURED' 'the API login did not succeed (no "SCRAM: server signature VERIFIED")' }
         elseif ($pt -notmatch '(?m)^[\s|]*\d+\s+zzwitapi\b') { Add-WitResult '331' $c2001 'NOT-MEASURED' 'the control failed: WHO in the same session did not answer zzwitapi, so the second command proves nothing' }
-        else { Set-WitVerdict '331' $c2001 $pt 'Command requires administrator privileges' @('sdsys over the API from other computers', 'is not in your VOC', 'Verb not found', 'The API is open for sdsys') }
+        else { Set-WitVerdict '331' $c2001 $pt '(REMOTE\.SDSYS is not in your VOC|Command requires administrator privileges)' @('sdsys over the API from other computers', 'The API is open for sdsys', 'did not succeed') }
         Set-WitCompare '331' 'the ordinary account changed nothing: the file is as it was' $netBytes (& $readFile) -Evidence $apiFile
     }
 
