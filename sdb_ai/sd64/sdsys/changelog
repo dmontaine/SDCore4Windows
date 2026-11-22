@@ -9,10 +9,15 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            seconds)..." before it makes the Windows user, and again after the new password is typed and
                            before Windows sets it; they were silent for about ten seconds.  The password prompts of the
                            installer's closing window (the SDSYS password and its repeat) throw away keys typed before
-                           they appeared, so they are not taken as the start of the password.
+                           they appeared, so they are not taken as the start of the password, and so does every hidden
+                           prompt inside SD (INPUT ... HIDDEN: passwords asked by CREATE.ACCOUNT, MODIFY.PASSWORD and the
+                           rest).  CLEARINPUT no longer runs for ever when the input is a pipe.  A Keep reinstall no
+                           longer warns "Some files were not converted" about SDSYS's own files, which are already case
+                           insensitive.
              Why         - A wait over two seconds should say what it is for; a password should be only what is typed
-                           at its prompt.
-             Does NOT    - Change the prompts inside SD: those are changed separately.
+                           at its prompt; a warning should mean something is left to do.
+             Does NOT    - Clear a key typed in the instant between the clearing and the prompt showing, or touch the
+                           answers a script pipes in or stacks with DATA.
 
 21 Nov 26  UNINSTALLING AND KEEPING YOUR DATA NO LONGER LOSES WHO MAY USE SSH, THE API, FILES AND THE AI, OR YOUR SCHEDULED JOBS.
 

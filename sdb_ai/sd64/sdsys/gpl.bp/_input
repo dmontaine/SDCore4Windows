@@ -148,6 +148,12 @@
          if not(len(data.queue) and use.data.queue) and not(keyready()) then nothing.waiting = 1
       end
 
+*     21 Nov 26 - WINDOWS ROW 372 (VM sit12; Linux 2ca433b7, S.297): A PASSWORD PROMPT NEVER STARTS WITH WHAT WAS TYPED BEFORE IT.  A paste or an
+*     impatient Enter made before the prompt appeared was taken as the start of the password, which showed as stars already in the field.  When
+*     the characters will be read from the keyboard (nothing is taken from the DATA queue) and they are not echoed (INPUT ... HIDDEN, or no echo),
+*     the type-ahead is thrown away first.  A piped input is left alone (clearinput does nothing on a pipe: it is a script's answers).
+      if (password or no.echo) and not(nothing.waiting) and not(len(data.queue) and use.data.queue) then clearinput
+
       if len(prompt()) and not(nothing.waiting) then display prompt() :
 
       if has.fill and not(nothing.waiting) then display str(fill1, max.input) : str(char(8), max.input) :

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 21 Nov 26 Windows port - from Linux 2ca433b7 (S.297, Windows row 372): op_clrinput() asks discard_typeahead(), which leaves a piped input alone (it never ended on a pipe).
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the COMO write's result is tested.
  * 8 Nov 26 Windows port - from Linux cf405b48 (S.87 batch 14): case inversion is removed (PTERM key 2, getkey()'s invert argument); KEYINC and KEYINCT
  *           now do what KEYIN and KEYINT do.
@@ -560,8 +561,7 @@ void op_breakct() {
    op_clrinput()  -  CLRINPUT opcode  -  Clear terminal input queue       */
 
 void op_clrinput() {
-  while (keyready())
-    keyin(0);
+  discard_typeahead();   /* 21 Nov 26: a piped input is not type-ahead and never ends; see linuxio.c */
 }
 
 /* ======================================================================

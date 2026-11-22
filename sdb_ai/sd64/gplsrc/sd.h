@@ -620,6 +620,7 @@ void break_key(void);
 int16_t keyin(int timeout);
 int32_t keyin_idle_ms(void); /* ms waited with nothing typed, as AUTOLOGOUT judges it (kernel(K$AUTOLOGOUT, -2)) */
 bool keyready(void);
+void discard_typeahead(void); /* CLEARINPUT: what was typed ahead is thrown away; a pipe is left alone (it is the script's answers) */
 void log_termination_signal(void); /* S.196: the SIGHUP/SIGTERM line, written by process_events(), never by the handler */
 int32_t type_ahead_count(void);
 bool write_socket(char * str, int bytes, bool flush);

@@ -28,6 +28,8 @@
 * must never rebuild (the session runs from it).
 *
 * START-HISTORY:
+* 21 Nov 26 Windows port - from Linux 2ca433b7 (S.296, Windows row 377): a file already case insensitive, under SDSYS or outside the account,
+*           is not counted or named (a read only open reads FL$FLAGS); one that is not, or cannot be opened, still is.
 * 17 Nov 26 Windows port - four-version audit round 1, second pass (P-3482; owner's rulings D4 and D7): SDSYS is skipped altogether, as
 *           Linux (its own data files were walked first); each account walked is named (12035, Linux 11030 + 1005); a file left because
 *           its work file could not be made or cleared is named (10184) beside the work file, so the report names every file it left.
@@ -268,6 +270,21 @@ convert.one:
    in.sds = (one.key[1, len(sds.real) + 1] = sds.real : '/') or (one.key[1, len(sds.raw) + 1] = sds.raw : '/')
    in.acct = (one.key[1, len(acct.real) + 1] = acct.real : '/')
    if not(in.acct) or (in.sds and not(this.is.sdsys)) then
+* 21 Nov 26 - WINDOWS ROW 377 (VM sit12; Linux 2ca433b7, S.296): a file that is ALREADY case insensitive has nothing left to convert, and SDSYS's
+*   own files are, from creation, in a tree this release made.  Naming them made the closing warning "Some files were not converted" appear on
+*   every Keep reinstall.  The flag is read through a READ ONLY open, which rebuilds and changes nothing, so the rule above stands (the file is
+*   still never converted from here); an open that fails leaves the file counted and named, as before (the account's owner may not be allowed
+*   to open it).
+      is.nc = 0
+      openpath one.path readonly to chk.fu on error
+         is.nc = 0
+      end then
+         is.nc = bitand(fileinfo(chk.fu, FL$FLAGS), FL$FLAGS.NOCASE)
+         close chk.fu
+      end else
+         is.nc = 0
+      end
+      if is.nc then return
       locate one.real in outside.files<1> setting out.at else
          outside.count += 1
          if dcount(outside.files, @fm) < twin.list.cap then outside.files<-1> = one.real
