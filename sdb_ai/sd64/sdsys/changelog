@@ -7,8 +7,9 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
            PASSWORD WITHOUT ELEVATION.
 
              What        - Signed in to Windows as SDSYS, starting SD from the Start menu (or typing sd at an ordinary
-                           prompt) brings up Windows' consent prompt and opens SD elevated, in SDSYS.  It used to open
-                           an unelevated window that refused SDSYS and stopped.  MODIFY.PASSWORD with no account name
+                           prompt) brings up Windows' consent prompt, once, and opens SD elevated, in SDSYS; a No ends
+                           with "SDSYS needs an elevated session".  It used to open an unelevated window that refused
+                           SDSYS and stopped.  MODIFY.PASSWORD with no account name
                            works in a session that was not started elevated: the SD service changes the password of
                            the Windows user the session runs as, after the current password is proved, and writes
                            "cred-own set" (or "cred-own refused") to the audit trail.  It used to say the account had no
@@ -47,8 +48,8 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            installer does it as SDSYS through one task it starts as SYSTEM (sdsvc.exe -restore-kept),
                            and checks each definition and the uninstall's note first.  The closing page says what
                            came back.  Anything that could not come back is at the top of that page in bold red with
-                           the reason and the exact steps: sign in to Windows as SDSYS, start SD Core and type one
-                           SET.JOB CHANGE line for each job, or REMOTE.SDSYS ON.  The "Add SD Core to the system PATH"
+                           the exact steps: sign in to Windows as SDSYS, start SD Core and type one SET.JOB CHANGE
+                           line for each job (a damaged one with <job> <schedule> to fill in), or REMOTE.SDSYS ON.  The "Add SD Core to the system PATH"
                            box of the reinstall starts as you had it: if SD's folder was not on the PATH when you
                            uninstalled, the box starts cleared (it is still there to change).  The installer window
                            is wider, so the closing page needs less scrolling, and when its warnings are too long for

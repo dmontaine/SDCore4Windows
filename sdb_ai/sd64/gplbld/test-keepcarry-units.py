@@ -161,8 +161,8 @@ def rows_for(iss_raw, jobs_raw):
        and "API access is NOT restored." in code, "")
     ck("M3", "the jobs and remote administration warnings are built only when this was not an upgrade; the note is spent whatever it said",
        re.search(r"KeptMsg := '';\s*\n\s*KeptCount := 0;\s*\n\s*RestoredMsg := '';\s*\n\s*if not TrueUpgrade then\s*\n\s*begin\s*\n\s*KeptJobs := KeptJobCount;", code) is not None
-       and "SCHEDULED JOB(S) WERE KEPT, BUT THIS INSTALLER COULD NOT " in code
-       and "REMOTE ADMINISTRATION IS OFF. It was on before the uninstall," in code
+       and "'. SCHEDULED JOBS COULD NOT BE SCHEDULED AGAIN.' + #13#10 +" in code   # 21 Nov 26 (370 round 4): the owner's layout
+       and "'. REMOTE ADMINISTRATION IS OFF.' + #13#10 +" in code
        and re.search(r"end;\s*\n\s*RadminNoteClear;", code) is not None, "")
     ck("M4", "KeptMsg reaches the closing page through WarnReport, and is no longer part of FinishReport",
        "WarnReport := WarnReport + MarkWarn(KeptMsg);" in code
@@ -185,8 +185,9 @@ def rows_for(iss_raw, jobs_raw):
        and "SetLength(AccessMsg, 0);" in code
        and "WarnReport := WarnReport + MarkWarn('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API." in code
        and "ApiRuleMsg := #13#10#13#10" not in code, "")
-    ck("W6", "the warning block opens with a heading in capitals that says the settings are not on and that these are the steps",
-       "'WARNING: SETTINGS YOU HAD BEFORE THE UNINSTALL ARE NOT ON NOW, AND THIS INSTALLER COULD NOT TURN THEM ON AGAIN. '" in code and "'DO THESE STEPS:'" in code, "")
+    ck("W6", "the warning block opens with one short heading in capitals that says the settings are not on (21 Nov 26, the owner's layout, round 4)",
+       "KeptMsg := 'WARNING: SOME SETTINGS FROM BEFORE THE UNINSTALL ARE NOT ON NOW.' + #13#10#13#10 + KeptMsg;" in code
+       and "DO THESE STEPS" not in code, "")
     # ---- the red survives the overflow (VM sit11, 21 Nov 26, the owner's screenshot of an upgrade page that fell back to the plain memo) ----
     ck("W7", "when the page overflows the labels up to the LAST warning stay and only what follows them is scrolled, in a memo placed under them, from text that restarts after each warning",
        "KeepN := N;" in srep and "WarnBottom := Y - GapY;" in srep and "AfterText := '';" in srep and "AfterText := AfterText + Chunk + #13#10#13#10;" in srep
@@ -208,9 +209,11 @@ def rows_for(iss_raw, jobs_raw):
        "not FileExists(ExpandConstant('{#DataDir}\\sdsys\\gpl.bp.out\\tool_home'))" in isetup and "not FileExists(ExpandConstant('{#DataDir}\\sdsys\\gpl.bp\\tool_home'))" in isetup
        and "set.start.default" not in isetup, "")
     # ---- S: the owner's rule (chat, 21 Nov 26): what cannot be put back is warned about during the install WITH THE EXACT STEPS -------
-    ck("S1", "the jobs line and the remote administration line each give the steps (sign in to Windows as SDSYS, start SD Core, type), the jobs' lines from KeptJobSteps and the other the command remote.sdsys on",
-       code.count("sign in to Windows as SDSYS, start SD Core and type:") == 2 and "start SD Core and type:' + #13#10 + KeptJobSteps + #13#10#13#10;" in code
-       and "'    remote.sdsys on' + #13#10#13#10;" in code, "")
+    ck("S1", "the jobs item and the remote administration item each say 'To correct, sign into Windows as SDSYS, and start SD Core.' then 'At the colon prompt type:' then the command(s) 5 spaces in, with no reason sentence (the owner's layout, round 4)",
+       code.count("'To correct, sign into Windows as SDSYS, and start SD Core.' + #13#10 + 'At the colon prompt type:' + #13#10 +") == 2
+       and "'At the colon prompt type:' + #13#10 +\n              KeptJobSteps + #13#10;" in code
+       and "'     remote.sdsys on' + #13#10#13#10;" in code
+       and "RestoreJobReasons(RestoreText)" not in code, "")
     sjw = proc(code, "SafeJobWord")
     kjs = proc(code, "KeptJobSteps")
     ck("S2", "SafeJobWord lets through only lower case letters, digits and a hyphen, and with Extra a space, a colon and a full stop",
@@ -218,9 +221,9 @@ def rows_for(iss_raw, jobs_raw):
        and "(Extra and ((C = ' ') or (C = ':') or (C = '.')))" in sjw and "Length(S) <= 40" in sjw, "")
     ck("S3", "KeptJobSteps prints set.job change NAME JOB SCHEDULE only for a plain name, the job backup-all or update-accounts and a plain schedule; anything else is named as damaged, never echoed from the file",
        "if SafeJobWord(Name, False) and ((JobId = 'backup-all') or (JobId = 'update-accounts')) and SafeJobWord(Sched, True) then" in kjs
-       and "'    set.job change ' + Name + ' ' + JobId + ' ' + Sched" in kjs
-       and "'    The scheduled job named \"' + Name + '\" has a damaged definition.  Make it again with:' + #13#10 +" in kjs
-       and "'        set.job change ' + Name + ' <job> <schedule>' + #13#10" in kjs   # 21 Nov 26: the owner's wording, the command on its own line
+       and "'     set.job change ' + Name + ' ' + JobId + ' ' + Sched" in kjs
+       and "'     set.job change ' + Name + ' <job> <schedule>' + #13#10" in kjs   # 21 Nov 26 (round 4): commands only, 5 spaces in
+       and "has a damaged definition" not in kjs
        and "Copy(Line, 1, 4) = 'job='" in kjs and "Copy(Line, 1, 9) = 'schedule='" in kjs
        and "FILE_ATTRIBUTE_DIRECTORY) = 0" in kjs and "'radmin-'" in kjs, "")
     return rows
@@ -268,15 +271,16 @@ MUTANTS = [
      "        if False then\n          AccessMsg :=\n            'Your database was kept, and so were its Windows groups:' + #13#10#13#10\n        else\n", "M2"),
     ("the jobs line is built on an upgrade too", "iss", "RestoredMsg := '';\n      if not TrueUpgrade then\n      begin\n        KeptJobs := KeptJobCount;", "RestoredMsg := '';\n      if True then\n      begin\n        KeptJobs := KeptJobCount;", "M3"),
     ("KeptMsg is dropped from the page", "iss", "WarnReport := WarnReport + MarkWarn(KeptMsg);", "", "M4"),
-    ("the remote administration warning loses its command", "iss", "'    remote.sdsys on' + #13#10#13#10;", "'' + #13#10#13#10;", "S1"),
-    ("the jobs warning loses its steps", "iss", "type:' + #13#10 + KeptJobSteps + #13#10#13#10;", "type:' + #13#10 + #13#10#13#10;", "S1"),
-    ("a blank line comes back between the sentence and the steps", "iss", "type:' + #13#10 + KeptJobSteps + #13#10#13#10;", "type:' + #13#10#13#10 + KeptJobSteps + #13#10#13#10;", "S1"),
+    ("the remote administration warning loses its command", "iss", "'     remote.sdsys on' + #13#10#13#10;", "'' + #13#10#13#10;", "S1"),
+    ("the jobs warning loses its steps", "iss", "'At the colon prompt type:' + #13#10 +\n              KeptJobSteps + #13#10;", "'At the colon prompt type:' + #13#10 +\n              #13#10;", "S1"),
+    ("the reason sentence comes back before the jobs' commands", "iss", "'At the colon prompt type:' + #13#10 +\n              KeptJobSteps + #13#10;",
+     "'At the colon prompt type:' + #13#10 +\n              RestoreJobReasons(RestoreText) + KeptJobSteps + #13#10;", "S1"),
     ("the warnings are drawn after the sign-out line", "iss", "      WarnReport +\n      'You must sign out or restart before using SD Core.' + #13#10#13#10 +", "      'You must sign out or restart before using SD Core.' + #13#10#13#10 +\n      WarnReport +", "W1"),
     ("a warning paragraph is no longer red", "iss", "      Para[N].Font.Color := clRed;\n", "", "W2"),
     ("the scrolling memo shows the marks", "iss", "Memo.Text := Plain;", "Memo.Text := Msg;", "W3"),
     ("MarkWarn marks nothing", "iss", "Result := Result + '!!' + Chunk + #13#10#13#10;", "Result := Result + Chunk + #13#10#13#10;", "W4"),
     ("the missing-firewall-rule warning goes back into the text", "iss", "WarnReport := WarnReport + MarkWarn('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API.", "ApiRuleMsg := #13#10#13#10 + ('WARNING: NO FIREWALL RULE LETS OTHER COMPUTERS REACH THE SD CORE API.", "W5"),
-    ("the warning block loses its heading", "iss", "'DO THESE STEPS:'", "'THESE:'", "W6"),
+    ("the warning block loses its heading", "iss", "KeptMsg := 'WARNING: SOME SETTINGS FROM BEFORE THE UNINSTALL ARE NOT ON NOW.' + #13#10#13#10 + KeptMsg;", "KeptMsg := KeptMsg;", "W6"),
     ("an overflow scrolls the whole page again", "iss", "if (KeepN > 0) and (Rest = '') and (WarnBottom * 10 <= MaxH * 6) then", "if False then", "W8"),
     ("the memo is drawn over the red block", "iss", "Memo.Top := T + WarnBottom + GapY;", "Memo.Top := T;", "W7"),
     ("the red labels are freed with the rest", "iss", "for I := KeepN to N - 1 do", "for I := 0 to N - 1 do", "W7"),

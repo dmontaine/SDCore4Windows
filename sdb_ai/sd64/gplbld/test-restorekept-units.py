@@ -209,13 +209,11 @@ def rows_for(t):
     ck("P3", "a result counts only with 'sdrestore: child exit 0'; remote administration only with 'RESTORE remote-admin: open'; jobs only with at least one and none NOT",
        "RestoreRan := Pos('sdrestore: child exit 0', RestoreText) > 0;" in blk and "Pos('RESTORE remote-admin: open', RestoreText) > 0" in blk
        and "(JobsDone >= 1) and (JobsNot = 0)" in blk, "")
-    ck("P4", "what came back is one plain line each; what did not is a numbered warning with the restore's own reason lines and the exact steps",
+    # 21 Nov 26 (370, VM sit12 round 4): the owner's layout - the numbered warning gives the steps and the commands only, no reason lines.
+    ck("P4", "what came back is one plain line each; what did not is a numbered warning with the exact steps and commands, and no reason sentence",
        "Remote administration: on again, as it was before the uninstall." in blk and "scheduled again, as they were before the uninstall." in blk
-       and "could not turn it on again:" in blk and "KeptJobSteps" in blk and "'    remote.sdsys on'" in blk
-       and "RestoreWhy := RestoreJobReasons(RestoreText);" in blk
-       # 21 Nov 26 (370, the owner on VM sit12): a damaged definition is said once, by KeptJobSteps; the restore's line for it is left out
-       and "Rest := RestoreLines(Text, 'RESTORE job ', ': NOT scheduled again');" in iss
-       and "if (Line <> '') and (Pos('its definition is damaged', Line) = 0) then" in iss, "")
+       and "REMOTE ADMINISTRATION IS OFF." in blk and "KeptJobSteps" in blk and "'     remote.sdsys on'" in blk
+       and "RestoreWhy" not in blk and "could not turn it on again" not in blk, "")
     ck("P5", "RestoreLines keeps only printable ASCII from the helper's output; the page draws RestoredMsg",
        "(Line[I] >= ' ') and (Line[I] <= '~')" in iss and "AccessMsg +\n             RestoredMsg +" in iss, "")
     return rows

@@ -3200,14 +3200,14 @@ begin
                 Sched := Copy(Line, 10, 40);
             end;
           end;
+          { 21 Nov 26 - RELEASE_1.1 370, the owner's layout on VM sit12 round 4: the commands only, one per job, 5 spaces in; no reason
+            sentence before them (a damaged definition gives <job> <schedule> to fill in). }
           if SafeJobWord(Name, False) and ((JobId = 'backup-all') or (JobId = 'update-accounts')) and SafeJobWord(Sched, True) then
-            Result := Result + '    set.job change ' + Name + ' ' + JobId + ' ' + Sched + #13#10
+            Result := Result + '     set.job change ' + Name + ' ' + JobId + ' ' + Sched + #13#10
           else if SafeJobWord(Name, False) then
-            { 21 Nov 26 - RELEASE_1.1 370, the owner's words on VM sit12: the sentence first, the command on a line of its own. }
-            Result := Result + '    The scheduled job named "' + Name + '" has a damaged definition.  Make it again with:' + #13#10 +
-                               '        set.job change ' + Name + ' <job> <schedule>' + #13#10
+            Result := Result + '     set.job change ' + Name + ' <job> <schedule>' + #13#10
           else
-            Result := Result + '    one definition has a name that is not plain; delete that file from ' + ExpandConstant('{#DataDir}\sd-jobs') + #13#10;
+            Result := Result + '     (a definition whose name is not plain: delete it from ' + ExpandConstant('{#DataDir}\sd-jobs') + ')' + #13#10;
         end;
       until not FindNext(FR);
     finally
@@ -5454,7 +5454,7 @@ var
   KeptMsg: String;
   KeptJobs, KeptCount: Integer;
   { 21 Nov 26 - RELEASE_1.1 370: the restore's text, what it said, and the plain lines for what it put back. }
-  RestoreText, RestoreWhy, RestoredMsg: String;
+  RestoreText, RestoredMsg: String;
   RestoreRan, RadminWas: Boolean;
   JobsDone, JobsNot: Integer;
   ApiRuleMsg: String;
@@ -6273,28 +6273,19 @@ begin
         RestoreRan := Pos('sdrestore: child exit 0', RestoreText) > 0;
         JobsDone := RestoreNumber(RestoreText, 'RESTORE jobs: ');
         JobsNot := RestoreNumber(RestoreText, ' scheduled again, ');
-        if RestoreRan then
-          RestoreWhy := ''
-        else
-        begin
-          RestoreWhy := RestoreLines(RestoreText, 'RESTORE-RUN:', '') + RestoreLines(RestoreText, 'sdrestore:', '');
-          if RestoreWhy = '' then
-            RestoreWhy := '    The restore did not run.' + #13#10;
-        end;
+        { 21 Nov 26 - RELEASE_1.1 370, round 4: the page gives no reason sentences (the owner's layout), only the steps. }
         if RadminWas then
         begin
           if RestoreRan and (Pos('RESTORE remote-admin: open', RestoreText) > 0) then
             RestoredMsg := RestoredMsg + 'Remote administration: on again, as it was before the uninstall.' + #13#10#13#10
           else
           begin
+            { 21 Nov 26 - RELEASE_1.1 370, the owner's layout (VM sit12 round 4): heading, how to correct, the command 5 spaces in; no
+              reason sentence, no word left dangling on a line of its own. }
             KeptCount := KeptCount + 1;
-            if RestoreRan then
-              RestoreWhy := RestoreLines(RestoreText, 'RESTORE remote-admin:', '');
-            if RestoreWhy = '' then
-              RestoreWhy := '    The restore did not open it.' + #13#10;
-            KeptMsg := KeptMsg + IntToStr(KeptCount) + '. REMOTE ADMINISTRATION IS OFF. It was on before the uninstall, and this installer ' +
-              'could not turn it on again:' + #13#10 + RestoreWhy + #13#10 +
-              'To turn it on again, sign in to Windows as SDSYS, start SD Core and type:' + #13#10#13#10 + '    remote.sdsys on' + #13#10#13#10;
+            KeptMsg := KeptMsg + IntToStr(KeptCount) + '. REMOTE ADMINISTRATION IS OFF.' + #13#10 +
+              'To correct, sign into Windows as SDSYS, and start SD Core.' + #13#10 + 'At the colon prompt type:' + #13#10 +
+              '     remote.sdsys on' + #13#10#13#10;
           end;
         end;
         if KeptJobs > 0 then
@@ -6304,16 +6295,13 @@ begin
           else
           begin
             KeptCount := KeptCount + 1;
-            if RestoreRan then
-              RestoreWhy := RestoreJobReasons(RestoreText);   { 21 Nov 26 (370): a damaged definition is said once, by KeptJobSteps }
-            KeptMsg := KeptMsg + IntToStr(KeptCount) + '. ' + IntToStr(KeptJobs) + ' SCHEDULED JOB(S) WERE KEPT, BUT THIS INSTALLER COULD NOT ' +
-              'SCHEDULE THEM ALL AGAIN:' + #13#10 + RestoreWhy + #13#10 +
-              'To schedule them again, sign in to Windows as SDSYS, start SD Core and type:' + #13#10 + KeptJobSteps + #13#10#13#10;   { 21 Nov 26 (370): the steps directly under, the owner's layout }
+            KeptMsg := KeptMsg + IntToStr(KeptCount) + '. SCHEDULED JOBS COULD NOT BE SCHEDULED AGAIN.' + #13#10 +
+              'To correct, sign into Windows as SDSYS, and start SD Core.' + #13#10 + 'At the colon prompt type:' + #13#10 +
+              KeptJobSteps + #13#10;   { 21 Nov 26 (370): the owner's layout, one command per job }
           end;
         end;
         if KeptCount > 0 then
-          KeptMsg := 'WARNING: SETTINGS YOU HAD BEFORE THE UNINSTALL ARE NOT ON NOW, AND THIS INSTALLER COULD NOT TURN THEM ON AGAIN. ' +
-            'DO THESE STEPS:' + #13#10#13#10 + KeptMsg;
+          KeptMsg := 'WARNING: SOME SETTINGS FROM BEFORE THE UNINSTALL ARE NOT ON NOW.' + #13#10#13#10 + KeptMsg;
       end;
       RadminNoteClear;
       PathNoteClear;   { 21 Nov 26 - RELEASE_1.1 371: spent by any install; the wizard already read it }

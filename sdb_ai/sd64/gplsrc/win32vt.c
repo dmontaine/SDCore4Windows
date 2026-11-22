@@ -325,7 +325,8 @@ static int mode_switch_for_runtime(const char* q, int n) {
    Otherwise it does not return:
      - 21 Nov 26, RELEASE_1.1 374: the Windows user SDSYS on a UAC-limited
        token is started again elevated (Windows asks for consent) and this
-       process ends; declined, it goes on below and LOGIN refuses it.
+       process ends; declined, it goes on below, LOGIN refuses it, and the
+       host says why above "SD stopped" (SD_SDSYS_DECLINED: asked once).
      - a CLASSIC console window (ConsoleWindowClass) whose only client is this
        process - the Start Menu shortcut's conhost.exe, or the window opened
        below - becomes SD's: 140 by 43 to start (GetLargestConsoleWindowSize
@@ -465,13 +466,15 @@ void own_window(const WCHAR* title) {
      Start menu's SD runs unelevated for everybody (one shortcut, all users), and SDSYS's session needs an elevated process: so SDSYS,
      and only SDSYS, is started again through UAC's consent and this copy ends before it hosts anything or binds the shared segment.
      LOGIN still decides; this only asks Windows for the token LOGIN requires.  Declined, the session runs here as before and LOGIN
-     refuses it with 10002 under the line below.  A hosted session (SD_OWN_WINDOW), ssh and session 0 have returned above. */
-  if (sdsys_limited()) {
-    DWORD done;
-    const WCHAR* msg = L"SDSYS needs an elevated session, and it was not started elevated.\r\n";
+     refuses it with 10002; the host then says why above "SD stopped".  A hosted session (SD_OWN_WINDOW), ssh and session 0 have
+     returned above. */
+  /* 21 Nov 26 - RELEASE_1.1 374, VM sit12 round 4: the line written here was cleared by SD's own start, so nobody saw it, and the
+     conhost relaunch below re-ran this test and asked a second time.  A No is now remembered in SD_SDSYS_DECLINED, which the
+     processes started from here inherit: nothing asks again, and the host says the line above "SD stopped", where it stays. */
+  if ((GetEnvironmentVariableW(L"SD_SDSYS_DECLINED", NULL, 0) == 0) && sdsys_limited()) {
     if (start_elevated(exe))
       ExitProcess(0);
-    WriteConsoleW(out, msg, (DWORD)wcslen(msg), &done, NULL);
+    SetEnvironmentVariableW(L"SD_SDSYS_DECLINED", L"1");
   }
 
   w = GetConsoleWindow();
@@ -509,10 +512,14 @@ void own_window(const WCHAR* title) {
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
     if (code != 0) {
-      WCHAR msg[160], c;
+      WCHAR msg[240], c;
       DWORD done;
-      /* The owner's wording, 12 Nov 26: what the person needs first, the status after it for support and scripts. */
-      swprintf(msg, 160, L"\r\nSD stopped - the reason is shown above. Press Enter to close this window. (exit status %lu)",
+      /* The owner's wording, 12 Nov 26: what the person needs first, the status after it for support and scripts.
+         21 Nov 26 - RELEASE_1.1 374: after a No at SDSYS's elevation, why, first. */
+      swprintf(msg, 240, L"%ls\r\nSD stopped - the reason is shown above. Press Enter to close this window. (exit status %lu)",
+               (GetEnvironmentVariableW(L"SD_SDSYS_DECLINED", NULL, 0) > 0)
+                   ? L"\r\nSDSYS needs an elevated session, and it was not started elevated."
+                   : L"",
                (unsigned long)code);
       SetConsoleMode(in, ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
       FlushConsoleInputBuffer(in);
