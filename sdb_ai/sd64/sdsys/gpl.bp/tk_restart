@@ -47,7 +47,7 @@ deffun ps_script_out(script, want.out) calling '!ps_script_out'
    msg = ''
 
    lines = why
-   lines<-1> = 'Restarting stops SD and starts it again.  Everyone using SD is signed out, and this session ends too.'
+   lines<-1> = 'A restart stops and starts SD and signs out everyone, this session too.'   ;* one line in the box: the owner, round 8, "a dangling word"
    lines<-1> = 'Not now: nothing restarts, and the change takes effect when SD is next started.'
    call $tk_confirm('sd -restart', lines, '', cres, cmsg, 'Restart SD?', '&Restart,&Not now')
    if cres # 'run' then

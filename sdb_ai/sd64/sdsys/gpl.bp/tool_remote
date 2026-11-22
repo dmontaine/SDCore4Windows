@@ -864,6 +864,8 @@ do.api:
       want = trim(convert(@fm : char(10) : char(13), '   ', sysmsg(10136)))
       if want # '' and index(flat, want, 1) > 0 then         ;* SD was not restarted. The setting is written and takes effect when SD is next started.
          why = 'The API door is now ' : aw : ' in sd.conf, but SD opens its API socket only when it starts: until SD restarts, the API stays as it was.'
+         msg = 'remote.api ' : aw : ': written to sd.conf'           ;* the status line under the box says what was done (owner, round 8: it said "Reading the settings")
+         call $tk_frame(ctx, keys, panes<view>, msg)
          call $tk_restart(ctx, why, rres, rmsg)
          if rres = 'failed' then gosub take.screen               ;* Restart closed the page and SD did not end this session
          msg = rmsg

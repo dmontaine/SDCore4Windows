@@ -884,6 +884,7 @@ change.param:
 *     21 Nov 26 - RELEASE_1.1 382 (owner): a change that takes effect only at a restart asks, in a box, whether to restart SD now
       if k.eff = 'restart' then
          why = k : ' is now ' : now.f : ' in sd.conf, but SD reads it only when it starts: until SD restarts, it keeps running with ' : now.r : '.'
+         call $tk_frame(ctx, keys, panes<view>, msg)                   ;* the status line under the box says what was done (owner, round 8)
          call $tk_restart(ctx, why, rres, rmsg)
          if rres = 'failed' then gosub take.screen               ;* Restart closed the page and SD did not end this session
          msg = k : ' in sd.conf: ' : old.f : ' -> ' : now.f : '; ' : rmsg
