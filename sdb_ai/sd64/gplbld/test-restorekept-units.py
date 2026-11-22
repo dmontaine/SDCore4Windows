@@ -212,7 +212,10 @@ def rows_for(t):
     ck("P4", "what came back is one plain line each; what did not is a numbered warning with the restore's own reason lines and the exact steps",
        "Remote administration: on again, as it was before the uninstall." in blk and "scheduled again, as they were before the uninstall." in blk
        and "could not turn it on again:" in blk and "KeptJobSteps" in blk and "'    remote.sdsys on'" in blk
-       and "RestoreLines(RestoreText, 'RESTORE job ', ': NOT scheduled again')" in blk, "")
+       and "RestoreWhy := RestoreJobReasons(RestoreText);" in blk
+       # 21 Nov 26 (370, the owner on VM sit12): a damaged definition is said once, by KeptJobSteps; the restore's line for it is left out
+       and "Rest := RestoreLines(Text, 'RESTORE job ', ': NOT scheduled again');" in iss
+       and "if (Line <> '') and (Pos('its definition is damaged', Line) = 0) then" in iss, "")
     ck("P5", "RestoreLines keeps only printable ASCII from the helper's output; the page draws RestoredMsg",
        "(Line[I] >= ' ') and (Line[I] <= '~')" in iss and "AccessMsg +\n             RestoredMsg +" in iss, "")
     return rows

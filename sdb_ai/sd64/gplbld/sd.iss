@@ -3298,6 +3298,34 @@ begin
   end;
 end;
 
+{ 21 Nov 26 - RELEASE_1.1 370, the owner on VM sit12: the restore's "RESTORE job NAME: NOT scheduled again - its definition is damaged" line
+  only repeated the sentence KeptJobSteps writes for the same job ("The scheduled job named ... has a damaged definition.  Make it again
+  with: ..."), so the jobs' reasons leave out the damaged ones.  Any other reason the restore gave is still shown. }
+function RestoreJobReasons(const Text: String): String;
+var
+  Rest, Line: String;
+  P: Integer;
+begin
+  Result := '';
+  Rest := RestoreLines(Text, 'RESTORE job ', ': NOT scheduled again');
+  while Rest <> '' do
+  begin
+    P := Pos(#13#10, Rest);
+    if P = 0 then
+    begin
+      Line := Rest;
+      Rest := '';
+    end
+    else
+    begin
+      Line := Copy(Rest, 1, P - 1);
+      Rest := Copy(Rest, P + 2, Length(Rest));
+    end;
+    if (Line <> '') and (Pos('its definition is damaged', Line) = 0) then
+      Result := Result + Line + #13#10;
+  end;
+end;
+
 { The kept rule put back: api-firewall.ps1 -Open, as ApplyApiFirewall does for a box ticked.  Not a choice made now - the
   administrator's own earlier answer, read from the machine.  A failure carries ELEVATED so IsFailureText sends it to the closing box. }
 function KeepApiFirewallOpen: String;
@@ -6277,9 +6305,7 @@ begin
           begin
             KeptCount := KeptCount + 1;
             if RestoreRan then
-              RestoreWhy := RestoreLines(RestoreText, 'RESTORE job ', ': NOT scheduled again');
-            if RestoreWhy = '' then
-              RestoreWhy := '    Not every job was scheduled again.' + #13#10;
+              RestoreWhy := RestoreJobReasons(RestoreText);   { 21 Nov 26 (370): a damaged definition is said once, by KeptJobSteps }
             KeptMsg := KeptMsg + IntToStr(KeptCount) + '. ' + IntToStr(KeptJobs) + ' SCHEDULED JOB(S) WERE KEPT, BUT THIS INSTALLER COULD NOT ' +
               'SCHEDULE THEM ALL AGAIN:' + #13#10 + RestoreWhy + #13#10 +
               'To schedule them again, sign in to Windows as SDSYS, start SD Core and type:' + #13#10#13#10 + KeptJobSteps + #13#10#13#10;
