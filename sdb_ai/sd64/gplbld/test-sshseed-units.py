@@ -19,6 +19,12 @@ DataTreeWasAbsent, and the attach step runs after it; S3 the order in sd.iss is 
 route groups.  MUTANTS (text copies, the live files only read): the script as it was at HEAD before this fix (no
 -FirstInstall arm) is caught; an sd.iss whose SyncRouteGroups lost the flag is caught.  NOT checked: what Windows does at
 an install - that is a cycle (a fresh install's sdssh has no members; an upgrade from a tree with no sdssh seeds it).
+
+22 Nov 26 - RELEASE_1.1 393 (owner: "Yes, reset them"; Linux S.310).  -FirstInstall now also EMPTIES every route group that
+was already there (a silent uninstall keeps them, so a "fresh" install inherited old members).  S1 now reads the new
+order (the FirstInstall arm FIRST, then the not-new arm, then the seed); S4 checks that all six groups are noted when they
+already existed and that the FirstInstall arm empties each through Clear-Group, which removes by ADSI and reads back.
+MUTANTS added: no Clear-Group loop; one group not noted; Clear-Group that does not remove.
 """
 import os
 import re
@@ -59,13 +65,33 @@ def script_problems(t):
     out = []
     if not re.search(r"param\(\[switch\]\$Check,\s*\[switch\]\$FirstInstall\)", c):
         out.append("no -FirstInstall switch")
-    i_new = c.find("if (-not $sshIsNew) {")
-    i_first = c.find("} elseif ($FirstInstall) {")
+    i_first = c.find('    if ($FirstInstall) {\n        Say "$SshGroup starts empty')
+    i_new = c.find("} elseif (-not $sshIsNew) {")
     i_seed = c.find("$members = Get-Members $SeedFrom")
-    if not (0 <= i_new < i_first < i_seed):
-        out.append("the seed is not behind a FirstInstall arm (positions %d, %d, %d)" % (i_new, i_first, i_seed))
-    elif "Add-LocalGroupMember" in c[i_first:c.find("} else {", i_first)]:
+    if not (0 <= i_first < i_new < i_seed):
+        out.append("the seed is not behind a FirstInstall arm (positions %d, %d, %d)" % (i_first, i_new, i_seed))
+    elif "Add-LocalGroupMember" in c[i_first:i_new]:
         out.append("the FirstInstall arm adds members")
+    return out
+
+
+GROUPS = ("SshGroup", "ApiGroup", "FilesGroup", "FilesWriteGroup", "FilesAdminGroup", "AiGroup")
+
+
+def reset_problems(t):
+    c = code(t)
+    out = []
+    for g in GROUPS:
+        if not re.search(r"Ensure-Group \$%s \$\w+\n\s*(?:\$sshIsNew = \$script:GroupCreated\n\s*)?if \(-not \$script:GroupCreated\) \{ \$existed \+= \$%s \}" % (g, g), c):
+            out.append("%s is not noted when it already existed" % g)
+    i = c.find("    if ($FirstInstall) {\n        if ($existed.Count -eq 0) {")
+    j = c.find('    if ($FirstInstall) {\n        Say "$SshGroup starts empty')
+    if not (0 <= i < j) or "foreach ($g in $existed) { Clear-Group $g }" not in c[i:j]:
+        out.append("the FirstInstall arm does not empty every group that existed, before the sdssh arm")
+    f = c.find("function Clear-Group([string]$name) {")
+    body = c[f:c.find("\n}\n", f)] if f >= 0 else ""
+    if "$g.psbase.Invoke('Remove', $p)" not in body or "Get-AdsiMemberPaths" not in body or "$script:failed = $true" not in body:
+        out.append("Clear-Group does not remove each member by ADSI and fail on what is left")
     return out
 
 
@@ -99,13 +125,23 @@ r = it.find('Parameters: "localgroup sdusers ""{username}"" /add"')
 row(r > 0 and it.find("[Run]") < r < it.find("[UninstallRun]"),
     "S3 the installing user is put in sdusers by [Run] (which is why a first install must not seed): found at offset %d" % r)
 
-old = st.replace("    } elseif ($FirstInstall) {\n", "    } elseif ($false) {\n")
+p = reset_problems(st)
+row(not p, "S4 (393) under -FirstInstall every route group that already existed is emptied (Clear-Group, by ADSI, read back) before anyone is granted", "; ".join(p))
+
+old = st.replace('    if ($FirstInstall) {\n        Say "$SshGroup starts empty', '    if ($false) {\n        Say "$SshGroup starts empty')
 row(script_problems(old) != [], "MUTANT: a script whose seed is not behind -FirstInstall is caught")
-old2 = re.sub(r"\n    \} elseif \(\$FirstInstall\) \{\n[^\n]*\n", "\n", st)
-row(script_problems(old2) != [], "MUTANT: the script as it was before the fix (no FirstInstall arm) is caught")
+old2 = re.sub(r'\n    if \(\$FirstInstall\) \{\n        Say "\$SshGroup starts empty[^\n]*\n    \} elseif', "\n    if", st)
+row(script_problems(old2) != [], "MUTANT: the script with no FirstInstall arm before the seed is caught")
 mut = it.replace("    Args := Args + ' -FirstInstall';", "    Args := Args;")
 row(iss_problems(mut) != [], "MUTANT: an sd.iss that lost the flag is caught")
-row(old2 != st and mut != it and old != st, "CONTROL: each mutant changed its copy (the anchors were found in the live files)")
+m3 = st.replace("foreach ($g in $existed) { Clear-Group $g }", "")
+row(reset_problems(m3) != [], "MUTANT (393): a FirstInstall arm that empties nothing is caught")
+m4 = st.replace("    if (-not $script:GroupCreated) { $existed += $AiGroup }\n", "")
+row(reset_problems(m4) != [], "MUTANT (393): a group left out of the reset (sdaiusers) is caught")
+m5 = st.replace("$g.psbase.Invoke('Remove', $p)", "$null = $p")
+row(reset_problems(m5) != [], "MUTANT (393): a Clear-Group that removes nobody is caught")
+row(all(m != st for m in (old, old2, m3, m4, m5)) and mut != it,
+    "CONTROL: each mutant changed its copy (the anchors were found in the live files)")
 
 print("test-sshseed-units: %d passed, %d failed" % (passes, fails))
 sys.exit(1 if fails else 0)

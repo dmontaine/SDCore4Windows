@@ -3,7 +3,7 @@
 #
 #   powershell -ExecutionPolicy Bypass -File sync-route-groups.ps1            create and seed
 #   powershell -ExecutionPolicy Bypass -File sync-route-groups.ps1 -Check     print what it would do
-#   powershell -ExecutionPolicy Bypass -File sync-route-groups.ps1 -FirstInstall   create; a new sdssh stays empty (the installer, first install)
+#   powershell -ExecutionPolicy Bypass -File sync-route-groups.ps1 -FirstInstall   create; every route group starts EMPTY (the installer, no data tree)
 #
 # Exit 0 success, 1 failure.  Prints what it did either way.
 #
@@ -48,6 +48,14 @@
 # and its ATTACH turns nothing on (the owner's rule: delivered closed, the administrator opens it; the wizard's "open every
 # access gate" box is how the person asks for ssh).  The seed stays for an upgrade from before the route split, which keeps
 # the ssh the system already had.
+#
+# 22 Nov 26 - RELEASE_1.1 393 (owner, 22 Nov: "Yes, reset them, and tell linux"; Linux S.310).  -FirstInstall now EMPTIES every
+# route group that was already there, not only a new sdssh.  An uninstall with nobody to answer it keeps the groups (row 369(b)),
+# so deleting the data afterwards left old members in sdssh/sdapi, and a "fresh" install inherited ssh and API access it never
+# granted (light verify b363, verify-accountrules).  No data tree means no SD account, so no membership can be one an
+# administrator chose here.  An upgrade or a Keep reinstall finds the tree, does not pass -FirstInstall, and touches nothing.
+# The installing user's own gates are applied after this (sd.iss: SyncRouteGroups before AttachInstallerAccount).  sdusers,
+# sdsshonly and sdsshnokey are not route groups and are left alone: the last two only restrict.
 param([switch]$Check, [switch]$FirstInstall)
 
 $ErrorActionPreference = 'Stop'
@@ -132,19 +140,75 @@ function Get-Members([string]$name) {
     return $out.ToArray()
 }
 
+# 22 Nov 26 - RELEASE_1.1 393: take every member out of a group that was already there.  Through ADSI, not Get-LocalGroupMember:
+# Windows PowerShell 5.1's cmdlet throws on a group holding an ORPHANED SID (a member whose Windows account was deleted), and a
+# group left by an earlier install is exactly where those are.  ADSI lists an orphan by its SID path and removes it like any
+# other.  Reports each one, and refuses the null case: a group it could not read, or left non-empty, is a failure.
+function Get-AdsiMemberPaths($group) {
+    $paths = New-Object System.Collections.ArrayList
+    foreach ($m in @($group.psbase.Invoke('Members'))) {
+        $null = $paths.Add($m.GetType().InvokeMember('ADsPath', 'GetProperty', $null, $m, $null))
+    }
+    return ,$paths.ToArray()
+}
+function Clear-Group([string]$name) {
+    try {
+        $g = [ADSI]("WinNT://$env:COMPUTERNAME/$name,group")
+        $paths = Get-AdsiMemberPaths $g
+    } catch {
+        Say "COULD NOT READ the members of $name to empty it - $($_.Exception.Message)"
+        $script:failed = $true
+        return
+    }
+    if ($paths.Count -eq 0) { Say "$name was already there and empty"; return }
+    foreach ($p in $paths) {
+        $shown = $p -replace '^WinNT://', ''
+        if ($Check) { Say "would take $shown out of $name"; continue }
+        try {
+            $g.psbase.Invoke('Remove', $p)
+            Say "took $shown out of $name (left from an earlier install)"
+        } catch {
+            Say "FAILED to take $shown out of $name - $($_.Exception.Message)"
+            $script:failed = $true
+        }
+    }
+    if ($Check) { return }
+    try { $left = (Get-AdsiMemberPaths ([ADSI]("WinNT://$env:COMPUTERNAME/$name,group"))).Count } catch { $left = -1 }
+    if ($left -ne 0) {
+        Say "$name was NOT emptied: $left member(s) left (-1: it could not be read back)"
+        $script:failed = $true
+    }
+}
+
 try {
+    $existed = @()
     Ensure-Group $SshGroup $SshComment
     $sshIsNew = $script:GroupCreated
+    if (-not $script:GroupCreated) { $existed += $SshGroup }
     Ensure-Group $ApiGroup $ApiComment
+    if (-not $script:GroupCreated) { $existed += $ApiGroup }
     Ensure-Group $FilesGroup $FilesComment
+    if (-not $script:GroupCreated) { $existed += $FilesGroup }
     Ensure-Group $FilesWriteGroup $FilesWriteComment
+    if (-not $script:GroupCreated) { $existed += $FilesWriteGroup }
     Ensure-Group $FilesAdminGroup $FilesAdminComment
+    if (-not $script:GroupCreated) { $existed += $FilesAdminGroup }
     Ensure-Group $AiGroup $AiComment
+    if (-not $script:GroupCreated) { $existed += $AiGroup }
 
-    if (-not $sshIsNew) {
+    if ($FirstInstall) {
+        if ($existed.Count -eq 0) {
+            Say "no route group was there before this install - all were created empty"
+        } else {
+            Say ("no data tree, so the route groups start empty: emptying " + ($existed -join ', '))
+            foreach ($g in $existed) { Clear-Group $g }
+        }
+    }
+
+    if ($FirstInstall) {
+        Say "$SshGroup starts empty - a first install gives nobody ssh; an administrator gives it with modify.account <account> ssh (or both)"
+    } elseif (-not $sshIsNew) {
         Say "$SshGroup already existed - not seeding, its membership is whatever an administrator left"
-    } elseif ($FirstInstall) {
-        Say "$SshGroup made empty - a first install gives nobody ssh; an administrator gives it with modify.account <account> ssh (or both)"
     } else {
         $members = Get-Members $SeedFrom
         if ($null -eq $members) {
