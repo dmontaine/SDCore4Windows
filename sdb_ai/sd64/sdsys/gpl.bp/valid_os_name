@@ -1,6 +1,6 @@
 * VALID_OS_NAME(name)
 * Return @true if name is a safe Linux user/group identifier for OS.EXECUTE.
-* Copyright (c) String Database
+* Copyright (c) Donald Montaine
 *
 * START-DESCRIPTION:
 *

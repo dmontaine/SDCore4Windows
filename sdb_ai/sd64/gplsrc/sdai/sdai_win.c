@@ -1,6 +1,6 @@
 /* SDAI_WIN.C
  * sd-ai.exe: the Windows facts - the caller, the gate group, DPAPI, private files, atomic replace, locks, the event log.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

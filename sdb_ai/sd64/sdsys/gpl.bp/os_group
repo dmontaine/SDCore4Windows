@@ -1,6 +1,6 @@
 * OS_GROUP(action, group, member)
 * Create and delete Windows local groups, and add and remove their members.
-* Copyright (c) String Database
+* Copyright (c) Donald Montaine
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by

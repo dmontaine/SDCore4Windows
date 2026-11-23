@@ -1,5 +1,5 @@
 /* local_sdsys_probe.c - the ADMIT side of SDSYS's local route.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

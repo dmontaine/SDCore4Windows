@@ -1,6 +1,6 @@
 /* WIN32PIPE.C
  * Attach an SDLocal client's named pipe to this process's stdin and stdout.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

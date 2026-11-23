@@ -1,6 +1,6 @@
 /* WIN32RUNIN.H
  * RUN.IN ... DEBUG on Windows: what the SDSYS session, the debugged child and the SD service agree on.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

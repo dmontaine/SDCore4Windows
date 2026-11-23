@@ -1,6 +1,6 @@
 /* SDAI_JSON.C
  * sd-ai.exe: a bounded JSON reader, and a writer that writes what Python's json.dumps writes.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

@@ -1,6 +1,6 @@
 * RESTOREA
 * RESTORE.ACCOUNT verb (S.50).
-* Copyright (c) String Database
+* Copyright (c) Donald Montaine
 *
 * START-HISTORY:
 * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): the manifest key ssh.key (acc_os_info) is read and handed to !create_account (CA$SSH.KEY) when it is

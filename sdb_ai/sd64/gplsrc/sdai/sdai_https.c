@@ -1,6 +1,6 @@
 /* SDAI_HTTPS.C
  * sd-ai.exe: the one outward call - TCP, TLS by the static OpenSSL, HTTP/1.1.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

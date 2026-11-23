@@ -1,6 +1,6 @@
 * ACC_HOLD
 * The login hold for BACKUP.ACCOUNT and RESTORE.ACCOUNT (S.50).
-* Copyright (c) String Database
+* Copyright (c) Donald Montaine
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): TEST also asks whether the holder's process exists (K$PID.ALIVE).  A killed session keeps its user table

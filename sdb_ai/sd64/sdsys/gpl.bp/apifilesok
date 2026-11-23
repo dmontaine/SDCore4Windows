@@ -1,6 +1,6 @@
 * APIFILESOK(action, entered, writeok, adminok)
 * May a files-only API session make this request?
-* Copyright (c) String Database
+* Copyright (c) Donald Montaine
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by

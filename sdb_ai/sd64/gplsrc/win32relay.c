@@ -1,7 +1,7 @@
 /* WIN32RELAY.C
  * Native Windows half of the API's TLS relay: start sdtlsrelay.exe as the
  * bare relay account, at Low integrity, with exactly two inherited handles.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

@@ -1,7 +1,7 @@
 /* WIN32S4U.H
  * Take on an SD user's Windows identity without their password, for
  * op_kernel.c's K_ASSUME_USER.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

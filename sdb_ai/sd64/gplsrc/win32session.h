@@ -1,7 +1,7 @@
 /* WIN32SESSION.H
  * Spawn an authenticated API session AS the user, over a named pipe, for
  * RELEASE_1.1 55 (direction (a), Linux parity).
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

@@ -1,6 +1,6 @@
 /* WIN32AUDIT.C
  * Native Windows append-only file writing, for k_error.c.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

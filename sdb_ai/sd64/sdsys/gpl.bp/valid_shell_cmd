@@ -1,6 +1,6 @@
 * VALID_SHELL_CMD(cmd)
 * Return @true if cmd has no shell metacharacters unsafe for OS.EXECUTE.
-* Copyright (c) String Database
+* Copyright (c) Donald Montaine
 *
 * START-DESCRIPTION:
 *

@@ -1,6 +1,6 @@
 /* WIN32AUDITPIPE.H
  * The audit trail's writer: what a session and the service agree on.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

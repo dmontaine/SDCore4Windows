@@ -1,6 +1,6 @@
 * RUNIN_DEBUG
 * run.in account debug file program, the administrator's side: the debugger here, the program in a separate, unelevated process of the account.
-* Copyright (c) String Database.  This program is free software; you can redistribute it and/or modify it under the terms of the GNU General
+* Copyright (c) Donald Montaine.  This program is free software; you can redistribute it and/or modify it under the terms of the GNU General
 * Public License, version 3 or later.
 * START-HISTORY:
 * 13 Nov 26 Windows port - written.  RELEASE_1.1 253(b): run.in WITH debug, the form Windows allows (gplsrc/win32runin.h has the design; the

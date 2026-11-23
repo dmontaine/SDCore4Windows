@@ -1,6 +1,6 @@
 /* WIN32AUDITPIPE.C
  * A session's half of the audit trail's writer: hand a record to the service.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

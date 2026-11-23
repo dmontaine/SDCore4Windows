@@ -1,6 +1,6 @@
 * SETTINGSR
 * SETTINGS.REPORT verb (S.50).
-* Copyright (c) String Database
+* Copyright (c) Donald Montaine
 *
 * START-HISTORY:
 * 14 Nov 26 Windows port - RELEASE_1.1 243: 12950 is printed before !settings_os, which starts PowerShell (a line before any wait over 2 s).

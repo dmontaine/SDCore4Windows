@@ -1,7 +1,7 @@
 /* WIN32GROUP.C
  * Is a NAMED user a member of a NAMED local group?  A live SAM query, with no
  * child process.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

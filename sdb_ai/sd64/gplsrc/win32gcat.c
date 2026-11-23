@@ -1,6 +1,6 @@
 /* WIN32GCAT.C
  * Is a global catalogue object writable by someone other than the administrators?  (RELEASE_1.1 249, Linux W.11 F2)
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

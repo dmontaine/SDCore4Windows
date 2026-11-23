@@ -1,6 +1,6 @@
 * XFERSRV
 * The file transfer server: the command processor of an sftp request that came in over the ssh login.
-* Copyright (c) String Database
+* Copyright (c) Donald Montaine
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by

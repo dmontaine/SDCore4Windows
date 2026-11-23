@@ -1,6 +1,6 @@
 * ACC_BAKDIR
 * The saved backup directory: show it, save it, or use it (asking for it if there is none)
-* Copyright (c) String Database
+* Copyright (c) Donald Montaine
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by

@@ -1,6 +1,6 @@
 /* WIN32TRACE.C
  * The socket trace log, made owner-only (SET.SOCKET.MODE SKT$INFO.TRACE).
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

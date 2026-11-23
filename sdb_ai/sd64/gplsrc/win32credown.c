@@ -1,6 +1,6 @@
 /* WIN32CREDOWN.C
  * A session's half of cred-own: hand the person's own-password request to the SD service.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

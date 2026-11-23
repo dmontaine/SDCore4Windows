@@ -2,7 +2,7 @@
 * Run a PowerShell script that carries a secret, without putting it on a
 * command line.  Returns the script's exit status, or -1 if it could not be
 * run at all.
-* Copyright (c) String Database
+* Copyright (c) Donald Montaine
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by

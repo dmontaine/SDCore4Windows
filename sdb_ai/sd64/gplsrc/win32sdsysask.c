@@ -1,6 +1,6 @@
 /* WIN32SDSYSASK.C
  * "ssh -t <user>@localhost sd-sdsys", sd.exe's half: the asker's end of the SD service's pipe (RELEASE_1.1 339).
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

@@ -1,6 +1,6 @@
 /* sdcredown.c - cred-own in the SD service: a person changes their own SD password
  *
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

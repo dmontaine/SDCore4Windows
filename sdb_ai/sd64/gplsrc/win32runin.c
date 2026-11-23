@@ -1,6 +1,6 @@
 /* WIN32RUNIN.C
  * RUN.IN ... DEBUG on Windows, sd.exe's half: the debugged child's door, and the SDSYS session's end of a run.
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

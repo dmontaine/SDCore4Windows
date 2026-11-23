@@ -1,7 +1,7 @@
 /* WIN32TLS.C
  * Native Windows half of the API's TLS relay: is the identity directory
  * closed to everyone but SYSTEM and Administrators?
- * Copyright (c) String Database
+ * Copyright (c) Donald Montaine
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
