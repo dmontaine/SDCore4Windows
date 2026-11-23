@@ -17,6 +17,8 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 * 
 * START-HISTORY:
+* rev WC2.0-0 22 Nov 26 Windows port - release string WC2.0-0 (owner, 22 Nov: "WC2.0-0 for core, WS2.0-0 for
+*            [solo]", shown to the user).  Segment numerics unchanged.
 * rev W2.0-0 10 Nov 26 Windows port - release string W2.0-0 (owner, 10 Nov, relayed by Linux mail T1000: both Windows
 *            products are 2.0-0 from now on, in their own stamp scheme).  Segment numerics unchanged.
 * rev W1.2-0 26 Oct 26 Windows port - release string W1.2-0 (owner's instruction;
@@ -51,7 +53,7 @@
 $define MAJOR.REV      1
 $define MINOR.REV      0
 $define BUILD          2
-$define SD.REV.STAMP   "W2.0-0"
+$define SD.REV.STAMP   "WC2.0-0"
 
 $define SD.COPYRIGHT.YEAR "2007"
 

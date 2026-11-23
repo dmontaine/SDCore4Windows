@@ -5,12 +5,12 @@
     ONE FILE FOR BOTH WINDOWS PRODUCTS.  The same bytes are in SDCore4Windows and SDCore4WindowsSolo; the script knows which
     product it is from the installer script beside it (sd.iss: SD Core for Windows; sd-solo.iss: SD Core Solo for Windows).
 
-        powershell -ExecutionPolicy Bypass -File <repo>\sdb_ai\sd64\gplbld\mkrelease.ps1 -Version W2.0-0
+        powershell -ExecutionPolicy Bypass -File <repo>\sdb_ai\sd64\gplbld\mkrelease.ps1 -Version WC2.0-0
                    [-Installer FILE] [-SourceZip FILE] [-DocsRepo DIR] [-Readme FILE] [-Books DIR] [-Clients DIR]
                    [-SshServer DIR] [-Python DIR] [-ConfSample FILE] [-Label rc1] [-AllowDev] [-Force]
                    [-StagingDir DIR] [-ZipDir DIR]
 
-    -Version     W2.0-0 (Core) or WS2.0-0 (Solo): the installer's AppVer
+    -Version     WC2.0-0 (Core) or WS2.0-0 (Solo): the installer's AppVer (22 Nov 26: Core's prefix is WC, owner)
     -Installer   default <Projects>\Project_Installers\sdout\sd-setup-<ver>.exe (Solo: sd-solo-setup-<ver>.exe), as cycle.ps1 writes it
     -SourceZip   default sdout\<repo>-source-<ver>.zip; its .txt beside it names the commit and branch the installer was built from
     -DocsRepo    default <Projects>\SDCore4WindowsDocs (Solo: SDCore4WindowsSoloDocs)
@@ -24,7 +24,7 @@
     -SshServer   a folder with OpenSSH-Win64-*.msi, copied to ssh-server\ (the installer installs from it when the box is ticked)
     -Python      a folder with python-*-amd64.exe, copied to python\ (the installer offers to run it)
     -ConfSample  Solo only: sd-solo-setup.conf.sample, beside the installer
-    -Label       names a release candidate: SDCore-W2.0-0-rc1 (lower case letters and digits, up to 12)
+    -Label       names a release candidate: SDCore-WC2.0-0-rc1 (lower case letters and digits, up to 12)
     -AllowDev    the source .txt names a branch other than main: a TEST package, named -test, never to be distributed
     -Force       replace an existing staging folder and zip of this name
     -StagingDir, -ZipDir   default <Projects>\Project_Staging and Project_Zips (test seam)
@@ -100,12 +100,12 @@ if (Test-Path -LiteralPath (Join-Path $gplbld 'sd-solo.iss')) {
     $pkgPre = 'SDCoreSolo-'; $changesPre = 'sd-core-solo-for-windows-'; $docsName = 'SDCore4WindowsSoloDocs'; $repoName = 'SDCore4WindowsSolo'
     $bookPre = 'SD-Core-Solo-for-Windows-'
 } elseif (Test-Path -LiteralPath (Join-Path $gplbld 'sd.iss')) {
-    $product = 'Core'; $iss = 'sd.iss'; $verRx = '^W[0-9]+\.[0-9]+-[0-9]+$'; $setupPre = 'sd-setup-'
+    $product = 'Core'; $iss = 'sd.iss'; $verRx = '^WC[0-9]+\.[0-9]+-[0-9]+$'; $setupPre = 'sd-setup-'
     $pkgPre = 'SDCore-'; $changesPre = 'sd-core-for-windows-'; $docsName = 'SDCore4WindowsDocs'; $repoName = 'SDCore4Windows'
     $bookPre = 'SD-Core-for-Windows-'
 } else { Die "neither sd.iss nor sd-solo.iss is beside this script ($gplbld)" }
 
-if ($Version -notmatch $verRx) { Die "-Version looks like $(if ($product -eq 'Solo') {'WS2.0-0'} else {'W2.0-0'}) for $product (given: '$Version')" }
+if ($Version -notmatch $verRx) { Die "-Version looks like $(if ($product -eq 'Solo') {'WS2.0-0'} else {'WC2.0-0'}) for $product (given: '$Version')" }
 $issVer = (Select-String -LiteralPath (Join-Path $gplbld $iss) -Pattern '#define AppVer "([^"]+)"' | Select-Object -First 1)
 if (-not $issVer) { Die "no '#define AppVer' in $iss" }
 $issVer = $issVer.Matches[0].Groups[1].Value

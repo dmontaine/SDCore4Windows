@@ -27,8 +27,12 @@
   #define Stage "..\..\stage"
 #endif
 #ifndef AppVer
-  #define AppVer "W2.0-0"
+  #define AppVer "WC2.0-0"
 #endif
+
+; 22 Nov 26 - AppVer W2.0-0 -> WC2.0-0, owner's instruction: "WC2.0-0 for core, WS2.0-0 for [solo] ... so that the user sees
+; those release numbers".  The installer becomes sd-setup-WC2.0-0.exe (OutputBaseFilename); the kernel and BASIC stamps
+; (revstamp.h, both copies) and the $release VOC record say the same, as login compares system(1012) with SD.REV.STAMP.
 
 ; 29 Sep 26 - AppVer W1.1-0 -> W1.1-1 (RELEASE_1.1 112, English only), owner's
 ; instruction.  The release string moved in lockstep in the same five places as

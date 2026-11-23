@@ -25,7 +25,7 @@ Write-Host "test-shareddocs-units: shared-docs.ps1 at $(Join-Path $PSScriptRoot 
 # --- names -------------------------------------------------------------------------------------------------------------------------------
 Check 'a release changes document name is taken'        $true  (Test-DocName 'sd-core-for-windows-w2.0-0-changes.pdf')
 Check 'a manual name is taken'                           $true  (Test-DocName 'user.pdf')
-Check 'upper case is refused (DOCS.INSTALL would skip it)' $false (Test-DocName 'SD-Core-for-Windows-W2.0-0-User.pdf')
+Check 'upper case is refused (DOCS.INSTALL would skip it)' $false (Test-DocName 'SD-Core-for-Windows-WC2.0-0-User.pdf')
 Check 'a leading dot is refused'                         $false (Test-DocName '.hidden.pdf')
 Check 'a space is refused'                               $false (Test-DocName 'user guide.pdf')
 Check 'a path separator is refused'                      $false (Test-DocName '..\x.pdf')

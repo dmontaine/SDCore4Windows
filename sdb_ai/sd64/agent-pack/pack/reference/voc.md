@@ -295,7 +295,7 @@ a marginal verb.
 
 ```
 001  X
-002  W2.0-0
+002  WC2.0-0
 ```
 
 This is `$release`, and it is SDSYS's **only** X-record. An X-record is

@@ -116,7 +116,7 @@
   },
   "voc.entry": {
    "chunks": 21,
-   "sha256": "4e9666af239a59f9dd13c7036b848ad5c08677d5c9f54551cda60b0ae36a6dc6"
+   "sha256": "b63ebb76ba31a24d27d37752ecdb9cb5d576e97f49509103d848e30edae9772c"
   },
   "voc.layer": {
    "chunks": 2,
@@ -124,7 +124,7 @@
   },
   "voc.type": {
    "chunks": 9,
-   "sha256": "efab82c2d26562e9836238c94c3c1321ecd8f5f7f81f9afa121f04baac67cba0"
+   "sha256": "4701572afe68f12ab26eb07eaa492d8c7a6eff25f23dd44122fec1ab2017ede8"
   },
   "voc.types": {
    "chunks": 1,
@@ -146,7 +146,7 @@
   },
   "examples/voc-entries.md": {
    "chunks": 21,
-   "sha256": "7d012e7386065eafc20ce402a2cb7c12f58e5ba449c4e1b747293fda8e6b6e7b",
+   "sha256": "883e873e26f1b3dec0f190b3dcab570ff19f3bc6a553f88822df5fd01a0a64c5",
    "words": 571
   },
   "index.json": {
@@ -199,13 +199,13 @@
   },
   "reference/voc.md": {
    "chunks": 12,
-   "sha256": "703c9879cca21d9375ea0b4bab459cc5c92efda9e4328f323f50bd8aef97323a",
+   "sha256": "13c358ea08c6a6e4fd145842930a16ab14f08b84d46a406085660c229fdc0c6e",
    "words": 1889
   }
  },
  "product": "SD Core for Windows",
  "regenerate": "python agent-pack/mkpack.py --write",
- "release_record": "W2.0-0",
- "rev_stamp": "W2.0-0",
+ "release_record": "WC2.0-0",
+ "rev_stamp": "WC2.0-0",
  "since_rule": "the oldest changelog section whose entry titles name the item; only names that cannot be plain English count; '-' = not found"
 }
