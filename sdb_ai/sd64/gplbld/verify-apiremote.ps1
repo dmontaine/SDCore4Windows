@@ -156,8 +156,8 @@ if (-not ([Security.Principal.WindowsPrincipal] `
 # Cleanup handled it, but a guard that can fire early should.
 if (-not (Get-Service -Name $SvcName -ErrorAction SilentlyContinue)) {
     Write-Output ("  looked for service : {0}" -f $SvcName)
-    Write-Output ('  services matching "String Database": ' +
-                  ((Get-Service | Where-Object { $_.DisplayName -like '*String Database*' } |
+    Write-Output ('  services matching "SD Core for Windows": ' +
+                  ((Get-Service | Where-Object { $_.DisplayName -like '*SD Core for Windows*' } |
                     ForEach-Object { $_.Name }) -join ', '))
     Refuse ("no service named '$SvcName' - this script has the name wrong, or SD is not installed.")
 }
@@ -211,7 +211,7 @@ function Stop-SD {
         # Get-Service returns ServiceController, which has Name/DisplayName and
         # NO PathName - reaching for one throws under Set-StrictMode.
         Write-Host ('  Services that look like it: ' +
-                      ((Get-Service | Where-Object { $_.DisplayName -like '*String Database*' } |
+                      ((Get-Service | Where-Object { $_.DisplayName -like '*SD Core for Windows*' } |
                         ForEach-Object { $_.Name }) -join ', '))
         return $false
     }

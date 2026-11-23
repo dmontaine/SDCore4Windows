@@ -1,6 +1,6 @@
 # SD Core for Windows
 
-SD, the multivalue String Database, for Windows — one of four SD Core versions
+SD Core for Windows, a multivalue database — one of four SD Core versions
 (Linux and Windows, each multi-user and single-user) that behave the same.
 
 SD is a multivalue database in the Pr1me Information tradition, descended from

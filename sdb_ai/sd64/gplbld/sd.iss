@@ -67,7 +67,8 @@
 ; install by name both still match: VerifyInstall1.ps1:252 and sdtestuser.ps1
 ; use -like 'SD *', and capture-state.ps1:217 uses -match 'SD'.
 #define AppName    "SD Core"
-#define AppPublisher "String Database"
+#define AppPublisher "SD Core"
+; 22 Nov 26 - AppPublisher was "String Database" (Apps & features shows it); owner: "String Database" should appear nowhere a user could see it.
 #define DataDir    "{commonappdata}\SD"
 
 [Setup]

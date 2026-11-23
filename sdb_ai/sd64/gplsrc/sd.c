@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 22 Nov 26 Windows port - sd --version names the product: "SD Core for Windows (sd) Version ...", as Solo's names its own, and so
+ *           does the start-up log line (owner: "Fix the --version for Core"; the old name is to show nowhere a user can see it).
  * 18 Nov 26 Windows port - RELEASE_1.1 339: main() calls sdsys_local_detect() right after xfer_detect(); "ssh -t <user>@localhost sd-sdsys"
  *           makes this process the asker of the SD service's door (sd_sdsysask.c, win32sdsysask.c) and nothing else.
  * 18 Nov 26 Windows port - RELEASE_1.1 339: -SDSYSLOCAL pid, the claim the SD service's SDSYS session for a listed user's ssh login makes.
@@ -189,7 +191,7 @@ int main(int argc, char *argv[]) {
   #define msgsz 256
   char msg[msgsz];
   openlog ("sd_Log", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
-  syslog (LOG_INFO, "String Database (sd) command line:");
+  syslog (LOG_INFO, "SD Core for Windows (sd) command line:");
   strcpy(msg,"sd ");
   for (arg = 1; (arg < argc); arg++) {
     if ((strlen(msg)+ strlen(argv[arg]) + 2) < msgsz){
@@ -639,7 +641,7 @@ Private bool comlin(int argc, char *argv[]) {
             goto help;
           } else if (!stricmp(argv[arg], "--VERSION")) {
 /* rev 0.9.1 Mar 25 return to single rev track */            
-            printf("String Database (sd) Version %s %s\n", SD_REV_STAMP, BUILD_TARGET);
+            printf("SD Core for Windows (sd) Version %s %s\n", SD_REV_STAMP, BUILD_TARGET);
             exit(0);
           } else
             goto unrecognised;

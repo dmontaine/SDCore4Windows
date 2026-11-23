@@ -54,7 +54,7 @@ $env:PSModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules;$env:SystemRoot
 $ErrorActionPreference = 'Continue'
 
 $SvcName    = 'SD'
-$SvcDisplay = 'String Database (SD)'
+$SvcDisplay = 'SD Core for Windows'   # 22 Nov 26: was 'String Database (SD)' (owner: that name appears nowhere a user sees)
 $SvcDesc    = 'Runs the SD multivalue database. Stopping this service ends every SD session on this machine.'
 
 # NOT A param DEFAULT.  In a script with a mandatory parameter or

@@ -16617,10 +16617,10 @@ Telnet connection from %1
 ```
 
 ### msg:5009
-> kind=message tier=reference since=- src=sdsys/messages/5009:1#df580adf
+> kind=message tier=reference since=- src=sdsys/messages/5009:1#c3fb5696
 
 ```
-This user is not registered for String Database (sd) use
+This user is not registered for SD Core for Windows (sd) use
 ```
 
 cited by: `apisrvr`, `login`, `xfersrv`
@@ -17350,10 +17350,10 @@ Fatal error : Cannot return to previous account
 cited by: `apisrvr`, `cproc`, `setacc`
 
 ### msg:5163
-> kind=message tier=reference since=- src=sdsys/messages/5163:1#805ac189
+> kind=message tier=reference since=- src=sdsys/messages/5163:1#0aef2ca6
 
 ```
-Directory is not a String Database (sd) account
+Directory is not an SD Core for Windows (sd) account
 ```
 
 cited by: `apisrvr`, `cproc`, `login`, `setacc`

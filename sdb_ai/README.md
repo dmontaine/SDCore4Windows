@@ -1,6 +1,6 @@
 # SD Core for Windows — source tree
 
-The source of SD Core for Windows, the multivalue String Database. It follows SD
+The source of SD Core for Windows, a multivalue database. It follows SD
 Core for Linux, the version the other SD Core versions follow. The repository's
 top-level `README.md` describes the product and how to build and install it.
 

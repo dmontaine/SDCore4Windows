@@ -286,7 +286,7 @@ $sshCommon = @(
 # as admitted: the question this asks is whether the account got IN, not what it
 # landed on.  Keeping both means the script works either side of
 # allow-ssh-groups.ps1, which is a manual step (PROJECT_STATUS.md header).
-$sdBanner = 'String Database'
+$sdBanner = 'SD Core for Windows, version'   # the sign-on banner (22 Nov 26: was 'String Database')
 
 function SshResult($r) {
     if ($r.ExitCode -eq 0 -and $r.Out -match [regex]::Escape($Account)) { return 'admitted' }

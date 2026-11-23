@@ -282,7 +282,7 @@ function SshPassword($pass) {
     # the question is whether the account got IN.  Keeping both lets this script
     # run either side of allow-ssh-groups.ps1, which is applied by hand.
     if ($r.ExitCode -eq 0 -and $r.Out -match [regex]::Escape($Account)) { return 'admitted' }
-    if ($r.Out -match 'String Database') { return 'admitted' }
+    if ($r.Out -match 'SD Core for Windows, version') { return 'admitted' }   # the sign-on banner (22 Nov 26: was 'String Database')
     $why = ($r.Out + ' ' + $r.Err).Trim() -replace '\s+', ' '
     if ($why -eq '') { $why = 'no output, exit ' + $r.ExitCode }
     return ('refused: ' + $why)
