@@ -98,15 +98,44 @@ function Refuse($msg) {
 
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
 
+# 22 Nov 26 (light verify b363): an own-window HOST sd.exe - one whose parent is conhost, explorer or another sd.exe - is the window of a
+# session, not SD running, and it outlives a stop (restart-sd.ps1's Get-SdHostPids, RELEASE_1.1 361, the same rule).  Counting it made
+# this wait out its 45 s and refuse "SD would not stop" with nothing to say what held it; a refusal now lists every process still there.
+function Get-SdHostPids {
+    $all = @()
+    try { $all = @(Get-CimInstance -ClassName Win32_Process -Filter "Name='sd.exe' OR Name='conhost.exe' OR Name='explorer.exe'" -OperationTimeoutSec 15 -ErrorAction Stop) } catch { return @() }
+    $name = @{}
+    foreach ($q in $all) { $name[[int]$q.ProcessId] = [string]$q.Name }
+    $sd = @($all | Where-Object { $_.Name -eq 'sd.exe' })
+    $parentsOfSd = @($sd | ForEach-Object { [int]$_.ParentProcessId })
+    $out = @()
+    foreach ($q in $sd) {
+        $pp = [int]$q.ParentProcessId
+        $pn = if ($name.ContainsKey($pp)) { $name[$pp] } else { '' }
+        if ($pn -eq 'conhost.exe' -or $pn -eq 'explorer.exe' -or $parentsOfSd -contains [int]$q.ProcessId) { $out += [int]$q.ProcessId }
+    }
+    return $out
+}
+function Get-SdLeft {
+    $hosts = @(Get-SdHostPids)
+    return @(Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { ($_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe')))) -and -not ($_.Name -eq 'sd' -and $hosts -contains [int]$_.Id) })
+}
 function Stop-SD {
     if (Get-Service -Name $SvcName -ErrorAction SilentlyContinue) {
         & "$env:SystemRoot\System32\sc.exe" stop $SvcName | Out-Null
     }
     $deadline = (Get-Date).AddSeconds(45)
-    while (((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })) -and (Get-Date) -lt $deadline) {
+    while ((Get-SdLeft).Count -gt 0 -and (Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 500
     }
-    return -not [bool]((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
+    $left = @(Get-SdLeft)
+    if ($left.Count -eq 0) { return $true }
+    Write-Host '  still running after the stop (window hosts not counted):'
+    foreach ($p in $left) {
+        $c = Get-CimInstance -ClassName Win32_Process -Filter ("ProcessId=" + $p.Id) -ErrorAction SilentlyContinue
+        Write-Host ('    ' + $p.Name + ' pid ' + $p.Id + ' session ' + $p.SessionId + ' parent ' + $(if ($c) { $c.ParentProcessId } else { '?' }) + '  ' + $(if ($c) { $c.CommandLine } else { '' }))
+    }
+    return $false
 }
 
 function Start-SD {
