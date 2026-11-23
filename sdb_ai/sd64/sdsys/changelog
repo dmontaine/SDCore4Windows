@@ -6,7 +6,7 @@ WC2.0-0 and SD Core Solo for Windows WS2.0-0, and SD shows that number wherever 
 
 22 Nov 26  SD NAMES ITSELF "SD CORE FOR WINDOWS" EVERYWHERE YOU SEE ITS NAME.
 
-             What        - sd --version prints "SD Core for Windows (sd) Version WC2.0-0 64 Bit"; the sign-on banner
+             What        - sd --version prints "SD Core for Windows Version WC2.0-0"; the sign-on banner
                            is "SD Core for Windows, version WC2.0-0"; the Windows service's display name is
                            "SD Core for Windows"; the installer's publisher is "SD Core"; messages 5009 and 5163 and
                            the start-up log line name SD Core for Windows.
