@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # test-tkcapt-units.py - what a captured message is ($tk_capt, S.300; SD Core for Windows' row 380), read off the source as text.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-tkcapt-units.py [--selftest]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-tkcapt-units.py [--selftest]
 #
 #   C1  the cause is still where the rule says: messages.c turns a written line break into LF and CR
 #   C2  $tk_capt is $internal, catalogued, takes four arguments; its common block has a $ name

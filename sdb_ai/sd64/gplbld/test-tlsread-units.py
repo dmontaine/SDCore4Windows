@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-tlsread-units.py - the READ of a TLS socket gives up at the caller's timeout (S.73 item 2, the silent server), as invariants read off the source.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-tlsread-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-tlsread-units.py
   python3 .../test-tlsread-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it could not run.  Written 20 Oct 26.

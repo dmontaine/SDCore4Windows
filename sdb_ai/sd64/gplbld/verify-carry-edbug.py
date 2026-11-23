@@ -3,7 +3,7 @@
 # sandbox-edbug.py - three defects the openQM release notes list for the ED editor and the debugger, tested to be
 # ABSENT from SD (sheet items 264, 327 and 335).  No install, no sudo.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-edbug.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-edbug.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py.  With --build it is built first from THIS tree (it must be empty
 # or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.

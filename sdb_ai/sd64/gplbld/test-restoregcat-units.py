@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-restoregcat-units.py - RESTORE.ACCOUNT looks a call name up in the global catalogue in LOWER case.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-restoregcat-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-restoregcat-units.py
   python3 .../test-restoregcat-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.  Written 18 Oct 26.

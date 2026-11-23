@@ -7,8 +7,8 @@
 # holds the lock, vb.openseq treats that as an open file (os.st = 0), and the client's close releases it; sandbox-qmclient.py row P9b holds it - and the short programs that end at once (acc_archive, acc_os_bakdir, netcred, netdefs, locktracer, importdata, ...), whose variable goes with them.
 # FREE CHECK: the BASIC read as text; no install, no sd.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-openseq-else-units.py
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-openseq-else-units.py --selftest
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-openseq-else-units.py
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-openseq-else-units.py --selftest
 import os
 import re
 import sys

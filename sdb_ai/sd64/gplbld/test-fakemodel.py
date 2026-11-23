@@ -4,7 +4,7 @@
 # test-aihelper-units.py imports by path (named test-* so that assert-current exempts it and the free tier, which runs test-*-units only, does not run it).
 # No sd, no elevation, no network but the loopback; the openssl command line (MSYS2's UCRT64 one when PATH has none) makes the throw-away certificates.
 #
-#   python C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\test-fakemodel.py --selftest
+#   python C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\test-fakemodel.py --selftest
 #
 # A TLS server on 127.0.0.1 speaking the two wire formats sd-ai speaks, by the path it is asked at:
 #   /v1/messages              the Anthropic Messages API       (header x-api-key, anthropic-version)

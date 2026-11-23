@@ -4,7 +4,7 @@
 #                      function called by READ, WRITE, DELETE and CLEARFILE, the %header% file that holds it, and what must NOT
 #                      call it.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-dirtrig.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-dirtrig.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py (needs no install, no sudo).  With --build it is built first from THIS tree (it
 # must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.

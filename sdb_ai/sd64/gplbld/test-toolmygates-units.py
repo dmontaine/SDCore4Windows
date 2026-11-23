@@ -2,7 +2,7 @@
 """test-toolmygates-units.py - the account holder's gate page, TOOL.GATES in every account's VOC (`gpl.bp/tool_mygates`), as invariants read off the source (S.75 A2, the user audience).
 Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolmygates-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolmygates-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the page's BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY WHAT A SESSION SEES***: that is
 `sandbox-tool-mygates.py` (ordinary sessions on a private SD, the disk as the evidence).  What a text check is for: the properties that make the page SAFE FOR EVERYONE and TRUE - it asks for

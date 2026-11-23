@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-failaudit-units.py - a refused API login is audited BEFORE the failed-credential delay (S.60).
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-failaudit-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-failaudit-units.py
   python3 .../test-failaudit-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.  Written 4 Oct 26.

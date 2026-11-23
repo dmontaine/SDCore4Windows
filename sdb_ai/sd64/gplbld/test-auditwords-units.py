@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-auditwords-units.py - every word SD writes to the audit trail is lower case.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-auditwords-units.py
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-auditwords-units.py
     python3 .../test-auditwords-units.py --selftest        (mutants: each breakage must be caught)
     python3 .../test-auditwords-units.py --root DIR        (a gpl.bp directory to read instead)
 

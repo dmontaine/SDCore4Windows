@@ -2,7 +2,7 @@
 #
 # test-ai-units.py - the AI integration read off its source as TEXT (from Linux b1d496df, S.69 step 2; RELEASE_1.1 246).  Free: no sd, no install, no elevation.
 #
-#   python C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\test-ai-units.py [--selftest [--from=N]]
+#   python C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\test-ai-units.py [--selftest [--from=N]]
 #
 # What a behaviour test cannot say: that a rule is still WRITTEN where it must be.  Exit 0 every row passed, 1 a row failed.   --selftest   each MUTANT (a rule
 # taken out of a copy of the text, in memory) must turn a row red; --from=N runs the mutants from number N on.  test-aihelper-units.py RUNS the Windows parts.

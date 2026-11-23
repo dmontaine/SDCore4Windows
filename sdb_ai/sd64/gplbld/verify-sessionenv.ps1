@@ -18,7 +18,7 @@
     Exit 0 every check passed, 1 a check failed, 2 it could not run.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\verify-sessionenv.ps1 -Prefix sdenvb322
+    powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\verify-sessionenv.ps1 -Prefix sdenvb322
 #>
 
 [CmdletBinding()]

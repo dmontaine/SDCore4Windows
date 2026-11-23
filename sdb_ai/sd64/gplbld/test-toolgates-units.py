@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-toolgates-units.py - the gate matrix, TOOL.GATES (`gpl.bp/tool_gates`), as invariants read off the source (S.75, administrator app A2).  Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolgates-units.py [--selftest [--from=N]]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolgates-units.py [--selftest [--from=N]]
 
 TG18-TG20 (2 Nov 26, S.88 p5-U2b P10): Ctrl-Q asks before it drops a queue; the first of their mutants is M_P10 (39 since S.62 LC3 added two before it), so --selftest --from=39 runs only those.
 TG21 (17 Nov 26, from Linux 1557e270, S.62 LC3): the key sign-in column; TG15 holds the new layout (name 10 wide, 'susp' with no space before it) for nineteen cells.

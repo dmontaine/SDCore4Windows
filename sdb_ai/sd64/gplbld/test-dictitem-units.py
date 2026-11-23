@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """test-dictitem-units.py - S.90 stage 1: the dictionary item engine !dict_item, read off the source as text.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-dictitem-units.py
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-dictitem-units.py --selftest
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-dictitem-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-dictitem-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it could not run.
 

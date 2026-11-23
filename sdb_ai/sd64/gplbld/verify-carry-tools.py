@@ -3,7 +3,7 @@
 # sandbox-tools.py - the stand-alone file tools sdidx and sdfix, run on scratch copies of a real indexed hashed file.
 #                    No install, no sudo.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-tools.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-tools.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py.  With --build it is built first from THIS tree (it must be empty or
 # absent); without it <dir> must already be built, which is how the same script is run against an OLD tree to prove it

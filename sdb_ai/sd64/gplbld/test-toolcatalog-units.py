@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-toolcatalog-units.py - the programs page, TOOL.CATALOG (`gpl.bp/tool_catalog`), as invariants read off the source (S.75, development app DV6).  Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolcatalog-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolcatalog-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the page's BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT A PROGRAM IS COMPILED, CATALOGUED OR TAKEN OUT***: that is
 `sandbox-tool-catalog.py` (a private SD, ordinary sessions on a pseudo-terminal, the disk and a separate session as the evidence).  What a text check is for: the properties that make the page a FRONT

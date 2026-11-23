@@ -3,7 +3,7 @@
 # sandbox-bcomp-a1.py - 1.2-0 bundle A-1 (openQM features after 2.6.6, BCOMP only): does the compiler do
 #                       what each item says?  Needs no install, no sudo.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-bcomp-a1.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-bcomp-a1.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py (a private SD built from a tree, its own IPC keys, never the
 # live system).  With --build the sandbox is built first from THIS tree and <dir> must be empty or absent.

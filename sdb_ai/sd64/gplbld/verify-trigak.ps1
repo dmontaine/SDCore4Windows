@@ -51,7 +51,7 @@
     Exit 0 every check passed, 1 a check failed, 2 the test could not run.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\verify-trigak.ps1
+    powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\verify-trigak.ps1
 #>
 
 [CmdletBinding()]

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """test-ideos-units.py - the IDE MAKES operating system files (the editor merge's stage E2, 30 Oct 2026), read off the source as text.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-ideos-units.py
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-ideos-units.py --selftest
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-ideos-units.py --selftest --from=N      (only the mutants from number N on; N is printed by --selftest)
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-ideos-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-ideos-units.py --selftest
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-ideos-units.py --selftest --from=N      (only the mutants from number N on; N is printed by --selftest)
 
 No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it could not run.
 

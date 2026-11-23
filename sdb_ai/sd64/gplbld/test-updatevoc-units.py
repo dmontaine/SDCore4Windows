@@ -6,8 +6,8 @@
 # installer runs one on every install) wrote the holder's page over the administrator's.  gpl.bp/login's update.voc now reads VOC_TEMPLATE when the VOC it updates is the
 # SDSYS account's own (mode 2 or 4, run by the administrator in the sdsys account) and NEWVOC for every other account.  FREE CHECK: the source read as text; no install, no sd.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-updatevoc-units.py
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-updatevoc-units.py --selftest      (mutants of login, each must fail its named check)
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-updatevoc-units.py
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-updatevoc-units.py --selftest      (mutants of login, each must fail its named check)
 #
 #   V1  the premise: the template and NEWVOC hold tool.gates with DIFFERENT targets ($tool_gates / $tool_mygates); without that difference the rest guards nothing
 #   V2  the SDSYS account's own update: update.sdsys.voc is set from `@who = 'sdsys'` AND the administrator test, in the mode 2 / 4 branch, before that branch's `gosub update.voc`

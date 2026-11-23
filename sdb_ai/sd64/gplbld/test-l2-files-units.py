@@ -3,7 +3,7 @@
 `tool_catalog`, `tool_test`, `tool_bulk`, `tool_query`) laid out by the layout service ($tk_layout), read off the source as text and held against the service's MODEL.  Free: no install,
 no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-l2-files-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-l2-files-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  ***IT RUNS NO SD, SO IT CANNOT SAY THAT A PAGE IS DRAWN AT ITS NEW SIZE***: that is `sandbox-l2-files.py` (written, not run when this check was made).  What it holds:
 

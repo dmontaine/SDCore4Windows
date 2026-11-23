@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-dbgmain-units.py - the debugger's full-screen display on a terminal with no alternate screen (S.98 H3), read off the source as text.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-dbgmain-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-dbgmain-units.py
   python3 .../test-dbgmain-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.  Written 2 Nov 26.

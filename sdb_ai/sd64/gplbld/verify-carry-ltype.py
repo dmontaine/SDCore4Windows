@@ -4,7 +4,7 @@
 #                    links to D and I items (and the refusal of a link to an A item), a link's file expression, and what a link says when it is wrong.
 #                    No install, no sudo.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-ltype.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-ltype.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py (needs a `make`d bin/sd).  With --build it is built first from THIS tree
 # (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.

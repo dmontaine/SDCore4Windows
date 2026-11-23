@@ -2,8 +2,8 @@
 # test-widgetmove-units.py - S.88 p3.3a (2 Nov 2026): moving and sizing a widget that a form already has, and the IDE's resize that uses it.  FREE CHECK, text only (comment lines and
 # ;* tails removed), no install, no sudo, no sd.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-widgetmove-units.py
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-widgetmove-units.py --selftest      (mutants; each must turn a row red)
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-widgetmove-units.py
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-widgetmove-units.py --selftest      (mutants; each must turn a row red)
 #
 #   W0  NULL CASE: every file and routine read here is there
 #   W1  $sl_widget_move is $internal, takes six arguments, decides every refusal (not a form, no widget, a place or size that is not a number, a kind that takes no

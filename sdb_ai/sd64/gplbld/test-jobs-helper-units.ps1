@@ -1,6 +1,6 @@
 # test-jobs-helper-units.ps1 - drive sd-jobs.ps1, the job helper of SET.JOB (the administrator's scheduled jobs on Task Scheduler).
 #
-#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\test-jobs-helper-units.ps1
+#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\test-jobs-helper-units.ps1
 #
 # 10 Nov 26 Windows port - for Linux's test-jobs-elevate-units.py (S.102 stages 2 to 4), carry area 14.  Linux cuts the job functions out of sd-elevate and
 # runs them on scratch files; this does the same with sd-jobs.ps1's "# BEGIN jobs_functions" region, then runs the whole script in its dry run

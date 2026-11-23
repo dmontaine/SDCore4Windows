@@ -2,7 +2,7 @@
 # this computer, so it meets the local door (12992, "SDSYS may use the API from this computer only ...") and NEVER remote.sdsys api's
 # list (10174, "SDSYS may be reached through the API from another computer only when ...").  apisrvr's K$OWN.ADDR test.
 #
-#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\probe-344ownaddr.ps1
+#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\probe-344ownaddr.ps1
 #
 # AN ORDINARY, UNELEVATED PowerShell on the HOST (SD Core installed and current, the API open to the network).  It asks for SDSYS's SD
 # password (Read-Host, no echo; only its length is printed): the door is decided AFTER SCRAM proves it, so a wrong password measures

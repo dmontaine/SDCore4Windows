@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-examples-units.py - the example programs (examples.bp in every account, S.261) as invariants read off the source.  Free: no install, no elevation, no sd.
 
-    python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-examples-units.py [--selftest]
+    python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-examples-units.py [--selftest]
 
 16 Nov 2026, Windows port of Linux's guard of the same name (cc7e41c6, 657da3de).  The owner, 17 Nov 2026: "there should be a examples.bp file available
 to all users that contains those programs and a set of training programs typical for a Computer Science 101 course"; asked how every account reaches

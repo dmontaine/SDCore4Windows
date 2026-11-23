@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-toolentries-units.py - TOOL.ENTRIES, the master files page (S.96 M1a-M2), as invariants read off the source.
 
-  python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-toolentries-units.py
+  python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-toolentries-units.py
   python .../test-toolentries-units.py --selftest
   python .../test-toolentries-units.py --selftest --from=113     (only the mutants from M_FIELD1 on: field 1 on one record only, 3 Nov 26; T24b)
   python .../test-toolentries-units.py --selftest --from=85      (only the mutants from M_GLOBAL on: G, the global change, and U, its undo, 3 Nov 26; T24-T28)

@@ -5,7 +5,7 @@
 #   The disk sort records (gplsrc/op_sort.c) counted their bytes in int16_t, so an item or a key of 32 kb or more wrapped
 #   when SORTMEM was exceeded and the sort spilled to disk.  The lengths are int32_t now, every field padded to four bytes.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-sortwide.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-sortwide.py <dir> [--build]
 #
 # No install, no sudo.  <dir> is a sandbox made by sandbox-fromtree.py (needs a `make`d bin/sd).  With --build it is built first
 # from THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.

@@ -414,7 +414,7 @@ if ($Snapshot) {
     # DOWNGRADE, since sdout still holds W1.0-0.  Both are computed now: the NEWEST
     # sd-setup-*.exe in the caller's sdout, and this script's own full path.
     # 27 Sep 26 - sdout moved with cycle.ps1's $Out to Projects\Project_Installers\sdout.
-    $sdoutDir = Join-Path $env:USERPROFILE 'Projects\Project_Installers\sdout'
+    $sdoutDir = Join-Path $env:USERPROFILE 'SDCoreProject\Project_Installers\sdout'
     $newest = Get-ChildItem -LiteralPath $sdoutDir -Filter 'sd-setup-*.exe' `
                   -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if ($newest) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-toolbulk-units.py - the bulk update page, TOOL.BULK (`gpl.bp/tool_bulk`), as invariants read off the source (S.75, development app DV5).  Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolbulk-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolbulk-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the page's BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT A RECORD WAS CHANGED, SKIPPED OR PUT BACK***: that is
 `sandbox-tool-bulk.py` (a private SD, ordinary sessions on a pseudo-terminal, the records read back by a SEPARATE session as the evidence).  What a text check is for: the properties that

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-tk-keys-units.py - the toolkit's action registry ($tk_keys, tk.h's key table) held as TEXT (S.88 phase 3.9, steps S0 to S2).
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-tk-keys-units.py [--s0] [--selftest [--from=N]]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-tk-keys-units.py [--s0] [--selftest [--from=N]]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the BASIC of the 24 programs that build a key table (`call $tk_keys('add', ...)`), parses all of their
 rows, and holds the rules a hand edit breaks unnoticed: seven arguments at every call, no key bound to two actions in one pane, one label and one key

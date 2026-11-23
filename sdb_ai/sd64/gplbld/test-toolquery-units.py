@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-toolquery-units.py - the query and report builder, TOOL.QUERY (`gpl.bp/tool_query`), as invariants read off the source (S.75, development app DV4).  Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolquery-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolquery-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the page's BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT A SENTENCE IS REFUSED OR THAT A QUERY IS SAVED***: that is
 `sandbox-tool-query.py` (a private SD, ordinary sessions on a pseudo-terminal, the disk and a separate session as the evidence, and injection attempts whose side effects are looked for on the disk).

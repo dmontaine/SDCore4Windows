@@ -2,8 +2,8 @@
 """test-tooljobs-units.py - the scheduled jobs page's administrator half (S.102 stage 4): TOOL.JOBS's Jobs view (`gpl.bp/tool_jobs`) and its verb SET.JOB (`gpl.bp/set_job`), as
 invariants read off the source.  Free: no install, no elevation, no sd.
 
-    python C:\\Users\\Don\\Projects\\SDCore4Windows\\sdb_ai\\sd64\\gplbld\\test-tooljobs-units.py
-    python C:\\Users\\Don\\Projects\\SDCore4Windows\\sdb_ai\\sd64\\gplbld\\test-tooljobs-units.py --selftest [--from=N]
+    python C:\\Users\\Don\\SDCoreProject\\SDCore4Windows\\sdb_ai\\sd64\\gplbld\\test-tooljobs-units.py
+    python C:\\Users\\Don\\SDCoreProject\\SDCore4Windows\\sdb_ai\\sd64\\gplbld\\test-tooljobs-units.py --selftest [--from=N]
 
 10 Nov 26 Windows port - from Linux d049d8bb (S.102 stage 4), carry area 14.  The checks are Linux's; the helper is gplbld/sd-jobs.ps1 (Task Scheduler) in place of
 sd-elevate (systemd), set.job reaches it through !ps_script_out (no os.execute at all: V1, V15), its shell lines are the words after the helper's path (hargs: V3), its

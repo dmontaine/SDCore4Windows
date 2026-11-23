@@ -24,7 +24,7 @@
     ***WHAT A ROW MEANS HERE.***  The suites were written against a Linux sandbox
     that plays SDSYS.  A row that depends on that, or on a Linux path, a shell
     command or an sd.conf location, can fail on Windows without the feature being
-    wrong.  Linux's expected-output lists (P:\sdcore-mail\parity\linux-core-carry-18oct\expected)
+    wrong.  Linux's expected-output lists (P:\SDCoreProject\sdcore-mail\parity\linux-core-carry-18oct\expected)
     mark such rows "Linux-only"; $Known below names the rows judged N/A on
     Windows, each with its reason, and they are printed as N/A, never as PASS.
     The first run on a fresh install is expected to find some; add them, with the
@@ -64,7 +64,7 @@
     Exit 0 every suite passed, 1 a row failed, 2 a suite could not run.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\verify-carry.ps1 -Suite func-b4,conv-b3
+    powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\verify-carry.ps1 -Suite func-b4,conv-b3
 #>
 
 [CmdletBinding()]

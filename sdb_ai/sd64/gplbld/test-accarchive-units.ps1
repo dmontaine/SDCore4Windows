@@ -1,6 +1,6 @@
 # test-accarchive-units.ps1 - drive sd-account-archive.ps1's functions on scratch trees.
 #
-#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\test-accarchive-units.ps1
+#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\test-accarchive-units.ps1
 #
 # ORDINARY UNELEVATED PROMPT.  No install, no SD, no elevation.  Exit 0 all
 # passed, 1 something failed, 2 could not set up.  Everything it makes is under

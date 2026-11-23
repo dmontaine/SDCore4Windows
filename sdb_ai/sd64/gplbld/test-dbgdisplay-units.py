@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-dbgdisplay-units.py - the debugger's full-screen display in the IDE's style (S.98 H1), read off the source as text.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-dbgdisplay-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-dbgdisplay-units.py
   python3 .../test-dbgdisplay-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.  Written 1 Nov 26.

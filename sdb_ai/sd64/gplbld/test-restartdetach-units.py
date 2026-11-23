@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-restartdetach-units.py - RELEASE_1.1 340: a restart asked for from inside SD is handed to Task Scheduler.
 
-    python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-restartdetach-units.py [--selftest]
+    python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-restartdetach-units.py [--selftest]
 
 18 Nov 2026 01:25: remote.api on's restart stopped SD and never started it - restart-sd.ps1 ran as a child of (or in the helper tied
 to) the session its own stop ends.  FREE: reads two files.  Exit 0 every check passed, 1 a check failed, 2 it could not run.

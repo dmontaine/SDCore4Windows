@@ -3,7 +3,7 @@
 # sandbox-winsize.py - the size SD gives a display: the default for a session with no terminal, TERM DEFAULT, TERM w,h and
 # the sign-on answer, and what a real terminal still decides for itself.  No install, no sudo.
 #
-#   SDBOX_KEYSET=n python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-winsize.py <dir> [--build]
+#   SDBOX_KEYSET=n python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-winsize.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py.  With --build it is built first from THIS tree (it must be empty
 # or absent); without it <dir> must already be built, which is how the same script is run against an OLD tree to

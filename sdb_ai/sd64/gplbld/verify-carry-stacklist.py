@@ -3,7 +3,7 @@
 # sandbox-stacklist.py - 1.2-0 bundle B-5, sheet 61: EXECUTE ... STACKLIST keeps the default select list (list 0) as it was and
 #                        puts it back when the command returns.  No install, no sudo.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-stacklist.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-stacklist.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py (needs a `make`d bin/sd).  With --build it is built first from
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.

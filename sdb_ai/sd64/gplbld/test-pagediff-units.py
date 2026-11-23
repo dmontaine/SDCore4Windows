@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-pagediff-units.py - the invariants that keep a page of the toolkit from being left stale when it draws only what changed (S.113).
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-pagediff-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-pagediff-units.py
   python3 .../test-pagediff-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.  Written 3 Nov 26 (S.113, track F).

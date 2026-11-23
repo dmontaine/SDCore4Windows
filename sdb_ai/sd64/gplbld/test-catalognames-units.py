@@ -3,7 +3,7 @@
 # test-catalognames-units.py - no two programs in sdsys/gpl.bp are catalogued under the same name, and every function bcomp
 # knows by name is catalogued by exactly one program.  Read off the source.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-catalognames-units.py [--selftest]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-catalognames-units.py [--selftest]
 #
 # No sudo, no install, no sd.  Exit 0 every check held, 1 one did not.  --selftest plants a duplicate in a copy of the
 # sources and expects it to be caught.

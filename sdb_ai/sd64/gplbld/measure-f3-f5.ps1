@@ -1,7 +1,7 @@
 # measure-f3-f5.ps1 - READ-ONLY measurement for RELEASE_1.1 176 (Linux security evaluation F3 and F5).
 #
 # Run in an ELEVATED PowerShell (it reads ACLs that an ordinary user is refused):
-#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\measure-f3-f5.ps1
+#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\measure-f3-f5.ps1
 #
 # It changes nothing: no ACL, firewall rule, setting or file is written, except its own log under
 # %LOCALAPPDATA%\SD-verify. It does not start or stop SD.

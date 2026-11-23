@@ -3,7 +3,7 @@
 # test-clientheaders-units.py - the client library's language headers all declare the functions the library has, with the
 # parameters it has.  Read off the source.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-clientheaders-units.py [--selftest] [--lib <dir with sdclilib.so>]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-clientheaders-units.py [--selftest] [--lib <dir with sdclilib.so>]
 #
 # No sudo, no install, no sd.  Exit 0 every check held, 1 one did not, 2 it could not run.  --selftest plants faults in a copy
 # of the headers (a function taken out of each language, a parameter added, a function the library does not have, a library
@@ -17,7 +17,7 @@
 # 19 Nov 26 Windows port - RELEASE_1.1 351 (Linux S.262, c89f3864): the GPL client library (gplsrc/sdclilib/sdclilib.c and .h) is gone;
 #               the one SD ships is the clean-room library (binaries only).  The authority is now syscom/sdclilib.h, the C header SD ships,
 #               held against the functions the clean-room sdclilib.dll exports (objdump -p; SD_CLIENT_LIB, else the newest set under
-#               P:\git-private\sdclientlib-binaries, else --lib DIR; without one row 1 says it was skipped), and the SV_ status values
+#               P:\SDCoreProject\git-private\sdclientlib-binaries, else --lib DIR; without one row 1 says it was skipped), and the SV_ status values
 #               against a fixed table of the eight.  The row that compared syscom/sdclilib.h with the GPL header, and the mutant that added
 #               a function to the GPL source, went with them.  Row 9 loads sdclient.py against the clean-room DLL.
 # 22 Nov 26 Windows port - RELEASE_1.1 362: with no P:, the set a development bundle carries in Projects\Project_Other\sdclientlib-binaries.
@@ -71,7 +71,7 @@ SV = {"SV_OK": 0, "SV_ON_ERROR": 1, "SV_ELSE": 2, "SV_ERROR": 3, "SV_LOCKED": 4,
 
 
 def cleanroom_lib():
-    """The clean-room sdclilib.dll: SD_CLIENT_LIB (the DLL or its folder), else the newest set under P:\\git-private."""
+    """The clean-room sdclilib.dll: SD_CLIENT_LIB (the DLL or its folder), else the newest set under P:\\SDCoreProject\\git-private."""
     env = os.environ.get("SD_CLIENT_LIB")
     if env:
         return os.path.join(env, "sdclilib.dll") if os.path.isdir(env) else env

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """test-recovery-units.py - the editors' recovery copy (S.88, plan 2.9, defect D2; the owner's answer to Q2 of 28 Oct 2026: "Build it, ship it off"), read off the source as text.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-recovery-units.py
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-recovery-units.py --selftest
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-recovery-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-recovery-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it could not run.
 

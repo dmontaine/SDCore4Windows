@@ -2,8 +2,8 @@
 #
 # test-install-retiredconf.sh - installsdcore.sh takes the sd.conf parameters SD no longer has out of a restored sd.conf (S.87, 27 Oct 2026).
 #
-#   bash /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-install-retiredconf.sh
-#   bash /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-install-retiredconf.sh --selftest
+#   bash /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-install-retiredconf.sh
+#   bash /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-install-retiredconf.sh --selftest
 #   INSTALLER=<a copy of the installer> bash .../test-install-retiredconf.sh      (what --selftest uses)
 #
 # FREE CHECK: no sudo, no install, no sd.  Exit 0 every row passed, 1 a row failed, 2 it could not run (a missing

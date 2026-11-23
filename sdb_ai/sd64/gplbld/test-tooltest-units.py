@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-tooltest-units.py - the test runner, TOOL.TEST (`gpl.bp/tool_test`), as invariants read off the source (S.75, development app DV7).  Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-tooltest-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-tooltest-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the page's BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT A TEST IS RUN, THAT A VERDICT IS RIGHT OR THAT
 CTRL-C STOPS ONE***: that is `sandbox-tool-test.py` (a private SD, ordinary sessions on a pseudo-terminal, the count of runs in a data file and an independent run as the evidence).

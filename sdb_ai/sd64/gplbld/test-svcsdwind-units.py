@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-svcsdwind-units.py - RELEASE_1.1 341: the SD service counts only ITS OWN sdwind.exe.
 
-    python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-svcsdwind-units.py [--selftest]
+    python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-svcsdwind-units.py [--selftest]
 
 On 18 Nov 2026 01:31 "sd -start" exited 1 and the service reported RUNNING because the only sdwind.exe on the machine was SD Core
 Solo's: sdwind_running() matched the process NAME.  It now counts a process only when its image is the sdwind.exe beside the service

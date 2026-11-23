@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-sortparse-units.py - the key being inserted into a sort is read as a number ONCE per level, not at every comparison.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-sortparse-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-sortparse-units.py
   python3 .../test-sortparse-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-idekeys-units.py - the IDE's key map and the memo's editing keys (S.88 Phase 4, the owner's settled keys of 20 Oct 2026, plan decisions D28, D31, D32, D33), as invariants read off the source.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-idekeys-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-idekeys-units.py
   python3 .../test-idekeys-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it could not run.

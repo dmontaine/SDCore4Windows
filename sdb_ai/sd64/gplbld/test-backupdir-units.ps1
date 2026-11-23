@@ -1,6 +1,6 @@
 # test-backupdir-units.ps1 - drive sd-backupdir.ps1: the saved backup directory in sd.conf.
 #
-#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4WindowsSolo\sdb_ai\sd64\gplbld\test-backupdir-units.ps1
+#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4WindowsSolo\sdb_ai\sd64\gplbld\test-backupdir-units.ps1
 #
 # ORDINARY UNELEVATED PROMPT.  No install, no SD, no elevation.  Exit 0 all passed, 1 something
 # failed, 2 could not set up.  Everything it makes is under %TEMP%\test-backupdir-<id> and is

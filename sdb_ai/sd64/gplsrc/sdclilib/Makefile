@@ -4,7 +4,7 @@
 #   room versions of the clients, there is probably no need for the versions compiled during the build"; 19 Nov: "do it".
 #   The GPL client library that this directory built (sdclilib.c, sd_tls.c, sd_pin.c, qmcompat.c and their headers, the
 #   four DLLs, sd-connect.exe) is gone.  What every SD Core ships is the clean-room library, written without that source so
-#   that a commercial program may link to it; its binaries live outside every repository (P:\git-private\
+#   that a commercial program may link to it; its binaries live outside every repository (P:\SDCoreProject\git-private\
 #   sdclientlib-binaries\<commit>-<date>), and gplbld\stage-clients.ps1 puts them beside the installer.
 #   The probes below are this project's own test programs; they are compiled against the SHIPPED header
 #   (sdsys/syscom/sdclilib.h, the one a customer builds with) and linked against the clean-room import library, so a probe
@@ -17,7 +17,7 @@ ifeq ($(origin CC),default)
 CC := gcc
 endif
 # The newest set by its COMMIT.txt's time, not by name: a set's name starts with its commit hash, which does not sort by date.
-CLIENTLIB ?= $(patsubst %/COMMIT.txt,%/win64,$(firstword $(shell ls -t /p/git-private/sdclientlib-binaries/*/COMMIT.txt 2>/dev/null)))
+CLIENTLIB ?= $(patsubst %/COMMIT.txt,%/win64,$(firstword $(shell ls -t /p/SDCoreProject/git-private/sdclientlib-binaries/*/COMMIT.txt 2>/dev/null)))
 CLIENTHDR := ../../sdsys/syscom
 PROBEFLAGS = -std=c11 -Wall -Wextra -Wpedantic -I$(CLIENTHDR)
 PROBELIBS  = -L"$(CLIENTLIB)" -lsdclilib -lws2_32
@@ -38,7 +38,7 @@ all: clientlib $(LOCALTEST) $(SDSYSPROBE) localtest/remote-connect-test.exe
 clientlib:
 	@if [ -z "$(CLIENTLIB)" ] || [ ! -f "$(CLIENTLIB)/libsdclilib.dll.a" ]; then \
 	  echo "  no clean-room client library (CLIENTLIB='$(CLIENTLIB)'): the API probes are not built"; \
-	  echo "  set CLIENTLIB to a set's win64 folder (P:\\git-private\\sdclientlib-binaries\\<set>\\win64)"; \
+	  echo "  set CLIENTLIB to a set's win64 folder (P:\\SDCoreProject\\git-private\\sdclientlib-binaries\\<set>\\win64)"; \
 	  exit 3; fi
 	@echo "  API probes against the clean-room library in $(CLIENTLIB) and $(CLIENTHDR)/sdclilib.h"
 

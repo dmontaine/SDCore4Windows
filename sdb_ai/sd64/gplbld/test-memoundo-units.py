@@ -13,8 +13,8 @@
 # and the OLD encoding (the control) is not - for a large share of them.
 # FREE CHECK: no install, no sd.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-memoundo-units.py
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-memoundo-units.py --selftest
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-memoundo-units.py
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-memoundo-units.py --selftest
 import os
 import random
 import re

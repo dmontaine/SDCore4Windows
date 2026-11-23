@@ -30,8 +30,8 @@
 # Overrides for testing: SDCORE_MAIL_OUT (the outbox), SDCORE_MAIL_DONE, SDCORE_MAIL_ATTEMPTS.
 
 set -u
-OUT="${SDCORE_MAIL_OUT:-/p/sdcore-mail/to-linux}"
-DONE="${SDCORE_MAIL_DONE:-/p/sdcore-mail/done}"
+OUT="${SDCORE_MAIL_OUT:-/p/SDCoreProject/sdcore-mail/to-linux}"
+DONE="${SDCORE_MAIL_DONE:-/p/SDCoreProject/sdcore-mail/done}"
 ATTEMPTS="${SDCORE_MAIL_ATTEMPTS:-4}"
 
 cmd="${1:-}"

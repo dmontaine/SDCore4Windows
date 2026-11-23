@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-pipefds-units.py - a child SD detaches with daemon() gives back a pipe on fds 0-2 (S.241).
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-pipefds-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-pipefds-units.py
   python3 .../test-pipefds-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.  Written 14 Nov 26.

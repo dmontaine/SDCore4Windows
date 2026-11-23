@@ -2,8 +2,8 @@
 # test-ipc-units.py - W.11 F10 (security-model evaluation, 24 Oct 2026): what a process takes from the file $ipc.  FREE CHECK, text only (comments removed), no
 # install, no sudo, no sd.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-ipc-units.py
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-ipc-units.py --selftest      (mutants: each must be caught by the row it names)
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-ipc-units.py
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-ipc-units.py --selftest      (mutants: each must be caught by the row it names)
 #
 # $ipc is a hashed file in the system directory that every SD user's process writes (its %0 and %1 are sdsys:sdusers 0775), so an SD user with an operating-system
 # shell can write it.  Every program that names it was read; each is one of these (the INVENTORY below, which a program not in it fails):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-sftp-units.py - S.242 stage 3: the file transfer server inside sd, read as TEXT.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-sftp-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-sftp-units.py [--selftest]
 
 No sudo, no install, no sd.  It reads gplsrc/sd_sftp.c and .h, the places that wire it in (sd.c, kernel.c, kernel.h, sysseg.h,
 keys.h, op_kernel.c, gpl.src, gpl.bp/int$keys.h), the command processor gpl.bp/xfersrv, gplbld/ssh-forcecommand.sh and the

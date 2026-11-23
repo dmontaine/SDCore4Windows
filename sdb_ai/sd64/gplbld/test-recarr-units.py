@@ -12,8 +12,8 @@
 #   - 28 Oct 26 (the editor merge, stage B): the token form follows the tab's KIND (dict, voc, data), never a program's (source), and the kind is set before the mode (I11, I13, I14).
 # FREE CHECK: no install, no sd.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-recarr-units.py
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-recarr-units.py --selftest
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-recarr-units.py
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-recarr-units.py --selftest
 import os
 import re
 import sys

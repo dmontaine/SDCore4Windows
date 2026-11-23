@@ -1,6 +1,6 @@
 # test-remoteadmin-units.ps1 - remote administration over ssh (RELEASE_1.1 202): the broker's checks, the sshd arm, the pipe's ends
 #
-#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\test-remoteadmin-units.ps1 [-SelfTest]
+#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\test-remoteadmin-units.ps1 [-SelfTest]
 #
 # 13 Nov 26 Windows port - written for RELEASE_1.1 202 (Linux S.106's remote.sdsys, the Windows form).  Free: no install, no elevation, no sd,
 # no pipe, no Task Scheduler, no sshd.

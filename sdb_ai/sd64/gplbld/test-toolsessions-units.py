@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-toolsessions-units.py - the sessions and locks page, TOOL.SESSIONS (`gpl.bp/tool_sessions`), as invariants read off the source (S.75, administrator app A4).  Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolsessions-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolsessions-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the page's BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT A SESSION ENDS OR THAT A LOCK GOES***: that is
 `sandbox-tool-sessions.py` (a private SD, live sessions holding locks, the real logout and unlock verbs, the disk and the user table as the evidence).  What a text check is for: the

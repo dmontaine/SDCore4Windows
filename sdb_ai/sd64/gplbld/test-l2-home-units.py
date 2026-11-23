@@ -2,7 +2,7 @@
 """test-l2-home-units.py - the home screen on the toolkit's layout service (S.88 L2, ~/Documents/Audits/TUI/Opus_TUI_Plan.txt section 12 and 3.1), read off the source as text,
 with a MODEL of its geometry.  Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-l2-home-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-l2-home-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  ***IT RUNS NO SD, SO IT CANNOT SAY THAT THE PAGE IS DRAWN WHERE THE MODEL PUTS IT***: that is `sandbox-l2-home.py` (a private SD on a
 pseudo-terminal: the page at 140 by 43 compared cell for cell with the page as it was before L2, then at 180 by 55 and 200 by 60, grown and shrunk).  What it holds:

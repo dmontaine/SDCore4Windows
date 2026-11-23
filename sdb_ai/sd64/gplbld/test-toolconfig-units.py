@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-toolconfig-units.py - TOOL.CONFIG and SET.CONFIG held to the C they describe (Windows RELEASE_1.1 218).
 
-    python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-toolconfig-units.py [--selftest]
+    python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-toolconfig-units.py [--selftest]
 
 Ordinary unelevated prompt; no install, no SD.  Exit 0 all passed, 1 a check failed, 2 a file is missing.
 

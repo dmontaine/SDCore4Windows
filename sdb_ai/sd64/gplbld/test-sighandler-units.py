@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # test-sighandler-units.py - no signal handler of the SD kernel takes a semaphore or logs (S.196, 10 Nov 2026).
 #
-#   python C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\test-sighandler-units.py
-#   python C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\test-sighandler-units.py --selftest
+#   python C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\test-sighandler-units.py
+#   python C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\test-sighandler-units.py --selftest
 #
 # 9 Nov 26 Windows port - from Linux ff779018 (S.196): the daemon is sdwind.c here, not sdlnxd.c; nothing else changes.
 #

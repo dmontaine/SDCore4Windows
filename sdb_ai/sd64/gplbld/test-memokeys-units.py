@@ -10,8 +10,8 @@
 # The behaviour on a screen is sandbox-memokeys.py's (written and run 2 Nov 26: green 11 of 11 under xterm's sequences; never run red, the keys predate it); sandbox-realkeys.py is
 # the decoding row.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-memokeys-units.py
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-memokeys-units.py --selftest
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-memokeys-units.py
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-memokeys-units.py --selftest
 import glob
 import os
 import re

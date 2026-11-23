@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-vocremoved-units.py - the VOC deletion list (S.87), as invariants.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-vocremoved-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-vocremoved-units.py
   python3 .../test-vocremoved-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.

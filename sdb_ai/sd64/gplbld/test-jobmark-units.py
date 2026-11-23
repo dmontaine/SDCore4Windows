@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # test-jobmark-units.py - the kernel's answer to "is THIS process a scheduled administrator job of SD's?" (kernel(K$JOB.MARK)).
 #
-#   python C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\test-jobmark-units.py [--selftest]
+#   python C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\test-jobmark-units.py [--selftest]
 #
 # 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  Linux's guard drives sd_jobmark.c on a cgroup file and scratch files owned
 # by the test's own uid.  Windows has no cgroup: the mark is the process TOKEN (win32jobmark.c: the local account SDSYS, a batch logon, elevated) and a claim

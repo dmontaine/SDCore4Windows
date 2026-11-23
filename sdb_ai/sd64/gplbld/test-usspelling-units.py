@@ -2,7 +2,7 @@
 #
 # test-usspelling-units.py - what SD prints is in US spelling (S.186; the owner, 9 Nov 2026: "Everything SD prints").  No install, no sudo.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-usspelling-units.py [--selftest]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-usspelling-units.py [--selftest]
 #
 # START-HISTORY:
 # 18 Nov 26 Windows port - from Linux 48161ccf (S.62, P-6046): reads sdsys/config.table too, and knows "analyses".

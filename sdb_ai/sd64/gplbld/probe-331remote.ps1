@@ -2,7 +2,7 @@
 # this host to the VM's SD Core, by scram-probe.py (TLS 1.3 + SCRAM, no SD code on the client side), and a verdict on what the VM's
 # remote.sdsys api state says must happen.  Sitting plan: .claude/vm-sitting-core-s256-20261116.md steps H1-H5.
 #
-#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\probe-331remote.ps1 -Vm <VM address> -Expect <state>
+#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\probe-331remote.ps1 -Vm <VM address> -Expect <state>
 #
 #   -Expect shut       remote.sdsys api is off (as delivered):           REFUSED with 10174's words
 #   -Expect notlisted  it is on for addresses that do not include ours:  REFUSED with 15116's words, naming the address the VM saw

@@ -3,7 +3,7 @@
 # sandbox-q5.py - QM4 gaps, the 16 Oct 26 sitting: the CLEANUP parameter, the PHANTOMS parameter, PHANTOM USER n and LOCK.TRACER.
 #                 No install, no sudo.  (RESTRICTED is in sandbox-restricted.py: a compiler change should not run these rows.)
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-q5.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-q5.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py.  With --build it is built first from THIS tree (it must be empty or
 # absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.

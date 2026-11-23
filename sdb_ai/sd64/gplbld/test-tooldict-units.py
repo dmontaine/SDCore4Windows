@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-tooldict-units.py - the dictionary page, TOOL.DICT (`gpl.bp/tool_dict`), as invariants read off the source (S.75, development app DV2).  Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-tooldict-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-tooldict-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the page's BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT AN ITEM IS WRITTEN, REFUSED, DELETED OR COMPILED***: that is
 `sandbox-tool-dict.py` (a private SD, ordinary sessions on a pseudo-terminal, the disk as the evidence).  What a text check is for: the properties that make the page a FRONT END for an account

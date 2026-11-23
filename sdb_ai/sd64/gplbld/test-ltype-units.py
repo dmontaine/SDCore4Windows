@@ -3,7 +3,7 @@
 # test-ltype-units.py - L-type dictionary links (QM4 Fixes 7) read off the sources: what $linkref can answer, that both
 # of its callers handle every answer, and the order of the steps in the I-type compiler that make a link work.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-ltype-units.py [--selftest]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-ltype-units.py [--selftest]
 #
 # No sudo, no install, no sd.  Exit 0 every check held, 1 one did not.  --selftest breaks a copy of the sources in six
 # ways and expects each to be caught by exactly the check that owns it.  It cannot say that a link works: that is

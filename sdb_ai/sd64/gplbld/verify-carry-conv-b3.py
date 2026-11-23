@@ -3,7 +3,7 @@
 # sandbox-conv-b3.py - 1.2-0 bundle B-3 (openQM features after 2.6.6, conversion codes in the kernel):
 #                      MCN- and MC/N-, MCS, MCP with a replacement character, and MT with M.  No install, no sudo.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-conv-b3.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-conv-b3.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py (its sd binary is the one `make` last built, so a C change
 # needs a make first).  With --build it is built first from THIS tree (it must be empty or absent).

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-tkstd-units.py - the keys every full-screen program has the same, and the theme kept for the person (8 Nov 26, S.179).
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-tkstd-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-tkstd-units.py
   python3 .../test-tkstd-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.

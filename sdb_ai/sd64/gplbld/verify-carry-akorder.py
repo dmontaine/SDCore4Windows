@@ -3,7 +3,7 @@
 # sandbox-akorder.py - the keys of a RIGHT JUSTIFIED index are in one total order (the empty key, numbers by value, text), BUILD.INDEX loses no id, and an index
 # made before the change keeps working.  No install, no sudo.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-akorder.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-akorder.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py.  With --build it is built first from THIS tree (it must be empty or absent); without it <dir> must already be built,
 # which is how the same script is run against an OLD tree to prove it can fail.  Exit 0 every row passed, 1 a row failed, 2 it could not run.

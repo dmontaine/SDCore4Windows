@@ -2,7 +2,7 @@
 """test-toolaudit-units.py - the audit trail page, TOOL.AUDIT (`gpl.bp/tool_audit`), and its reader $AUDIT_READ (`gpl.bp/audit_read`), as invariants read off the source (S.75, administrator
 app A5).  Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolaudit-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolaudit-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the two programs' BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT THE PAGE SHOWS THE FILE'S LINES***: that is
 `sandbox-tool-audit.py` (a private SD, a fixture audit file of 1,500 lines, a Python reader written from the line format, and the lines the page saves read back from the disk).  What a text

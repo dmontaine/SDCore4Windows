@@ -19,7 +19,7 @@
     -Clients     a folder of client folders (Linux64, Linux64-openssl4, Windows64, bindings; never Windows32), copied to clients\.  Each must
                  hold a COMMIT.txt whose sha256 lines name every other file in it, and match them.  Windows64 comes from
                  stage-clients.ps1's output (the clean-room set) and nowhere else: its COMMIT.txt must say so, and a folder
-                 holding a qmclilib / qmclient file is refused.  P:\sdcore-mail\transfer\clients is NOT a source (its
+                 holding a qmclilib / qmclient file is refused.  P:\SDCoreProject\sdcore-mail\transfer\clients is NOT a source (its
                  Windows64 was the GPL-built library, Linux mail 2026-11-22T1010).
     -SshServer   a folder with OpenSSH-Win64-*.msi, copied to ssh-server\ (the installer installs from it when the box is ticked)
     -Python      a folder with python-*-amd64.exe, copied to python\ (the installer offers to run it)

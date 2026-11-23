@@ -47,7 +47,7 @@
     Exit 0 every suite run passed, 1 a row failed, 2 a suite could not run or the run could not start.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\verify-carry-adm.ps1 -Run a1 -Suite ospath,prof
+    powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\verify-carry-adm.ps1 -Run a1 -Suite ospath,prof
 #>
 
 [CmdletBinding()]

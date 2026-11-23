@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """test-idepath-units.py - operating system files in the IDE (the editor merge's stage E; ~/Documents/Audits/TUI/Opus_TUI_Plan.txt section 11, handoff-s88 step 4), read off the source as text.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-idepath-units.py
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-idepath-units.py --selftest
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-idepath-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-idepath-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it could not run.
 

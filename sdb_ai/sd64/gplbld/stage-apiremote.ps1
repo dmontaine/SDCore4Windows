@@ -105,7 +105,7 @@ $exe = Join-Path $cliDir 'localtest\remote-connect-test.exe'
 $srcExe = Join-Path $cliDir 'tests\remote_connect_test.c'
 # 19 Nov 26 - RELEASE_1.1 351 (Linux S.262): the DLL is the clean-room library, not built here; the newest set's win64 copy
 # (gplbld\stage-clients.ps1 checks the same sets against their COMMIT.txt).
-$sets = 'P:\git-private\sdclientlib-binaries'
+$sets = 'P:\SDCoreProject\git-private\sdclientlib-binaries'
 $set = @(Get-ChildItem -LiteralPath $sets -Directory -ErrorAction SilentlyContinue |
          Where-Object { (Test-Path -LiteralPath (Join-Path $_.FullName 'win64\sdclilib.dll')) -and (Test-Path -LiteralPath (Join-Path $_.FullName 'COMMIT.txt')) } |
          Sort-Object { (Get-Item -LiteralPath (Join-Path $_.FullName 'COMMIT.txt')).LastWriteTimeUtc })   # newest by COMMIT.txt, not by name
@@ -116,7 +116,7 @@ foreach ($f in @($exe, $dll)) {
     if (-not (Test-Path -LiteralPath $f)) {
         Bad ((Split-Path -Leaf $f) + ' is not there: ' + $f)
         Say '  The exe: run gplbld\verify-apiport.ps1, whose check-remote target builds it.'
-        Say '  The DLL: a clean-room set under P:\git-private\sdclientlib-binaries.'
+        Say '  The DLL: a clean-room set under P:\SDCoreProject\git-private\sdclientlib-binaries.'
         exit 2
     }
 }

@@ -1,6 +1,6 @@
 """test-sshseed-units.py - a FIRST install makes sdssh EMPTY; only an upgrade seeds it from sdusers.
 
-    python C:\\Users\\Don\\Projects\\SDCore4Windows\\sdb_ai\\sd64\\gplbld\\test-sshseed-units.py
+    python C:\\Users\\Don\\SDCoreProject\\SDCore4Windows\\sdb_ai\\sd64\\gplbld\\test-sshseed-units.py
 
 ORDINARY UNELEVATED PROMPT.  Reads text only; runs nothing, installs nothing.  Exit 0 all passed, 1 something failed,
 2 a file it reads is missing.

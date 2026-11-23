@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-toolfiles-units.py - the files page, TOOL.FILES (`gpl.bp/tool_files`), as invariants read off the source (S.75, development app DV1).  Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolfiles-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolfiles-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the page's BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT A FILE IS MADE, CLEARED OR DELETED***: that is
 `sandbox-tool-files.py` (a private SD, ordinary sessions on a pseudo-terminal, the disk and a separate session's count as the evidence).  What a text check is for: the properties that make

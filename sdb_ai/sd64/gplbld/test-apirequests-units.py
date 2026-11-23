@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-apirequests-units.py - the API request numbers 49 and 72 are the same in Core and Solo, as invariants read off the source.
 
-  python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-apirequests-units.py
+  python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-apirequests-units.py
   python .../test-apirequests-units.py --selftest
 
 No elevation, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.  The same file is in both Windows trees and says which one it is

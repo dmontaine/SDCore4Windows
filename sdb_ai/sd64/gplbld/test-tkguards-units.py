@@ -2,7 +2,7 @@
 """test-tkguards-units.py - the three shared guards of the toolkit that S.88 phase 2 added (`gpl.bp/tk_ownfile`, `tk_word`, `tk_brk`) and where they are called, read off the source as text.
 Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-tkguards-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-tkguards-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT A FILE IS REFUSED, THAT A KEYWORD IS REFUSED OR THAT THE BREAK
 KEY COMES BACK***: those are `sandbox-tool-query.py` section q13 (S2), `sandbox-tool-voc.py` section v7 (S4) and `sandbox-termsafe.py` section D4 (the break key), run on a private SD later.

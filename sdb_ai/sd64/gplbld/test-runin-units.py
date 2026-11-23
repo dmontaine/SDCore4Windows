@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-runin-units.py - RUN.IN, the administrator's account-scoped run, as invariants read off the source.
 
-  python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-runin-units.py
+  python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-runin-units.py
   python .../test-runin-units.py --selftest
 
 No elevation, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.  Written 3 Nov 26 for S.96 (owner, 2 Nov 2026: mechanism C, reserved for

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-tkbase-units.py - the toolkit's shared base, slice 1 (TK-0.1: the frame, the key table and the function-key row), read off the source as text.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-tkbase-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-tkbase-units.py
   python3 .../test-tkbase-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it could not run.  Written 22 Oct 2026 (S.75, plan .claude/plan-fullscreen-toolkit.md sections 2.1, 2.2, 2.12).

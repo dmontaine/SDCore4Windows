@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-semlock-units.py - a failed semaphore wait ends a process; sd -stop ends what outlives SIGTERM (Windows port of Linux S.177, 9 Nov 26).
 
-  python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-semlock-units.py
+  python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-semlock-units.py
   python .../test-semlock-units.py --selftest
 
 No elevation, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.

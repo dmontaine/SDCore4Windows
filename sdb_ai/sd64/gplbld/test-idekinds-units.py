@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """test-idekinds-units.py - the IDE's record kinds and locks (the editor merge, stage B; ~/Documents/Audits/TUI/Opus_TUI_Plan.txt section 11), read off the source as text.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-idekinds-units.py
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-idekinds-units.py --selftest
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-idekinds-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-idekinds-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it could not run.
 

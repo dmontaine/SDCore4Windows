@@ -11,8 +11,8 @@
 # Windows differs from Linux's guard in form only: no !peer_local here (APISRVR tests the peer itself), and the compiler is MSYS2's.
 # FREE CHECK: exit 2 (NO TREE) without the MSYS gcc.  It cannot say a real tunnel is refused: that is a VM row.
 #
-#   python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-ownaddr-units.py
-#   python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-ownaddr-units.py --selftest
+#   python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-ownaddr-units.py
+#   python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-ownaddr-units.py --selftest
 import os
 import re
 import subprocess

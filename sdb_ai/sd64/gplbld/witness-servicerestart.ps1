@@ -1,6 +1,6 @@
 # witness-servicerestart.ps1 - RELEASE_1.1 295: the SD service does NOT restart SD after "sd -stop", and DOES after the daemon dies.
 #
-#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\witness-servicerestart.ps1
+#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\witness-servicerestart.ps1
 #
 # ELEVATED.  It ends SD twice (every SD session on this computer ends with it) and leaves SD running at the end.  About 2 minutes.
 #   A  "sd -stop": after 25 s the service must be Stopped, no sdwind.exe, and sdsvc.log must say "exit code 0 ... not as a failure".

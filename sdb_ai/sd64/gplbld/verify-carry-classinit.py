@@ -3,7 +3,7 @@
 # sandbox-classinit.py - class modules: initial values (565), values for inherited classes (356) and MAIN (484).  No install, no
 # sudo.  QM4 Fixes items 565, 356 and 484.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-classinit.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-classinit.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py.  With --build it is built first from THIS tree (it must be empty or
 # absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.

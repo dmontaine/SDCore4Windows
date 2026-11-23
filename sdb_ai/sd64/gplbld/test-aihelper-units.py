@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-aihelper-units.py - the AI helper sd-ai.exe (gplsrc/sdai, native C), BUILT AND RUN.  RELEASE_1.1 246, 13 Nov 2026.
 
-  python C:\\Users\\Don\\Projects\\SDCore4Windows\\sdb_ai\\sd64\\gplbld\\test-aihelper-units.py [--selftest [--from=N]]
+  python C:\\Users\\Don\\SDCoreProject\\SDCore4Windows\\sdb_ai\\sd64\\gplbld\\test-aihelper-units.py [--selftest [--from=N]]
 
 Free: no sd, no install, no elevation, no network but the loopback (a pipe of its own, files in a temporary directory, a fake provider on
 127.0.0.1).  It BUILDS the helper from gplsrc/sdai into a temporary directory with MSYS2's UCRT64 gcc and the static OpenSSL, as the Makefile's

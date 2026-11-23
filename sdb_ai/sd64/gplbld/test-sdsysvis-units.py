@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-sdsysvis-units.py - SDSYS may have more than one session, and a second one is VISIBLE (S.76, the owner's decision of 26 Oct 2026), as invariants read off the source.  Free: no install, no sudo, no sd.
 
-    python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-sdsysvis-units.py [--selftest]
+    python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-sdsysvis-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the BASIC of four programs as text, with comments removed: the routine `!SDSYSN` that counts the sessions of SDSYS on a terminal, `login`
 (the audit line), `tool_sessions` (the mark on the rows) and `tool_home` (the home screen's signed-on line).  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT A LINE REACHES THE AUDIT

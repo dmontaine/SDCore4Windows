@@ -4,7 +4,7 @@
 #                       (name format, data format, FIT; dictionary then VOC) and the separator that tells a
 #                       wrapped line from the next value of a multivalued item.  No install, no sudo.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-vlist-a3.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-vlist-a3.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py.  With --build it is built first from THIS tree (it must be
 # empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.

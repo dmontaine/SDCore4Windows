@@ -4,7 +4,7 @@
 # name), 1048 (rolling sequence number), 1049 (HUSH), 1067 (default group size).  1086 (case sensitivity) is read back in
 # sandbox-func-q1.py with the CASING statement.  No install, no sudo.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-sys-q18.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-sys-q18.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py (needs a `make`d bin/sd).  With --build it is built first from
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.

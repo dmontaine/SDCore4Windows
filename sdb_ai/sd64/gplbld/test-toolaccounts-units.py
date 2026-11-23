@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-toolaccounts-units.py - the accounts page, TOOL.ACCOUNTS (`gpl.bp/tool_accounts`), as invariants read off the source (S.75, administrator app A3).  Free: no install, no elevation, no sd.
 
-    python C:/Users/Don/Projects/SDCore4Windows/sdb_ai/sd64/gplbld/test-toolaccounts-units.py [--selftest]
+    python C:/Users/Don/SDCoreProject/SDCore4Windows/sdb_ai/sd64/gplbld/test-toolaccounts-units.py [--selftest]
 
 The Windows carry (10 Nov 2026, RELEASE_1.1 221) of Linux's guard of the same name.  Windows differences, each a check: the docs are
 SDCore4WindowsDocs (SD_DOCS_CHECKOUT, else the checkout beside this one; absent, the guard says NO TREE and exits 2); an OTHER account's

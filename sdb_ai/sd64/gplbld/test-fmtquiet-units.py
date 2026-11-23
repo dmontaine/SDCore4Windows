@@ -10,8 +10,8 @@
 #   * not quiet: byte for byte what it printed before (the FORMAT verb, ED and SED never set the flag).
 # FREE CHECK: the BASIC read as text; no install, no sd.  It cannot say a screen stays whole - that is the IDE's suite (ide-edit).
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-fmtquiet-units.py
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-fmtquiet-units.py --selftest
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-fmtquiet-units.py
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-fmtquiet-units.py --selftest
 import os
 import re
 import sys

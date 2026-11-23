@@ -3,7 +3,7 @@
 # sandbox-crlf.py - the line terminator modes of directory files and sequential files: FCONTROL(fvar, FC$CRLF, mode) and the letters
 #                   L C B X in field 6 of an F-type VOC entry (QM4 Fixes item 452, openQM 4), measured by the BYTES ON DISK.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-crlf.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-crlf.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py (needs no install, no sudo).  With --build it is built first from THIS tree (it
 # must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.

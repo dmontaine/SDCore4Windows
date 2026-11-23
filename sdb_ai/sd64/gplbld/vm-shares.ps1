@@ -47,9 +47,11 @@ if ($state -ne 'poweroff') {
 # entry) - forward-slashed to match the style already here, since VBoxManage
 # and the existing "already has" comparisons below expect it.
 $homeFs = $env:USERPROFILE -replace '\\','/'
-$sdout  = "$homeFs/Projects/Project_Installers/sdout"   # 27 Sep 26 - follows cycle.ps1's $Out
-$xfer   = "$homeFs/sdxfer"
-$gplbld = "$homeFs/Projects/sd4windows/sdb_ai/sd64/gplbld"
+$sdout  = "$homeFs/SDCoreProject/Project_Installers/sdout"   # 27 Sep 26 - follows cycle.ps1's $Out
+$xfer   = "$homeFs/SDCoreProject/sdxfer"
+# 23 Nov 26 - this folder itself; the old fixed .../sd4windows/... path had
+# not existed since the 27 Sep rename.
+$gplbld = $PSScriptRoot -replace '\\','/'
 
 if (-not (Test-Path -LiteralPath $xfer)) {
     $null = New-Item -ItemType Directory -Path $xfer -Force

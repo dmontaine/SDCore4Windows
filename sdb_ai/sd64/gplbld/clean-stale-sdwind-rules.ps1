@@ -1,9 +1,9 @@
 # clean-stale-sdwind-rules.ps1 - remove the Windows "allow this program" firewall rules named sdwind.exe whose program no longer exists.
 #
 # Run in an ELEVATED PowerShell:
-#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\clean-stale-sdwind-rules.ps1
+#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\clean-stale-sdwind-rules.ps1
 # Default is a DRY RUN that only lists. To delete:
-#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\Projects\SDCore4Windows\sdb_ai\sd64\gplbld\clean-stale-sdwind-rules.ps1 -Delete
+#   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\SDCore4Windows\sdb_ai\sd64\gplbld\clean-stale-sdwind-rules.ps1 -Delete
 #
 # RELEASE_1.1 176 / 183.  Windows makes one TCP and one UDP Public-profile Allow rule for each copy of sdwind.exe that listens.
 # A rule whose program file is gone allows nothing useful and can match a different file later placed at that path.

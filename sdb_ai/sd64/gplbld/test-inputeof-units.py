@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-inputeof-units.py - do_input() does not read a stale errno at end of file (15 Oct 26).
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-inputeof-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-inputeof-units.py
   python3 .../test-inputeof-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 it could not run.

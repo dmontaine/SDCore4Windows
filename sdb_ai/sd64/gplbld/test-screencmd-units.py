@@ -3,8 +3,8 @@
 # test-screencmd-units.py - the SCREEN statement's three places agree: the verb table in bcomp, the subroutine each
 # verb calls, and the header that documents the statement.  No install, no sudo, no sd.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-screencmd-units.py              check the tree
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-screencmd-units.py --selftest   mutate a copy five ways
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-screencmd-units.py              check the tree
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-screencmd-units.py --selftest   mutate a copy five ways
 #
 # Exit 0 every check passed, 1 one failed, 2 it could not read what it checks.
 #

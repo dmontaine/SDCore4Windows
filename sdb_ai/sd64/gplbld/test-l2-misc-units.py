@@ -2,7 +2,7 @@
 """test-l2-misc-units.py - five toolkit pages on the layout service (S.88 stage L2): the holder's TOOL.GATES ($tool_mygates), TOOL.KEYS, TOOL.VOC, TOOL.DICT and the throw-away TKTEST,
 and stage C for TOOL.VOC and TOOL.DICT (E hands the record to the IDE).  Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-l2-misc-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-l2-misc-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads each page's BASIC as text, with comments removed, takes the pane DECLARATION out of the page's own `declare.layout`, lays it out with the geometry model of
 test-tklayout-units.py (a copy of $tk_layout's equations; that file is shared and not edited here) and holds the result against what the page drew before L2.  ***IT RUNS NOTHING, SO IT CANNOT SAY

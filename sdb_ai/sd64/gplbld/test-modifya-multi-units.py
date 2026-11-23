@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-modifya-multi-units.py - MODIFY.ACCOUNT with more than one action in one command (owner, 19 Oct 2026), as invariants read off modifya.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-modifya-multi-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-modifya-multi-units.py
   python3 .../test-modifya-multi-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it could not run.

@@ -3,7 +3,7 @@
 # sandbox-txnstatus.py - 1.2-0 bundle B-5, sheet 19: STATUS() immediately after END TRANSACTION is 0 when the transaction committed and
 #                        ER_ROLLBACK (1021) when it was rolled back, by ROLLBACK or by running into END TRANSACTION.  No install, no sudo.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-txnstatus.py <dir> [--build]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-txnstatus.py <dir> [--build]
 #
 # <dir> is a sandbox made by sandbox-fromtree.py (needs a `make`d bin/sd).  With --build it is built first from
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.

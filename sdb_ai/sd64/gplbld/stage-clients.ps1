@@ -5,7 +5,7 @@ stage-clients.ps1 - put the clean-room client libraries beside an installer, in 
 
 19 Nov 26 - RELEASE_1.1 351 (Linux S.262, c89f3864).  The owner, 17 and 19 Nov 2026: the GPL client library is no longer
 built from this source; the clean-room library (written without it, so a commercial program may link to it) is what every
-SD Core ships.  Its binaries live OUTSIDE every repository, in P:\git-private\sdclientlib-binaries\<commit>-<date>\, with a
+SD Core ships.  Its binaries live OUTSIDE every repository, in P:\SDCoreProject\git-private\sdclientlib-binaries\<commit>-<date>\, with a
 COMMIT.txt naming each file's SHA-256.  This script is the one place that turns such a set into what sd.iss installs and
 mkrelease.ps1 packages:
 
@@ -37,7 +37,7 @@ function Say([string] $t) { Write-Host $t }
 function Fail([string] $t) { Say "stage-clients: FAILED - $t"; exit 1 }
 function Cannot([string] $t) { Say "stage-clients: CANNOT RUN - $t"; exit 2 }
 
-$Sets = 'P:\git-private\sdclientlib-binaries'
+$Sets = 'P:\SDCoreProject\git-private\sdclientlib-binaries'
 $BundleSets = Join-Path (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)))) 'Project_Other\sdclientlib-binaries'
 if (-not (Test-Path -LiteralPath $Sets -PathType Container) -and (Test-Path -LiteralPath $BundleSets -PathType Container)) { $Sets = $BundleSets }
 $Layout = [ordered]@{

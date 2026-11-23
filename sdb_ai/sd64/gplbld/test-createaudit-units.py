@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test-createaudit-units.py - the create.account audit line names the gates it granted (owner, 19 Oct 2026), read off createa as text.
 
-  python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-createaudit-units.py
+  python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-createaudit-units.py
   python3 .../test-createaudit-units.py --selftest
 
 No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it could not run.

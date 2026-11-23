@@ -2,7 +2,7 @@
 #
 # test-xfun-units.py - the intrinsic function tables of bcomp and the XFUN opcode, read off the source.  QM4 gaps bundle Q-1.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-xfun-units.py [--selftest]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-xfun-units.py [--selftest]
 #
 # No sudo, no install, no sd.  Exit 0 every check held, 1 one did not.  --selftest breaks a copy of the sources in six
 # ways and expects each to be caught by exactly the check that owns it.

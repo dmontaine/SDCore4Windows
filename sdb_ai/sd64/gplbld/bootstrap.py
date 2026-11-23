@@ -156,7 +156,7 @@ def run(cmd, **kw):
 # starts a program loading a SECOND copy of the runtime gets exit 127 with no
 # output - so "sd -start" failed at once and cycle.ps1 stopped at step 2.  The
 # reference machine (ACE, 26H2 build 26300, runtime 3.6.9) does not.  Measured
-# on WIN with P:\setupdevbox\cross-root-test.ps1 (a copy of true.exe beside its
+# on WIN with P:\SDCoreProject\setupdevbox\cross-root-test.ps1 (a copy of true.exe beside its
 # own msys-2.0.dll): 127 from MSYS2's bash in the Remote Desktop session AND in
 # session 0, 127 with runtime 3.6.9-2 as well as 3.6.12, 0 from Git Bash, from
 # PowerShell, and through cmd.exe.  The cause is not found; the Windows build

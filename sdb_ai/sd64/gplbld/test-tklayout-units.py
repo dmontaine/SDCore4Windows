@@ -2,7 +2,7 @@
 """test-tklayout-units.py - the toolkit's layout service (S.88 L1, `gpl.bp/tk_layout`) and its wiring, read off the source as text, and a MODEL of its geometry.
 Free: no install, no sudo, no sd.
 
-    python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-tklayout-units.py [--selftest]
+    python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-tklayout-units.py [--selftest]
 
 WHAT THIS IS, AND WHAT IT IS NOT.  ***IT RUNS NO SD, SO IT CANNOT SAY THAT A PAGE IS DRAWN AT ITS NEW SIZE, THAT A RESIZE READ BY A DIALOGUE REACHES THE PAGE OR THAT THE LOCK HOLDS THE
 KEYBOARD***: that is `sandbox-tk-layout.py` (a private SD, a pseudo-terminal, the disk and the bytes written as the evidence) and, for the pages once they use the service (L2),

@@ -3,7 +3,7 @@
 # test-sysexc-units.py - the SYS.* exceptions (QM4 Fixes 354, 513) read off the sources: the table that gives an error
 # message its exception name, and the order of the steps that make a caught error leave the terminal alone.
 #
-#   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-sysexc-units.py [--selftest]
+#   python3 /home/don/SDCoreProject/SDCore4Linux/sdb_ai/sd64/gplbld/test-sysexc-units.py [--selftest]
 #
 # No sudo, no install, no sd.  Exit 0 every check held, 1 one did not.  --selftest breaks a copy of the sources in ten
 # ways and expects each to be caught by exactly the check that owns it.  It cannot say that any error is thrown or caught:
