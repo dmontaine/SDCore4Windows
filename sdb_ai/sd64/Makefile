@@ -319,11 +319,15 @@ sdsvc:
 # stage.py ships it in usr\bin and checks the import table.
 RELAYDIR := $(GPLSRC)sdtlsrelay
 
+# 25 Nov 26 Windows port - RELEASE_1.1 362: -lbcrypt here and for sd-ai.  A fresh MSYS2 (the dev-bundle test VM, 25 Nov) gets
+# mingw-w64 OpenSSL 4.1.0, whose static libcrypto.a calls BCryptGenRandom (nm: 1 reference; 3.6.3 on the owner's machine: 0), and
+# the link died "undefined reference to `BCryptGenRandom'".  bcrypt.dll is Windows' own (sdsvc already links it) and is not in
+# stage.py's NATIVE_ONLY lists; where libcrypto does not use it, the linker adds no import.
 sdtlsrelay:
 	@echo Building native TLS relay
 	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 \
 	    $(RELAYDIR)/sdtlsrelay.c -o $(GPLBIN)sdtlsrelay.exe \
-	    -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lcrypt32 -lws2_32 -ladvapi32
+	    -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lcrypt32 -lws2_32 -ladvapi32 -lbcrypt
 
 # 13 Nov 26 Windows port - RELEASE_1.1 246: THE AI HELPER IS NATIVE C (the owner,
 # 13 Nov 2026: "python not being an integral part of windows argues for the c
@@ -342,7 +346,7 @@ sd-ai:
 	@echo Building native AI helper
 	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 -municode \
 	    $(wildcard $(AIDIR)/*.c) -o $(GPLBIN)sd-ai.exe \
-	    -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lcrypt32 -lws2_32 -ladvapi32 -lnetapi32
+	    -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lcrypt32 -lws2_32 -ladvapi32 -lnetapi32 -lbcrypt
 
 # 12 Sep 26 Windows port - the Python helper, PROJECT_STATUS.md 5.27.
 #
